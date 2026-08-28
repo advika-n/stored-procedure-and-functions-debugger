@@ -5,7 +5,6 @@ const NAV_ITEMS = [
   { to: '/debugger', label: 'Debugger' },
   { to: '/theory', label: 'Theory' },
   { to: '/history', label: 'History' },
-  { to: '/quiz', label: 'Quiz' },
   { to: '/about', label: 'About' },
 ]
 

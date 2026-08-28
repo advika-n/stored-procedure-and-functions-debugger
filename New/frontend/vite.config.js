@@ -53,14 +53,6 @@ export default defineConfig({
         changeOrigin: true,
         bypass: bypassNavigations,
       },
-      // Same collision as '/debug'/'/debugger' and '/history' above:
-      // '/quiz' is both the Quiz page's own route and a prefix of the
-      // '/quiz/generate' API path, so it needs the same bypass guard.
-      '/quiz': {
-        target: 'http://127.0.0.1:8000',
-        changeOrigin: true,
-        bypass: bypassNavigations,
-      },
     },
   },
 })

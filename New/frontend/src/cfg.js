@@ -56,8 +56,6 @@ function renderStatementHeader(node) {
     case 'HandlerDeclNode':
       // renderStatementHeader(action) already ends in ';'.
       return `DECLARE CONTINUE HANDLER FOR ${node.condition} ${renderStatementHeader(node.action)}`
-    case 'ReturnNode':
-      return `RETURN ${renderExpr(node.value)};`
     default:
       return node.type
   }
@@ -90,11 +88,6 @@ function emitBlock(statements, entryTails, nodes, edges) {
 
     if (stmt.type === 'IfStatement' || stmt.type === 'WhileStatement') {
       nodes.push({ id: nodeId, label: renderStatementHeader(stmt), shape: 'diamond', line: stmt.line, kind: stmt.type })
-    } else if (stmt.type === 'ReturnNode') {
-      // Stadium shape (same bracket syntax as the Start/End terminals),
-      // styled separately -- see the returnNode/returnCurrent classDefs
-      // in renderMermaidDefinition -- to read as "execution ends here".
-      nodes.push({ id: nodeId, label: renderStatementHeader(stmt), shape: 'stadium', line: stmt.line, kind: stmt.type })
     } else {
       nodes.push({ id: nodeId, label: renderStatementHeader(stmt), shape: 'rect', line: stmt.line, kind: stmt.type })
     }
@@ -115,12 +108,6 @@ function emitBlock(statements, entryTails, nodes, edges) {
         edges.push({ from: tail.nodeId, to: nodeId, kind: 'loop-back' })
       }
       tails = [{ nodeId, kind: 'loop-exit' }]
-    } else if (stmt.type === 'ReturnNode') {
-      // Execution halts here -- no continuation edge to whatever
-      // statement would textually follow (even inside an IF/WHILE
-      // block). If this was one branch of an IF, the other branch's
-      // own tails (already computed independently) are unaffected.
-      tails = []
     } else {
       tails = [{ nodeId, kind: 'seq' }]
     }
@@ -129,25 +116,12 @@ function emitBlock(statements, entryTails, nodes, edges) {
   return tails
 }
 
-// The wrapped forms (FunctionNode/ProcedureNode) carry a name/params/line
-// for their own CREATE ... line -- same field shape the backend's
-// render_definition_header reads for the synthetic "entry" DebugStep
-// (see interpreter.py), so `line` here lines up with that step's `line`
-// and the existing current/visited-by-line matching below just works,
-// no special-casing needed. The bare legacy Procedure form (no CREATE
-// wrapper) has none of that, so it keeps the old generic, unlined
-// "Start" marker -- it was never highlightable either.
-function buildEntryNode(ast) {
-  if (ast.type === 'FunctionNode' || ast.type === 'ProcedureNode') {
-    const params = (ast.params ?? []).map((p) => p.name).join(', ')
-    return { id: START_ID, label: `${ast.name}(${params})`, shape: 'stadium', line: ast.line }
-  }
-  return { id: START_ID, label: 'Start', shape: 'terminal' }
-}
-
 /** Build a { nodes, edges } control-flow graph from a ProcedureNode AST. */
 export function buildFlowchartGraph(ast) {
-  const nodes = [buildEntryNode(ast), { id: END_ID, label: 'End', shape: 'terminal' }]
+  const nodes = [
+    { id: START_ID, label: 'Start', shape: 'terminal' },
+    { id: END_ID, label: 'End', shape: 'terminal' },
+  ]
   const edges = []
 
   const finalTails = emitBlock(ast.body, [{ nodeId: START_ID, kind: 'seq' }], nodes, edges)
@@ -193,10 +167,7 @@ export function computeDiagramState(graph, steps, currentStepIndex) {
 function nodeMermaidText(node) {
   const label = escapeLabel(node.label)
   if (node.shape === 'diamond') return `  ${node.id}{"${label}"}`
-  // 'terminal' (Start/End) and 'stadium' (entry signature, RETURN) use
-  // the same rounded-stadium bracket syntax -- they're only styled
-  // differently, via the classDefs below.
-  if (node.shape === 'terminal' || node.shape === 'stadium') return `  ${node.id}(["${label}"])`
+  if (node.shape === 'terminal') return `  ${node.id}(["${label}"])`
   return `  ${node.id}["${label}"]`
 }
 
@@ -243,47 +214,14 @@ export function renderMermaidDefinition(graph, diagramState) {
   lines.push('  classDef current fill:#3a2e18,stroke:#e8a23d,stroke-width:3px,color:#edeff4;')
   lines.push('  classDef visited fill:#1c332f,stroke:#4fb0a5,stroke-width:1px,color:#edeff4;')
   lines.push('  classDef terminal fill:#1d2538,stroke:#2a3348,color:#8891a6;')
-  // Entry (amber "start") and RETURN (teal "end") are permanent bookend
-  // colors, not just current/visited overlays -- a RETURN can only ever
-  // be the *last* step of a trace (execution halts there), so it would
-  // never actually pick up the generic 'visited' class, and it must
-  // never render 'current' amber (wrong accent for "success/end"). Each
-  // gets a dim resting shade plus a brighter "-current" shade so
-  // reaching either one is still visibly distinct from merely having it
-  // on screen -- same current-step highlighting guarantee every other
-  // node gets, just recolored to fit the bookend semantics.
-  lines.push('  classDef entryNode fill:#3a2e18,stroke:#e8a23d,stroke-width:1px,color:#edeff4;')
-  lines.push('  classDef returnNode fill:#1c332f,stroke:#4fb0a5,stroke-width:1px,color:#edeff4;')
-  lines.push('  classDef returnCurrent fill:#1c332f,stroke:#4fb0a5,stroke-width:3px,color:#edeff4;')
 
   const currentNode = graph.nodes.find((n) => n.line === currentLine)
+  const visitedNodeIds = graph.nodes
+    .filter((n) => n.line !== undefined && n.line !== currentLine && visitedLines.has(n.line))
+    .map((n) => n.id)
 
-  // One class per node, grouped so each classDef only needs one `class`
-  // statement. Precedence: RETURN and the entry node keep their own
-  // bookend color (dim/bright by current-ness); every other node keeps
-  // the original current/visited/untouched scheme unchanged.
-  const classGroups = new Map()
-  const addToClass = (className, nodeId) => {
-    if (!classGroups.has(className)) classGroups.set(className, [])
-    classGroups.get(className).push(nodeId)
-  }
-
-  for (const node of graph.nodes) {
-    const isCurrent = currentNode?.id === node.id
-    if (node.kind === 'ReturnNode') {
-      addToClass(isCurrent ? 'returnCurrent' : 'returnNode', node.id)
-    } else if (node.id === START_ID && node.shape === 'stadium') {
-      addToClass(isCurrent ? 'current' : 'entryNode', node.id)
-    } else if (isCurrent) {
-      addToClass('current', node.id)
-    } else if (node.line !== undefined && visitedLines.has(node.line)) {
-      addToClass('visited', node.id)
-    }
-  }
-
-  for (const [className, ids] of classGroups) {
-    lines.push(`  class ${ids.join(',')} ${className};`)
-  }
+  if (visitedNodeIds.length > 0) lines.push(`  class ${visitedNodeIds.join(',')} visited;`)
+  if (currentNode) lines.push(`  class ${currentNode.id} current;`)
 
   for (const index of takenLinkStyleIndexes) {
     lines.push(`  linkStyle ${index} stroke:#4fb0a5,stroke-width:3px;`)

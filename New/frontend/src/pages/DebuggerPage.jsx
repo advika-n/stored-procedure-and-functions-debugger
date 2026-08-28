@@ -4,7 +4,6 @@ import Editor from '@monaco-editor/react'
 import mermaid from 'mermaid'
 import { buildFlowchartGraph, computeDiagramState, renderMermaidDefinition } from '../cfg'
 import { SAMPLES } from '../samples'
-import { writeLastProcedure } from '../lastProcedure'
 
 // 'base' + explicit themeVariables (rather than the light 'neutral'
 // theme this used before the restyle) so default, unclassed flowchart
@@ -29,23 +28,6 @@ function formatValue(entry) {
   if (entry.value === null || entry.value === undefined) return null // caller shows a placeholder
   if (entry.type === 'string') return `"${entry.value}"`
   return String(entry.value)
-}
-
-// Predict Mode's guess check -- numeric comparison for numbers (so "50" and
-// "50.0" both match 50), case-insensitive exact match for booleans, exact
-// (surrounding-quote-tolerant) match for everything else.
-function checkGuess(guessRaw, entry) {
-  const guess = guessRaw.trim()
-  if (guess === '') return false
-  if (entry.type === 'number') {
-    const g = Number(guess)
-    return !Number.isNaN(g) && g === Number(entry.value)
-  }
-  if (entry.type === 'boolean') {
-    return guess.toLowerCase() === String(entry.value).toLowerCase()
-  }
-  const unquoted = guess.replace(/^['"]|['"]$/g, '')
-  return unquoted === String(entry.value)
 }
 
 function DebuggerPage() {
@@ -110,34 +92,6 @@ function DebuggerPage() {
   const askIdRef = useRef(0)
   const askMessagesEndRef = useRef(null)
 
-  // -- Text-to-speech for the current step's explanation, via the browser's
-  // native speechSynthesis API (no external service, no dependency). Feature-
-  // detected once so the speaker button/auto-read toggle simply don't render
-  // in a browser/context without support, rather than throwing.
-  const speechSupported = useMemo(
-    () => typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window,
-    [],
-  )
-  const [isSpeaking, setIsSpeaking] = useState(false)
-  const [autoReadExplanations, setAutoReadExplanations] = useState(false)
-
-  // -- Predict Mode (labeled "Quiz Mode" internally in these variable/class
-  // names -- renamed in the UI only, to stay distinct from the separate
-  // /quiz page): predict a step's effect before it's revealed. Off by
-  // default (see resetRunState/resetSteps for where the score resets).
-  const [quizMode, setQuizMode] = useState(false)
-  const [quizScore, setQuizScore] = useState({ correct: 0, total: 0 })
-  const [quizGuess, setQuizGuess] = useState('') // the value-prediction text input
-  const [quizFeedback, setQuizFeedback] = useState(null) // last { correct, guessDisplay, actualDisplay }
-
-  // Lets the standalone /quiz page's "This Procedure" option know what's
-  // currently in the editor, without a global state store -- see
-  // lastProcedure.js. Fires on every code/selection change, same as the
-  // Monaco editor itself; sessionStorage writes are cheap and local.
-  useEffect(() => {
-    writeLastProcedure(code, selectedSampleName)
-  }, [code, selectedSampleName])
-
   useEffect(() => {
     fetch('/health')
       .then((res) => {
@@ -185,15 +139,6 @@ function DebuggerPage() {
     setAskInput('')
     setConnectors([])
     variableRowRefs.current = {}
-    // A stale run's explanation shouldn't keep talking once that run is gone.
-    if (speechSupported) window.speechSynthesis.cancel()
-    setIsSpeaking(false)
-    // A new trace is a fresh quiz session -- score and any pending guess
-    // from the old one no longer mean anything (quizMode itself, the
-    // toggle, is a standing preference and stays as the user left it).
-    setQuizScore({ correct: 0, total: 0 })
-    setQuizGuess('')
-    setQuizFeedback(null)
   }
 
   function loadSample(sample) {
@@ -304,81 +249,19 @@ function DebuggerPage() {
 
   const resetSteps = useCallback(() => {
     setCurrentStepIndex(0)
-    // Replaying the same trace from the top is a fresh quiz attempt too.
-    setQuizScore({ correct: 0, total: 0 })
-    setQuizGuess('')
-    setQuizFeedback(null)
   }, [])
-
-  // Predict Mode: what (if anything) to predict before the step AFTER the
-  // current one is revealed. A changed variable (the first one, if a
-  // step changes several -- kept to one prediction so this stays quick)
-  // takes priority over a branch decision; a step with neither (a plain
-  // sequential statement) just means nothing to predict here.
-  const upcomingQuiz = useMemo(() => {
-    if (!quizMode || !hasSteps || isLastStep) return null
-    const upcoming = steps[currentStepIndex + 1]
-    const changedEntry = Object.entries(upcoming.variables ?? {}).find(([, entry]) => entry.changed)
-    if (changedEntry) {
-      const [variableName, entry] = changedEntry
-      return { type: 'value', variableName, entry }
-    }
-    if (upcoming.nodeType === 'IfStatement') {
-      return { type: 'branch', actualPath: upcoming.branch?.path ?? 'none' }
-    }
-    return null
-  }, [quizMode, hasSteps, isLastStep, steps, currentStepIndex])
-
-  const recordQuizResult = useCallback((correct, guessDisplay, actualDisplay) => {
-    setQuizScore((s) => ({ correct: s.correct + (correct ? 1 : 0), total: s.total + 1 }))
-    setQuizFeedback({ correct, guessDisplay, actualDisplay })
-  }, [])
-
-  const submitValueGuess = useCallback(
-    (event) => {
-      event.preventDefault()
-      if (!upcomingQuiz || upcomingQuiz.type !== 'value') return
-      const correct = checkGuess(quizGuess, upcomingQuiz.entry)
-      recordQuizResult(correct, quizGuess.trim(), formatValue(upcomingQuiz.entry) ?? '—')
-      setQuizGuess('')
-      goToNextStep()
-    },
-    [upcomingQuiz, quizGuess, recordQuizResult, goToNextStep],
-  )
-
-  const submitBranchGuess = useCallback(
-    (choice) => {
-      if (!upcomingQuiz || upcomingQuiz.type !== 'branch') return
-      // No ELSE block ('none' -- condition was false, nothing to enter)
-      // still counts as "Else" for scoring: the THEN branch wasn't taken.
-      const correct = choice === 'then' ? upcomingQuiz.actualPath === 'then' : upcomingQuiz.actualPath !== 'then'
-      recordQuizResult(correct, choice === 'then' ? 'Then' : 'Else', upcomingQuiz.actualPath === 'then' ? 'Then' : 'Else')
-      goToNextStep()
-    },
-    [upcomingQuiz, recordQuizResult, goToNextStep],
-  )
-
-  // The gate every "advance" action (Next button, ArrowRight) goes
-  // through in Predict Mode: a pending prediction must be answered via the
-  // quiz panel, not skipped past. Previous/the scrubber/step-log clicks
-  // are deliberate free navigation rather than "advancing", so they're
-  // left alone -- jumping around freely still works exactly as before.
-  const handleAdvance = useCallback(() => {
-    if (upcomingQuiz) return
-    goToNextStep()
-  }, [upcomingQuiz, goToNextStep])
 
   // Left/right arrow step navigation, but only while the editor itself
   // isn't the thing capturing keystrokes (so normal editing still works).
   useEffect(() => {
     function handleKeyDown(event) {
       if (editorRef.current?.hasTextFocus()) return
-      if (event.key === 'ArrowRight') handleAdvance()
+      if (event.key === 'ArrowRight') goToNextStep()
       else if (event.key === 'ArrowLeft') goToPreviousStep()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleAdvance, goToPreviousStep])
+  }, [goToNextStep, goToPreviousStep])
 
   // Recomputes the gutter caret's pixel position and the amber
   // cause->effect connector line(s) from it to any variable row that
@@ -552,65 +435,6 @@ function DebuggerPage() {
   }, [hasSteps, currentStepIndex, steps])
 
   const currentExplanation = hasSteps ? explanations[steps[currentStepIndex].stepNumber] : null
-  // Primitive (not the object reference) so effects below only re-fire when
-  // the text actually changes -- currentExplanation is looked up fresh from
-  // state on every render even when it resolves to the same entry.
-  const currentExplanationText = currentExplanation?.explanation ?? null
-
-  // Speak `text` aloud, replacing whatever (if anything) is already
-  // speaking -- speechSynthesis queues by default, and we never want two
-  // explanations overlapping.
-  const speak = useCallback(
-    (text) => {
-      if (!speechSupported || !text) return
-      window.speechSynthesis.cancel()
-      const utterance = new window.SpeechSynthesisUtterance(text)
-      utterance.onstart = () => setIsSpeaking(true)
-      utterance.onend = () => setIsSpeaking(false)
-      utterance.onerror = () => setIsSpeaking(false)
-      window.speechSynthesis.speak(utterance)
-    },
-    [speechSupported],
-  )
-
-  const stopSpeaking = useCallback(() => {
-    if (!speechSupported) return
-    window.speechSynthesis.cancel()
-    setIsSpeaking(false)
-  }, [speechSupported])
-
-  const handleToggleSpeak = useCallback(() => {
-    if (isSpeaking) stopSpeaking()
-    else if (currentExplanationText) speak(currentExplanationText)
-  }, [isSpeaking, currentExplanationText, speak, stopSpeaking])
-
-  // Auto-cancel any in-progress speech the moment the user navigates to a
-  // different step -- Prev/Next, the scrubber, and the step-log all funnel
-  // through setCurrentStepIndex, so this one effect covers all of them.
-  // Declared before the auto-read effect below so, within the same commit,
-  // any leftover speech is cancelled before a new step's explanation (if
-  // already cached) starts speaking.
-  useEffect(() => {
-    stopSpeaking()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStepIndex])
-
-  // "Auto-read explanations" -- off by default (see toggle below). Fires
-  // once per step, only after that step's explanation has actually arrived
-  // (immediately for a cache hit, or once the /explain fetch resolves).
-  useEffect(() => {
-    if (!autoReadExplanations || !currentExplanationText) return
-    speak(currentExplanationText)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep?.stepNumber, currentExplanationText, autoReadExplanations])
-
-  // Stop any speech in flight if the page itself unmounts mid-utterance.
-  useEffect(() => {
-    return () => {
-      if (speechSupported) window.speechSynthesis.cancel()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // Keep the chat scrolled to the most recent message as new ones arrive.
   useEffect(() => {
@@ -710,7 +534,7 @@ function DebuggerPage() {
             <button onClick={goToPreviousStep} disabled={isFirstStep}>
               ◀ Previous
             </button>
-            <button onClick={handleAdvance} disabled={isLastStep || Boolean(upcomingQuiz)} title={upcomingQuiz ? 'Answer the prediction below to continue' : undefined}>
+            <button onClick={goToNextStep} disabled={isLastStep}>
               Next ▶
             </button>
             <button onClick={resetSteps} disabled={!hasSteps}>
@@ -729,66 +553,7 @@ function DebuggerPage() {
             <span className="step-label">
               {hasSteps ? `Step ${currentStepIndex + 1} of ${steps.length}` : 'No steps yet'}
             </span>
-            {speechSupported && (
-              <label className="auto-read-toggle">
-                <input
-                  type="checkbox"
-                  checked={autoReadExplanations}
-                  onChange={(event) => setAutoReadExplanations(event.target.checked)}
-                />
-                Auto-read explanations
-              </label>
-            )}
-            <label className="auto-read-toggle">
-              <input
-                type="checkbox"
-                checked={quizMode}
-                onChange={(event) => setQuizMode(event.target.checked)}
-              />
-              Predict Mode
-            </label>
-            {quizMode && (
-              <span className="quiz-score">
-                {quizScore.correct}/{quizScore.total} correct
-                {quizFeedback && (
-                  <span className={quizFeedback.correct ? 'quiz-feedback quiz-feedback-correct' : 'quiz-feedback quiz-feedback-incorrect'}>
-                    {quizFeedback.correct ? '✓' : '✗'}{' '}
-                    {quizFeedback.correct ? 'correct' : `was ${quizFeedback.actualDisplay} (guessed ${quizFeedback.guessDisplay})`}
-                  </span>
-                )}
-              </span>
-            )}
           </div>
-
-          {upcomingQuiz?.type === 'value' && (
-            <form className="quiz-panel" onSubmit={submitValueGuess}>
-              <span className="quiz-prompt-text">
-                Predict the new value of <strong>{upcomingQuiz.variableName}</strong>
-              </span>
-              <input
-                type="text"
-                className="quiz-input"
-                value={quizGuess}
-                onChange={(event) => setQuizGuess(event.target.value)}
-                placeholder="Your guess…"
-                autoFocus
-              />
-              <button type="submit" disabled={!quizGuess.trim()}>
-                Submit
-              </button>
-            </form>
-          )}
-          {upcomingQuiz?.type === 'branch' && (
-            <div className="quiz-panel">
-              <span className="quiz-prompt-text">Predict which branch will be taken:</span>
-              <button type="button" onClick={() => submitBranchGuess('then')}>
-                Then
-              </button>
-              <button type="button" onClick={() => submitBranchGuess('else')}>
-                Else
-              </button>
-            </div>
-          )}
 
           <p>
             <button onClick={handleDebug} disabled={isRunning}>
@@ -917,20 +682,7 @@ function DebuggerPage() {
           )}
 
           <div className="explanation-panel">
-            <div className="explanation-panel-header">
-              <span className="panel-tab panel-tab-nested">EXPLANATION</span>
-              {speechSupported && hasSteps && currentExplanationText && (
-                <button
-                  type="button"
-                  className={isSpeaking ? 'speak-button speak-button-active' : 'speak-button'}
-                  onClick={handleToggleSpeak}
-                  aria-label={isSpeaking ? 'Stop reading explanation aloud' : 'Read explanation aloud'}
-                  title={isSpeaking ? 'Stop reading aloud' : 'Read this explanation aloud'}
-                >
-                  {isSpeaking ? '⏹' : '🔊'}
-                </button>
-              )}
-            </div>
+            <span className="panel-tab panel-tab-nested">EXPLANATION</span>
             {!hasSteps && (
               <p className="placeholder">Run Debug to see a plain-English explanation of each step.</p>
             )}

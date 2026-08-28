@@ -6,7 +6,6 @@ from app import demo_db, history
 from app.explainer import answer_question, explain_step
 from app.interpreter import InterpreterError, run
 from app.parser import ParserError, parse
-from app.quiz import generate_quiz
 from app.tokenizer import TokenizerError, tokenize
 
 app = FastAPI(title="Stored Procedure and Functions Debugger API")
@@ -127,34 +126,6 @@ def ask(request: AskRequest):
             detail="Couldn't reach Gemini to answer that question. Check that GEMINI_API_KEY is set and valid, then try again.",
         ) from exc
     return {"answer": answer}
-
-
-class QuizGenerateRequest(BaseModel):
-    source: str  # "theory" | "procedure"
-    code: str | None = None  # required when source == "procedure"
-
-
-@app.post("/quiz/generate")
-def quiz_generate(request: QuizGenerateRequest):
-    """5 Gemini-generated multiple-choice questions -- either general
-    theory or grounded in a specific procedure's source. See
-    app/quiz.py for prompt/parsing details. No template fallback (like
-    /ask, unlike /explain): a quiz has no sensible deterministic
-    substitute, so a Gemini failure surfaces as a 502 the frontend can
-    show as an error instead of a fabricated one."""
-    if request.source not in ("theory", "procedure"):
-        raise HTTPException(status_code=400, detail="source must be 'theory' or 'procedure'")
-    if request.source == "procedure" and not (request.code and request.code.strip()):
-        raise HTTPException(status_code=400, detail="code is required when source is 'procedure'")
-
-    try:
-        questions = generate_quiz(request.source, request.code)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Couldn't generate a quiz from Gemini right now. Check that GEMINI_API_KEY is set and valid, then try again.",
-        ) from exc
-    return {"questions": questions}
 
 
 @app.get("/history")
