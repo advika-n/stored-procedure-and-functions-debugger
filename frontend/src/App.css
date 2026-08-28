@@ -1,84 +1,439 @@
-#center {
-  max-width: 1200px;
-  margin: 3rem auto;
-  padding: 0 1.5rem 3rem;
-  text-align: left;
-  font-family: system-ui, sans-serif;
+/* ==========================================================================
+   "Debugger Notebook" design system.
+   Flat surfaces, hairline borders (never shadows), exactly three semantic
+   accents (amber / teal / coral) reused everywhere, Space Grotesk for
+   headings only, IBM Plex Mono for data/code, IBM Plex Sans for body copy.
+   Tokens live in theme.css.
+   ========================================================================== */
+
+button,
+input {
+  font-family: var(--font-body);
 }
 
-#center > h1 {
-  text-align: center;
+button {
+  font-size: 0.92rem;
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--accent-teal);
+  background: transparent;
+  color: var(--accent-teal);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--accent-teal-bg);
+}
+
+button:disabled {
+  border-color: var(--border-hairline);
+  color: var(--text-muted);
+  cursor: default;
+}
+
+/* visible keyboard focus everywhere, amber ring per the accessibility spec */
+:focus-visible {
+  outline: 2px solid var(--accent-amber);
+  outline-offset: 2px;
+}
+
+h1,
+h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.6rem;
+}
+
+h1 {
+  font-size: 1.9rem;
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  font-size: 1.05rem;
 }
 
 .status {
-  font-family: monospace;
-  font-size: 1.1rem;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-hairline);
   display: inline-block;
 }
 
 .status-ok {
-  background: #e6f4ea;
-  color: #1e7e34;
+  background: var(--accent-teal-bg);
+  color: var(--accent-teal);
+  border-color: var(--accent-teal);
 }
 
 .status-error {
-  background: #fdecea;
-  color: #b02a2a;
+  background: var(--accent-coral-bg);
+  color: var(--accent-coral);
+  border-color: var(--accent-coral);
 }
 
-button {
+.placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.page-subtitle {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  margin: 0 0 1rem;
+  max-width: 70ch;
+}
+
+/* -- persistent top nav -------------------------------------------------- */
+
+.site-header {
+  border-bottom: 1px solid var(--border-hairline);
+  background: var(--bg-panel);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.site-header-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0.9rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.site-brand {
+  font-family: var(--font-display);
+  font-weight: 600;
   font-size: 1rem;
-  padding: 0.5rem 1.25rem;
-  border-radius: 6px;
-  border: 1px solid #1e7e34;
-  background: #2ea043;
-  color: white;
-  cursor: pointer;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
 }
-
-button:disabled {
-  background: #9bd6a8;
-  border-color: #9bd6a8;
-  cursor: default;
-}
-
-/* -- top-level nav (Debugger / Theory) -------------------------------- */
 
 .top-nav {
   display: flex;
-  justify-content: center;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  gap: 0.25rem;
 }
 
 .top-nav-item {
   background: transparent;
-  color: #333;
+  color: var(--text-muted);
   border: 1px solid transparent;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  padding: 0.4rem 1rem;
+  border-radius: var(--radius);
+  padding: 0.4rem 0.9rem;
+  font-size: 0.88rem;
+  text-decoration: none;
+  display: inline-block;
 }
 
 .top-nav-item:hover {
-  background: #f2f2f2;
+  color: var(--text-primary);
+  background: var(--bg-panel-raised);
+  border-color: transparent;
 }
 
 .top-nav-item-active {
-  color: #1e7e34;
-  border-bottom: 2px solid #2ea043;
+  color: var(--accent-amber);
+  border-color: var(--border-hairline);
+  background: var(--bg-panel-raised);
   font-weight: 600;
 }
 
-/* -- sample procedure picker ------------------------------------------ */
+#page-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1.75rem 1.5rem 3rem;
+}
 
-.sample-picker {
+/* -- panel primitive: an index card, not a dashboard widget -------------
+   Hairline border, flat surface, small uppercase "folder tab" label
+   sitting just above the top border instead of a normal in-panel
+   heading. Reused across every page. */
+
+.panel {
+  position: relative;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  padding: 1.5rem 1.25rem 1.25rem;
+  margin-top: 0.9rem;
+}
+
+.panel-tab {
+  position: absolute;
+  top: -0.55rem;
+  left: 0.9rem;
+  background: var(--bg-base);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+}
+
+.panel-tab-nested {
+  /* used inside a panel that already has its own outer tab (e.g. the
+     Explanation block nested inside the Live State panel) */
+  position: static;
+  display: inline-block;
+  background: var(--bg-panel-raised);
+  margin-bottom: 0.6rem;
+}
+
+.panel-tab-inline {
+  position: static;
+  display: inline-block;
+}
+
+/* teal outline instead of the default muted hairline -- a success-state
+   tab (currently only Return Value), never a bare color swap elsewhere */
+.panel-tab-success {
+  color: var(--accent-teal);
+  border-color: var(--accent-teal);
+}
+
+/* ==========================================================================
+   Home page
+   ========================================================================== */
+
+.home-hero {
+  text-align: center;
+  padding: 2.5rem 1rem 2rem;
+}
+
+.home-hero h1 {
+  font-size: 2.4rem;
+}
+
+.home-pitch {
+  color: var(--text-muted);
+  font-size: 1.05rem;
+  max-width: 62ch;
+  margin: 0 auto 1.5rem;
+  line-height: 1.6;
+}
+
+.home-cta {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 0.7rem 1.6rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--accent-amber);
+  background: var(--accent-amber-bg);
+  color: var(--accent-amber);
+  text-decoration: none;
+}
+
+.home-cta:hover {
+  background: var(--accent-amber);
+  color: var(--bg-base);
+}
+
+.home-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1.1rem;
+  margin-top: 1.5rem;
+}
+
+.home-card {
+  position: relative;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  padding: 1.4rem 1.1rem 1.1rem;
+}
+
+.home-card h2 {
+  font-size: 1rem;
+  margin-top: 0.3rem;
+}
+
+.home-card p {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+/* ==========================================================================
+   About page
+   ========================================================================== */
+
+.about-page h1 {
+  margin-bottom: 1.2rem;
+}
+
+.about-panel p {
+  color: var(--text-primary);
+  line-height: 1.65;
+  font-size: 0.92rem;
+}
+
+.about-list {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.about-list code {
+  font-family: var(--font-mono);
+  background: var(--bg-panel-raised);
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--radius);
+  font-size: 0.85em;
+}
+
+.about-note {
+  margin-top: 0.8rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.about-note code {
+  font-family: var(--font-mono);
+  background: var(--bg-panel-raised);
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--radius);
+}
+
+/* ==========================================================================
+   Debugger page
+   ========================================================================== */
+
+.debugger-page h1 {
+  display: none; /* the page identifies itself via the nav + panel tabs */
+}
+
+.debugger-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.btn-export {
+  border-color: var(--accent-amber);
+  color: var(--accent-amber);
+}
+
+.btn-export:hover:not(:disabled) {
+  background: var(--accent-amber-bg);
+}
+
+.debugger-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1.6fr) minmax(280px, 1fr);
+  gap: 1.1rem;
+  align-items: start;
+  margin-top: 0.9rem;
+}
+
+@media (max-width: 1000px) {
+  .debugger-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel-samples,
+.panel-editor,
+.panel-state {
+  margin-top: 0;
+}
+
+.panel-state {
+  position: sticky;
+  top: 5.5rem;
+}
+
+@media (max-width: 1000px) {
+  .panel-state {
+    position: static;
+  }
+}
+
+/* connector-line SVG overlay -- spans the whole grid so a line can run
+   from the editor caret to a variable row in the panel beside it */
+.connector-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 6;
+}
+
+.connector-line {
+  stroke: var(--accent-amber);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0;
+  animation: connector-fade 900ms ease-out forwards;
+}
+
+@keyframes connector-fade {
+  0% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connector-line {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* -- left panel: sample / custom picker ---------------------------------- */
+
+.new-custom-button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.92rem;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 1rem;
+  border: 1px dashed var(--accent-amber);
+  color: var(--accent-amber);
+  background: var(--accent-amber-bg);
+  border-radius: var(--radius);
+}
+
+.new-custom-button:hover {
+  background: var(--accent-amber);
+  color: var(--bg-base);
+}
+
+.sample-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
 }
 
 .sample-card {
@@ -87,253 +442,186 @@ button:disabled {
   align-items: flex-start;
   gap: 0.3rem;
   text-align: left;
-  background: white;
-  color: #222;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 0.7rem 0.9rem;
+  background: var(--bg-panel-raised);
+  color: var(--text-primary);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  padding: 0.65rem 0.8rem;
 }
 
 .sample-card:hover {
-  border-color: #2ea043;
+  border-color: var(--accent-teal);
 }
 
 .sample-card-active {
-  border-color: #2ea043;
-  background: #f2fbf4;
+  border-color: var(--accent-teal);
+  background: var(--accent-teal-bg);
 }
 
-.sample-card-new {
-  border-style: dashed;
-  border-color: #2ea043;
-  color: #1e7e34;
-}
-
-.sample-card-new:hover {
-  background: #f2fbf4;
+.sample-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
 }
 
 .sample-card strong {
-  font-size: 0.95rem;
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  color: var(--text-primary);
+}
+
+/* PROCEDURE = neutral (the baseline case); FUNCTION = teal, tying it
+   visually to the teal Return Value panel every function's trace ends
+   in -- the same "this produces a result" thread, not a fourth accent. */
+.sample-kind-tag {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.05rem 0.4rem;
+  border-radius: var(--radius);
+  border: 1px solid;
+  flex-shrink: 0;
+}
+
+.sample-kind-tag-procedure {
+  color: var(--text-muted);
+  border-color: var(--border-hairline);
+  background: var(--bg-panel-raised);
+}
+
+.sample-kind-tag-function {
+  color: var(--accent-teal);
+  border-color: var(--accent-teal);
+  background: var(--accent-teal-bg);
 }
 
 .sample-description {
-  font-size: 0.8rem;
-  color: #666;
+  font-size: 0.76rem;
+  color: var(--text-muted);
   font-weight: normal;
+  line-height: 1.4;
 }
 
-/* -- step debugger layout ------------------------------------------- */
+/* -- center panel: editor + step controls -------------------------------- */
 
-.debugger-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
-  gap: 1.5rem;
-  align-items: start;
+.editor-shell {
+  position: relative;
+  padding-left: 22px;
+  background: #1e1e1e; /* matches Monaco's vs-dark canvas so the caret gutter blends in */
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
-@media (max-width: 800px) {
-  .debugger-layout {
-    grid-template-columns: 1fr;
+.editor-caret {
+  position: absolute;
+  top: 0;
+  left: 2px;
+  width: 18px;
+  color: var(--accent-amber);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+  transition: top 150ms ease;
+  pointer-events: none;
+  z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-caret {
+    transition: none;
   }
 }
 
-.debugger-column-main {
-  min-width: 0;
+/* subtle full-line tint -- the caret glyph is the primary marker now,
+   this just keeps the line easy to spot at a glance */
+.debug-current-line {
+  background: rgba(232, 162, 61, 0.1);
 }
-
-.debugger-column-side {
-  position: sticky;
-  top: 1.5rem;
-}
-
-/* -- step navigator ---------------------------------------------------- */
 
 .step-navigator {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  gap: 0.6rem;
+  margin: 0.9rem 0 0.75rem;
   flex-wrap: wrap;
 }
 
 .step-navigator button {
-  padding: 0.4rem 0.9rem;
-  font-size: 0.9rem;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.85rem;
 }
 
-/* -- step explanation panel ------------------------------------------ */
-
-.explanation-panel {
-  margin-bottom: 0.75rem;
-  min-height: 1.6rem;
-}
-
-.explanation-text {
-  margin: 0;
-  padding: 0.6rem 0.9rem;
-  background: #eef6ff;
-  border: 1px solid #cfe3fb;
-  border-radius: 6px;
-  color: #1a4971;
-  font-size: 0.95rem;
-}
-
-.explanation-source-badge {
-  margin-left: 0.6rem;
-  font-family: monospace;
-  font-size: 0.7rem;
-  font-weight: 600;
-  padding: 0.1rem 0.4rem;
-  border-radius: 999px;
-  vertical-align: middle;
-}
-
-/* template = neutral gray (fallback path); gemini = distinct blue/purple
-   so it's obvious at a glance which one actually generated the sentence. */
-.explanation-source-badge-template {
-  color: #555;
-  background: #e2e2e2;
-}
-
-.explanation-source-badge-gemini {
-  color: #4527a0;
-  background: #e4d9ff;
+.step-scrubber {
+  flex: 1;
+  min-width: 120px;
+  accent-color: var(--accent-amber);
 }
 
 .step-label {
-  margin-left: 0.25rem;
-  font-family: monospace;
-  color: #444;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
-/* -- Monaco current-line highlight --------------------------------------
-   Applied via editor.deltaDecorations, not text selection, so it stays
-   visible even when the editor doesn't have focus. */
+/* -- right panel: live state ---------------------------------------------- */
 
-.debug-current-line {
-  background: rgba(255, 213, 79, 0.28);
-}
-
-.debug-current-line-margin {
-  background: rgba(255, 213, 79, 0.6);
-  width: 4px !important;
-  margin-left: 3px;
-}
-
-/* -- variable watch table ------------------------------------------- */
-
-.placeholder {
-  color: #666;
-  font-style: italic;
-}
-
-.variable-table {
+.variable-table,
+.cursor-table {
   width: 100%;
   border-collapse: collapse;
-  font-family: monospace;
-  font-size: 0.9rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
 }
 
 .variable-table th,
-.variable-table td {
+.variable-table td,
+.cursor-table th,
+.cursor-table td {
   text-align: left;
-  padding: 0.4rem 0.6rem;
-  border-bottom: 1px solid #e0e0e0;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--border-hairline);
+  vertical-align: top;
 }
 
-.variable-table th {
-  color: #666;
+.variable-table th,
+.cursor-table th {
+  color: var(--text-muted);
   font-weight: 600;
-  border-bottom: 2px solid #ccc;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-hairline);
 }
 
 .var-row-changed {
-  background: #fff4cc;
+  background: var(--accent-amber-bg);
 }
 
 .var-empty {
-  color: #999;
+  color: var(--text-muted);
 }
 
 .changed-badge {
   margin-left: 0.5rem;
-  font-family: system-ui, sans-serif;
-  font-size: 0.7rem;
+  font-family: var(--font-body);
+  font-size: 0.64rem;
   font-weight: 600;
-  color: #8a6d00;
-  background: #ffe89b;
-  padding: 0.1rem 0.4rem;
-  border-radius: 999px;
+  color: var(--accent-amber);
+  background: var(--accent-amber-bg);
+  border: 1px solid var(--accent-amber);
+  padding: 0.05rem 0.4rem;
+  border-radius: var(--radius);
   vertical-align: middle;
 }
 
-/* -- error banner (NOT_FOUND / DIVISION_BY_ZERO conditions) ------------- */
-
-.error-banner {
-  margin-bottom: 1rem;
-  padding: 0.6rem 0.9rem;
-  border-radius: 6px;
-  border: 1px solid;
-  font-size: 0.88rem;
-}
-
-.error-banner-headline {
-  font-weight: 600;
-}
-
-.error-banner-condition {
-  font-family: monospace;
-  margin-right: 0.5rem;
-  padding: 0.05rem 0.4rem;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.08);
-}
-
-.error-banner-handler {
-  margin-top: 0.25rem;
-  font-size: 0.82rem;
-}
-
-/* handled = a CONTINUE HANDLER caught it -- amber, "recovered". */
-.error-banner-handled {
-  background: #fff8ec;
-  border-color: #f0ad4e;
-  color: #8a4b00;
-}
-
-/* unhandled = nothing caught it -- red, more severe. */
-.error-banner-unhandled {
-  background: #fdecea;
-  border-color: #e5a3a3;
-  color: #b02a2a;
-}
-
-/* -- cursor panel -------------------------------------------------------- */
-
 .cursor-panel {
-  margin-bottom: 1rem;
-}
-
-.cursor-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: monospace;
-  font-size: 0.85rem;
-}
-
-.cursor-table th,
-.cursor-table td {
-  text-align: left;
-  padding: 0.4rem 0.6rem;
-  border-bottom: 1px solid #e0e0e0;
-  vertical-align: top;
-}
-
-.cursor-table th {
-  color: #666;
-  font-weight: 600;
-  border-bottom: 2px solid #ccc;
+  margin-bottom: 1.25rem;
 }
 
 .cursor-name {
@@ -342,41 +630,210 @@ button:disabled {
 
 .cursor-badge {
   margin-left: 0.5rem;
-  font-family: system-ui, sans-serif;
-  font-size: 0.68rem;
+  font-family: var(--font-body);
+  font-size: 0.62rem;
   font-weight: 600;
-  padding: 0.1rem 0.4rem;
-  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+  border-radius: var(--radius);
   vertical-align: middle;
+  border: 1px solid;
 }
 
 .cursor-badge-more {
-  color: #1e7e34;
-  background: #e6f4ea;
+  color: var(--accent-teal);
+  background: var(--accent-teal-bg);
+  border-color: var(--accent-teal);
 }
 
 .cursor-badge-exhausted {
-  color: #666;
-  background: #eee;
+  color: var(--text-muted);
+  background: var(--bg-panel-raised);
+  border-color: var(--border-hairline);
 }
 
-/* -- Ask AI panel ------------------------------------------------------ */
+/* -- return value (function RETURN result) --------------------------------
+   Only ever renders when currentStep.returnValue is present -- never for
+   a procedure step, which is where the trace naturally ends for a
+   function too, so it reads as "the final result" right below the
+   variable table rather than just another row of state. Teal throughout:
+   a successful return is this app's one unambiguous success state. */
+
+.return-value-panel {
+  margin-top: 1.25rem;
+}
+
+.return-value-text {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  background: var(--accent-teal-bg);
+  border: 1px solid var(--accent-teal);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.return-value-badge {
+  font-family: var(--font-body);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bg-base);
+  background: var(--accent-teal);
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius);
+}
+
+.return-value-type {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--accent-teal);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.explanation-panel {
+  margin-top: 1.25rem;
+  min-height: 1.6rem;
+}
+
+.explanation-text {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.explanation-source-badge {
+  float: right;
+  margin-left: 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius);
+  border: 1px solid;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* template = amber (the deterministic fallback path); gemini = teal
+   (a live, successful API call) -- the two semantic accents used for
+   "AI badge" everywhere in this app, never a one-off third color. */
+.explanation-source-badge-template {
+  color: var(--accent-amber);
+  background: var(--accent-amber-bg);
+  border-color: var(--accent-amber);
+}
+
+.explanation-source-badge-gemini {
+  color: var(--accent-teal);
+  background: var(--accent-teal-bg);
+  border-color: var(--accent-teal);
+}
+
+/* -- error banner (NOT_FOUND / DIVISION_BY_ZERO conditions) -------------- */
+
+.error-banner {
+  margin-bottom: 1.1rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius);
+  border: 1px solid;
+  font-size: 0.85rem;
+}
+
+.error-banner-headline {
+  font-weight: 600;
+}
+
+.error-banner-condition {
+  font-family: var(--font-mono);
+  margin-right: 0.5rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: var(--radius);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.error-banner-handler {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* handled = a CONTINUE HANDLER caught it -- amber, "recovered, not severe". */
+.error-banner-handled {
+  background: var(--accent-amber-bg);
+  border-color: var(--accent-amber);
+  color: var(--accent-amber);
+}
+
+/* unhandled = nothing caught it -- coral, the interpreter's most severe state. */
+.error-banner-unhandled {
+  background: var(--accent-coral-bg);
+  border-color: var(--accent-coral);
+  color: var(--accent-coral);
+}
+
+/* -- Ask AI panel (collapsible) -------------------------------------------- */
+
+.panel-askai {
+  padding-top: 1rem;
+}
+
+.ask-ai-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.ask-ai-toggle:hover {
+  background: transparent;
+}
+
+.ask-ai-toggle-caret {
+  color: var(--accent-amber);
+  font-family: var(--font-mono);
+}
+
+.ask-ai-toggle-count {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  border: 1px solid var(--border-hairline);
+  border-radius: 999px;
+  padding: 0 0.45rem;
+}
 
 .ask-panel {
   margin-top: 1rem;
 }
 
 .ask-blurb {
-  font-size: 0.82rem;
-  color: #666;
-  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0 0 0.7rem;
 }
 
 .ask-messages {
   list-style: none;
-  margin: 0 0 0.6rem;
+  margin: 0 0 0.7rem;
   padding: 0;
-  max-height: 260px;
+  max-height: 300px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -391,36 +848,39 @@ button:disabled {
 
 .ask-question {
   align-self: flex-end;
-  max-width: 90%;
+  max-width: 80%;
   margin: 0;
-  background: #2ea043;
-  color: white;
-  padding: 0.45rem 0.7rem;
-  border-radius: 10px 10px 2px 10px;
-  font-size: 0.85rem;
+  background: var(--accent-teal-bg);
+  border: 1px solid var(--accent-teal);
+  color: var(--text-primary);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  font-size: 0.86rem;
+  font-family: var(--font-mono);
 }
 
 .ask-answer {
   align-self: flex-start;
-  max-width: 90%;
+  max-width: 80%;
   margin: 0;
-  background: #eef6ff;
-  border: 1px solid #cfe3fb;
-  color: #1a4971;
-  padding: 0.45rem 0.7rem;
-  border-radius: 10px 10px 10px 2px;
-  font-size: 0.85rem;
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--border-hairline);
+  color: var(--text-primary);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  font-size: 0.86rem;
+  line-height: 1.5;
 }
 
 .ask-loading {
   font-style: italic;
-  color: #567;
+  color: var(--text-muted);
 }
 
 .ask-error {
-  background: #fdecea;
-  border-color: #f3c6c1;
-  color: #b02a2a;
+  background: var(--accent-coral-bg);
+  border-color: var(--accent-coral);
+  color: var(--accent-coral);
 }
 
 .ask-form {
@@ -431,26 +891,30 @@ button:disabled {
 .ask-input {
   flex: 1;
   min-width: 0;
-  padding: 0.45rem 0.6rem;
-  font-size: 0.9rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.88rem;
+  font-family: var(--font-mono);
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  color: var(--text-primary);
 }
 
 .ask-form button {
-  padding: 0.45rem 0.9rem;
+  padding: 0.5rem 0.95rem;
   font-size: 0.85rem;
   flex-shrink: 0;
 }
 
-/* -- control-flow diagram ------------------------------------------- */
+/* -- control-flow diagram --------------------------------------------------
+   Scrolling lives on .diagram-panel (the inner element) only -- NOT on
+   .panel-flowchart (the outer panel). The outer panel also hosts the
+   floating .panel-tab label, which pokes above the panel's own top edge
+   by design (the "folder tab" look); giving the outer panel a non-visible
+   overflow clips that tab's top half instead of letting it float freely. */
 
 .diagram-panel {
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 1rem;
   overflow-x: auto;
-  background: #fafafa;
 }
 
 .diagram-svg svg {
@@ -460,12 +924,100 @@ button:disabled {
   height: auto;
 }
 
-/* -- Theory section --------------------------------------------------- */
+/* Mermaid renders its own inline fills for node/edge classes (see cfg.js);
+   these overrides bring that palette in line with the three accents. */
+.diagram-svg .node rect,
+.diagram-svg .node polygon {
+  stroke: var(--border-hairline) !important;
+}
+
+/* -- within-run step log (distinct from the persisted History page) ------ */
+
+.step-log-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.step-log-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 0.35rem 0.6rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.step-log-entry:hover {
+  background: var(--bg-panel-raised);
+  border-color: var(--border-hairline);
+}
+
+.step-log-entry-active {
+  color: var(--text-primary);
+  border-color: var(--accent-amber);
+  background: var(--accent-amber-bg);
+}
+
+.step-log-index {
+  color: var(--text-muted);
+  min-width: 1.6em;
+}
+
+.step-log-line {
+  color: var(--text-muted);
+  min-width: 2.8em;
+}
+
+.step-log-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.step-log-flag {
+  font-size: 0.62rem;
+  font-weight: 600;
+  padding: 0.05rem 0.4rem;
+  border-radius: var(--radius);
+  border: 1px solid;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.step-log-flag-amber {
+  color: var(--accent-amber);
+  border-color: var(--accent-amber);
+  background: var(--accent-amber-bg);
+}
+
+.step-log-flag-coral {
+  color: var(--accent-coral);
+  border-color: var(--accent-coral);
+  background: var(--accent-coral-bg);
+}
+
+/* ==========================================================================
+   Theory page
+   ========================================================================== */
 
 .theory-layout {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   gap: 2rem;
+  margin-top: 1rem;
 }
 
 @media (max-width: 700px) {
@@ -477,42 +1029,56 @@ button:disabled {
 .theory-nav {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
   position: sticky;
-  top: 1.5rem;
+  top: 5.5rem;
   align-self: start;
 }
 
 .theory-nav-item {
   background: transparent;
-  color: #333;
+  color: var(--text-muted);
   border: none;
-  border-left: 3px solid transparent;
+  border-left: 2px solid transparent;
   border-radius: 0;
   text-align: left;
   padding: 0.5rem 0.75rem;
-  font-size: 0.9rem;
+  font-size: 0.86rem;
 }
 
 .theory-nav-item:hover {
-  background: #f2f2f2;
+  background: var(--bg-panel-raised);
+  color: var(--text-primary);
 }
 
 .theory-nav-item-active {
-  border-left: 3px solid #2ea043;
-  background: #f2fbf4;
-  color: #1e7e34;
+  border-left: 2px solid var(--accent-amber);
+  background: var(--bg-panel-raised);
+  color: var(--accent-amber);
   font-weight: 600;
 }
 
 .theory-content {
   min-width: 0;
-  max-width: 68ch;
-  line-height: 1.6;
+  max-width: 72ch;
+  line-height: 1.65;
+  color: var(--text-primary);
+  font-size: 0.92rem;
 }
 
 .theory-content p {
   margin: 0 0 0.9rem;
+}
+
+.theory-content strong {
+  color: var(--text-primary);
+}
+
+.theory-content code {
+  background: var(--bg-panel-raised);
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--radius);
+  font-size: 0.85em;
 }
 
 .theory-content h2 {
@@ -520,39 +1086,41 @@ button:disabled {
 }
 
 .theory-code-label {
-  font-size: 0.85rem;
-  color: #666;
+  font-size: 0.8rem;
+  color: var(--text-muted);
   margin-bottom: 0.4rem !important;
 }
 
 .theory-code {
-  background: #f6f8fa;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  padding: 0.8rem 1rem;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
   overflow-x: auto;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.55;
   margin: 0 0 0.9rem;
+  color: var(--text-primary);
 }
 
 .theory-code-annotated {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
 }
 
 .theory-note {
-  font-size: 0.88rem;
-  color: #555;
-  border-left: 3px solid #ddd;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  border-left: 2px solid var(--border-hairline);
   padding-left: 0.75rem;
 }
 
 .theory-note-strong {
-  color: #8a4b00;
-  border-left-color: #f0ad4e;
-  background: #fff8ec;
+  color: var(--accent-amber);
+  border-left-color: var(--accent-amber);
+  background: var(--accent-amber-bg);
   padding: 0.5rem 0.75rem;
-  border-radius: 4px;
+  border-radius: var(--radius);
 }
 
 .theory-list {
@@ -564,7 +1132,9 @@ button:disabled {
   margin-bottom: 0.5rem;
 }
 
-/* -- History panel ----------------------------------------------------- */
+/* ==========================================================================
+   History page
+   ========================================================================== */
 
 .history-panel {
   max-width: 900px;
@@ -579,18 +1149,22 @@ button:disabled {
 }
 
 .history-blurb {
-  color: #555;
-  font-size: 0.9rem;
+  color: var(--text-muted);
+  font-size: 0.88rem;
   margin: 0;
   max-width: 55ch;
 }
 
 .history-header button {
   padding: 0.4rem 0.9rem;
-  font-size: 0.85rem;
-  background: #b02a2a;
-  border-color: #b02a2a;
+  font-size: 0.82rem;
+  border-color: var(--accent-coral);
+  color: var(--accent-coral);
   flex-shrink: 0;
+}
+
+.history-header button:hover:not(:disabled) {
+  background: var(--accent-coral-bg);
 }
 
 .history-list {
@@ -608,15 +1182,15 @@ button:disabled {
   justify-content: space-between;
   gap: 1rem;
   padding: 0.7rem 0.9rem;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: white;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
   cursor: pointer;
 }
 
 .history-row:hover {
-  border-color: #2ea043;
-  background: #f2fbf4;
+  border-color: var(--accent-teal);
+  background: var(--bg-panel-raised);
 }
 
 .history-row-main {
@@ -628,15 +1202,16 @@ button:disabled {
 
 .history-name {
   font-weight: 600;
-  font-family: monospace;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .history-timestamp {
-  font-size: 0.78rem;
-  color: #777;
+  font-size: 0.76rem;
+  color: var(--text-muted);
 }
 
 .history-row-side {
@@ -647,39 +1222,42 @@ button:disabled {
 }
 
 .history-step-count {
-  font-size: 0.8rem;
-  color: #555;
-  font-family: monospace;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
 }
 
 .status-badge {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 600;
   padding: 0.15rem 0.5rem;
-  border-radius: 999px;
+  border-radius: var(--radius);
   text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
+  border: 1px solid;
 }
 
 .status-badge-success {
-  background: #e6f4ea;
-  color: #1e7e34;
+  background: var(--accent-teal-bg);
+  color: var(--accent-teal);
+  border-color: var(--accent-teal);
 }
 
 .status-badge-error {
-  background: #fdecea;
-  color: #b02a2a;
+  background: var(--accent-coral-bg);
+  color: var(--accent-coral);
+  border-color: var(--accent-coral);
 }
 
 .history-delete {
   padding: 0.3rem 0.7rem;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   background: transparent;
-  border: 1px solid #ccc;
-  color: #b02a2a;
+  border-color: var(--border-hairline);
+  color: var(--accent-coral);
 }
 
 .history-delete:hover {
-  background: #fdecea;
-  border-color: #b02a2a;
+  background: var(--accent-coral-bg);
+  border-color: var(--accent-coral);
 }

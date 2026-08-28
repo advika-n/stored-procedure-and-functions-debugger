@@ -249,3 +249,142 @@ def test_answer_question_raises_when_key_is_missing(monkeypatch):
 
     with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
         explainer.answer_question("SET x = 1;", step, "what does this do")
+
+
+# -- _build_prompt: cursor and error context (the per-step explanation
+# prompt, used by generate_gemini_explanation -- NOT _build_ask_prompt,
+# which already included this context and is untouched here) ---------------
+
+
+def test_build_prompt_describes_a_successful_fetch_with_its_row():
+    step = {
+        "line": 7,
+        "nodeType": "FetchCursorNode",
+        "statementText": "FETCH prod_cursor INTO item_name, item_price;",
+        "variables": {"item_name": {"value": "Widget", "type": "string", "changed": True}},
+        "cursor": {"name": "prod_cursor", "currentRow": {"name": "Widget", "price": 10}, "rowIndex": 0, "hasMore": True},
+    }
+
+    prompt = explainer._build_prompt(step, None)
+
+    assert "prod_cursor" in prompt
+    assert "Widget" in prompt
+    assert "hasMore=True" in prompt
+    assert "exhausted" not in prompt
+
+
+def test_build_prompt_describes_an_exhausted_fetch():
+    step = {
+        "line": 12,
+        "nodeType": "FetchCursorNode",
+        "statementText": "FETCH premium_cursor INTO item_name, item_price;",
+        "variables": {},
+        "cursor": {"name": "premium_cursor", "currentRow": None, "rowIndex": 0, "hasMore": False},
+    }
+
+    prompt = explainer._build_prompt(step, None)
+
+    assert "premium_cursor" in prompt
+    assert "exhausted" in prompt
+    assert "hasMore=False" in prompt
+
+
+def test_build_prompt_does_not_call_an_open_or_close_step_exhausted():
+    # currentRow is None on OPEN/CLOSE too, but that's just "not
+    # applicable right now", not "this FETCH found nothing".
+    step = {
+        "line": 5,
+        "nodeType": "OpenCursorNode",
+        "statementText": "OPEN prod_cursor;",
+        "variables": {},
+        "cursor": {"name": "prod_cursor", "currentRow": None, "rowIndex": 0, "hasMore": True},
+    }
+
+    prompt = explainer._build_prompt(step, None)
+
+    assert "exhausted" not in prompt
+    assert "no current row yet" in prompt
+
+
+def test_build_prompt_flags_a_handled_error_as_the_primary_event():
+    step = {
+        "line": 12,
+        "nodeType": "FetchCursorNode",
+        "statementText": "FETCH premium_cursor INTO item_name, item_price;",
+        "variables": {},
+        "cursor": {"name": "premium_cursor", "currentRow": None, "rowIndex": 0, "hasMore": False},
+        "error": {
+            "condition": "NOT_FOUND",
+            "message": "Cursor 'premium_cursor' has no more rows to fetch",
+            "handler": "NOT_FOUND handler",
+        },
+    }
+
+    prompt = explainer._build_prompt(step, None)
+
+    assert "NOT_FOUND" in prompt
+    assert "no more rows to fetch" in prompt
+    assert "caught by the NOT_FOUND handler" in prompt
+    assert "primary thing that happened" in prompt  # the explicit steering instruction
+
+
+def test_build_prompt_flags_an_unhandled_error_distinctly():
+    step = {
+        "line": 19,
+        "nodeType": "SetStatement",
+        "statementText": "SET average = total / count;",
+        "variables": {},
+        "error": {"condition": "DIVISION_BY_ZERO", "message": "Division by zero", "handler": "unhandled"},
+    }
+
+    prompt = explainer._build_prompt(step, None)
+
+    assert "DIVISION_BY_ZERO" in prompt
+    assert "unhandled" in prompt
+    assert "caught by the" not in prompt  # only phrased that way when something DID catch it
+
+
+def test_build_prompt_omits_cursor_and_error_sections_for_a_plain_step():
+    step = {
+        "line": 1,
+        "nodeType": "SetStatement",
+        "statementText": "SET x = 1;",
+        "variables": {"x": {"value": 1, "type": "number", "changed": True}},
+    }
+
+    prompt = explainer._build_prompt(step, None)
+
+    assert "Cursor" not in prompt
+    assert "IMPORTANT" not in prompt
+
+
+def test_build_prompt_still_includes_branch_for_if_steps():
+    # Regression check: branch/loop were already handled correctly
+    # before this fix and must stay that way.
+    step = {
+        "line": 4,
+        "nodeType": "IfStatement",
+        "statementText": "IF total > 100 THEN",
+        "variables": {"total": {"value": 120, "type": "number", "changed": False}},
+        "branch": {"condition": "total > 100", "result": True, "path": "then"},
+    }
+
+    prompt = explainer._build_prompt(step, None)
+
+    assert "total > 100" in prompt
+    assert "branch taken: then" in prompt
+
+
+def test_build_prompt_still_includes_loop_for_while_steps():
+    step = {
+        "line": 1,
+        "nodeType": "WhileStatement",
+        "statementText": "WHILE count < 3 DO",
+        "variables": {"count": {"value": 1, "type": "number", "changed": False}},
+        "loop": {"condition": "count < 3", "result": True, "iteration": 2},
+    }
+
+    prompt = explainer._build_prompt(step, None)
+
+    assert "count < 3" in prompt
+    assert "iteration 2" in prompt

@@ -7,10 +7,19 @@ to JSON for inspection or shipped over the wire to a frontend.
 
 Supported grammar (informal, keywords in CAPS are literal tokens):
 
-    procedure   := statement*
+    program     := function_def | procedure_def | statement*
+
+    function_def := CREATE FUNCTION IDENT '(' func_param (',' func_param)* ')'
+                     RETURNS IDENT
+                     BEGIN statement* END ';'?
+    func_param   := IDENT IDENT
+
+    procedure_def := CREATE PROCEDURE IDENT '(' proc_param (',' proc_param)* ')'
+                      BEGIN statement* END ';'?
+    proc_param    := (IN | OUT | INOUT)? IDENT IDENT
 
     statement   := declare_stmt | declare_cursor_stmt | declare_handler_stmt
-                    | set_stmt | if_stmt | while_stmt
+                    | set_stmt | if_stmt | while_stmt | return_stmt
                     | open_cursor_stmt | fetch_cursor_stmt | close_cursor_stmt
 
     declare_stmt        := DECLARE IDENT IDENT (DEFAULT expr)? ';'
@@ -22,6 +31,7 @@ Supported grammar (informal, keywords in CAPS are literal tokens):
                      (ELSE statement*)?
                      END IF ';'
     while_stmt   := WHILE expr DO statement* END WHILE ';'
+    return_stmt  := RETURN expr ';'
     open_cursor_stmt  := OPEN IDENT ';'
     fetch_cursor_stmt := FETCH IDENT INTO IDENT (',' IDENT)* ';'
     close_cursor_stmt := CLOSE IDENT ';'
@@ -35,8 +45,64 @@ Supported grammar (informal, keywords in CAPS are literal tokens):
                      | '(' expr ')'
 
 BEGIN/END (as a bare block), IN and OUT are recognized by the tokenizer
-as keywords but are not part of this grammar subset, so the parser
-does not accept them.
+as keywords but are not part of this grammar subset outside of a
+function_def's own BEGIN...END wrapper (see "Functions" below), so the
+parser does not accept them elsewhere.
+
+-- Procedures: two forms, both fully supported ---------------------------
+
+A procedure can be written either way, and both are first-class:
+
+  1. The bare statement body (`program := statement*`), with NO
+     `CREATE`/`BEGIN`/`END` wrapper at all -- the ONLY form this
+     grammar understood before CREATE PROCEDURE support existed (see
+     Theory.jsx's StoredProceduresTopic, which used to describe this
+     as the only option; it's been updated). `parse()` returns this as
+     ``{"type": "Procedure", "body": [...]}`` -- no "name"/"params"
+     keys at all. This is the permanent backward-compatibility path:
+     every pre-existing sample, and every persisted History entry
+     saved before CREATE PROCEDURE support existed, is exactly this
+     shape and keeps parsing/running identically forever. Do not
+     remove or change this path.
+  2. The full `CREATE PROCEDURE name(params) BEGIN ... END` wrapper,
+     parsed by `parse_procedure_def()` into
+     ``{"type": "ProcedureNode", "name", "params", "body", "line"}`` --
+     deliberately a *different* type string from plain "Procedure",
+     precisely so old callers pattern-matching on `"Procedure"` are
+     never surprised by a new shape showing up under the same name.
+
+`parse()` picks between the three grammars (function_def,
+procedure_def, or the bare statement* fallback) by peeking at the
+first one or two tokens: a leading `CREATE FUNCTION` routes to
+`function_def`, a leading `CREATE PROCEDURE` routes to
+`procedure_def`, and anything else (including a `CREATE` followed by
+neither) falls through to -- or errors out of -- the appropriate path.
+Everywhere in this codebase that needs to know "is this AST a
+function", the check is `ast["type"] == "FunctionNode"`; nothing needs
+to distinguish "Procedure" from "ProcedureNode" specifically, since
+both describe a procedure and neither ever needs a RETURN.
+
+A procedure_def's params carry a `mode` ("IN", "OUT", or "INOUT",
+defaulting to "IN" when omitted) -- unlike a function_def's params,
+which never have a mode at all (see "Functions" below). See
+app.interpreter's module docstring for what OUT/INOUT actually do at
+runtime.
+
+-- Functions ------------------------------------------------------------
+
+A function's parameters are plain `name TYPE` pairs -- no IN/OUT mode,
+unlike a hypothetical procedure parameter list. They aren't
+auto-declared as zero-valued locals; a caller supplies their values
+the exact same way procedure parameters already do here (via the
+interpreter's `initial_params`), so referencing a parameter that
+wasn't supplied raises the same "not declared" error an undeclared
+procedure variable would.
+
+`RETURN expr;` is parseable anywhere an ordinary statement is (inside
+IF/WHILE bodies included) via the normal `_parse_statement` dispatch --
+it is not restricted to appearing only at a function's top level.
+app.interpreter enforces that a function actually executes one before
+its body runs out.
 
 -- Cursors -----------------------------------------------------------------
 
@@ -170,6 +236,81 @@ class Parser:
             body.append(self._parse_statement())
         return {"type": "Procedure", "body": body}
 
+    def parse_function_def(self) -> dict:
+        start = self._keyword("CREATE")
+        self._keyword("FUNCTION")
+        name_token = self._expect("IDENTIFIER")
+
+        self._expect("PUNCTUATION", "(")
+        params: list[dict] = []
+        if not self._check("PUNCTUATION", ")"):
+            params.append(self._parse_function_param())
+            while self._match("PUNCTUATION", ","):
+                params.append(self._parse_function_param())
+        self._expect("PUNCTUATION", ")")
+
+        self._keyword("RETURNS")
+        return_type_token = self._expect("IDENTIFIER")
+
+        self._keyword("BEGIN")
+        body = self._parse_block({"END"})
+        self._keyword("END")
+        self._match("PUNCTUATION", ";")  # optional trailing ';' after END
+
+        return {
+            "type": "FunctionNode",
+            "name": name_token["value"],
+            "params": params,
+            "returnType": return_type_token["value"],
+            "body": body,
+            "line": start["line"],
+        }
+
+    def _parse_function_param(self) -> dict:
+        # Plain `name TYPE` -- no IN/OUT mode, unlike a procedure
+        # parameter (see module docstring's "Functions" section).
+        name_token = self._expect("IDENTIFIER")
+        type_token = self._expect("IDENTIFIER")
+        return {"name": name_token["value"], "type": type_token["value"]}
+
+    def parse_procedure_def(self) -> dict:
+        start = self._keyword("CREATE")
+        self._keyword("PROCEDURE")
+        name_token = self._expect("IDENTIFIER")
+
+        self._expect("PUNCTUATION", "(")
+        params: list[dict] = []
+        if not self._check("PUNCTUATION", ")"):
+            params.append(self._parse_procedure_param())
+            while self._match("PUNCTUATION", ","):
+                params.append(self._parse_procedure_param())
+        self._expect("PUNCTUATION", ")")
+
+        self._keyword("BEGIN")
+        body = self._parse_block({"END"})
+        self._keyword("END")
+        self._match("PUNCTUATION", ";")  # optional trailing ';' after END
+
+        return {
+            "type": "ProcedureNode",
+            "name": name_token["value"],
+            "params": params,
+            "body": body,
+            "line": start["line"],
+        }
+
+    def _parse_procedure_param(self) -> dict:
+        # (IN | OUT | INOUT)? name TYPE -- mode defaults to "IN" when
+        # omitted, matching ordinary SQL/PSM behavior.
+        mode = "IN"
+        for candidate in ("IN", "OUT", "INOUT"):
+            if self._match("KEYWORD", candidate):
+                mode = candidate
+                break
+        name_token = self._expect("IDENTIFIER")
+        type_token = self._expect("IDENTIFIER")
+        return {"name": name_token["value"], "mode": mode, "type": type_token["value"]}
+
     # -- statements ---------------------------------------------------------
 
     def _parse_statement(self) -> dict:
@@ -191,10 +332,18 @@ class Parser:
             return self._parse_fetch_cursor()
         if self._check("KEYWORD", "CLOSE"):
             return self._parse_close_cursor()
+        if self._check("KEYWORD", "RETURN"):
+            return self._parse_return()
 
         raise self._error(
-            "Expected DECLARE, SET, IF, WHILE, OPEN, FETCH, or CLOSE", token
+            "Expected DECLARE, SET, IF, WHILE, RETURN, OPEN, FETCH, or CLOSE", token
         )
+
+    def _parse_return(self) -> dict:
+        start = self._keyword("RETURN")
+        value = self._parse_expr()
+        self._expect("PUNCTUATION", ";")
+        return {"type": "ReturnNode", "value": value, "line": start["line"]}
 
     def _parse_declare(self) -> dict:
         start = self._keyword("DECLARE")
@@ -503,16 +652,42 @@ def _render_raw_query(tokens: list[dict]) -> str:
 
 
 def parse(tokens: list[dict]) -> dict:
-    """Parse a full token list into a ProcedureNode AST.
+    """Parse a full token list into a Procedure, ProcedureNode, or
+    FunctionNode AST.
+
+    Dispatches by peeking at the first one or two tokens: a leading
+    ``CREATE PROCEDURE`` parses a full ``CREATE PROCEDURE ... BEGIN
+    ... END`` definition, a leading ``CREATE FUNCTION`` parses a full
+    ``CREATE FUNCTION ... RETURNS ... BEGIN ... END`` definition, and
+    anything else (no leading ``CREATE`` at all) falls back to the
+    original bare statement-list grammar -- a procedure body typed
+    with no wrapper, exactly as every pre-existing sample and every
+    History entry saved before ``CREATE PROCEDURE`` support existed
+    already does. See the module docstring's "Procedures: two forms"
+    section.
 
     Args:
         tokens: the token list produced by ``app.tokenizer.tokenize``.
 
     Returns:
-        A ``{"type": "Procedure", "body": [...]}`` dict — the root of
-        the AST, containing every top-level statement in source order.
+        One of:
+          - ``{"type": "Procedure", "body": [...]}`` (bare form)
+          - ``{"type": "ProcedureNode", "name", "params", "body"}``
+            (wrapped form)
+          - ``{"type": "FunctionNode", "name", "params", "returnType",
+            "body"}``
 
     Raises:
-        ParserError: if the tokens don't match the supported grammar.
+        ParserError: if the tokens don't match the supported grammar,
+            including a ``CREATE`` followed by neither ``FUNCTION`` nor
+            ``PROCEDURE``.
     """
-    return Parser(tokens).parse_procedure()
+    parser = Parser(tokens)
+    if parser._check("KEYWORD", "CREATE"):
+        following = parser.tokens[parser.pos + 1] if parser.pos + 1 < len(parser.tokens) else None
+        if following is not None and following["type"] == "KEYWORD" and following["value"].upper() == "PROCEDURE":
+            return parser.parse_procedure_def()
+        if following is not None and following["type"] == "KEYWORD" and following["value"].upper() == "FUNCTION":
+            return parser.parse_function_def()
+        raise parser._error("Expected FUNCTION or PROCEDURE after CREATE", following)
+    return parser.parse_procedure()

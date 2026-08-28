@@ -109,6 +109,70 @@ and that asymmetry is deliberate:
     raises before that step could be returned to a caller); the
     frontend still renders it correctly for consistency and in case a
     future caller wants a partial trace.
+
+-- Functions ------------------------------------------------------------
+
+A FunctionNode (see app.parser) runs through the exact same
+`_execute_block`/`_execute_statement` machinery as a Procedure's body --
+the only new piece is ReturnNode. Executing one evaluates its
+expression, records a DebugStep with a `returnValue` field
+(``{value, type}``), and then raises the internal `_ReturnSignal` to
+unwind out of however many nested IF/WHILE blocks it's inside,
+stopping the function immediately -- no statement after a RETURN ever
+runs, even other statements later in the same block. `run()` is the
+only place that catches `_ReturnSignal`.
+
+Whether "the body finished without ever returning" is an error depends
+on what's being run: a *function* must return something (its whole
+point is to produce a value), so the module-level `run()` requires one
+and raises InterpreterError if the body completes with no RETURN
+having executed -- never a silent `None`. A *procedure* has no return
+concept at all and is never held to this; `require_return` is only
+ever set when the AST root is a FunctionNode.
+
+A FunctionNode's own `CREATE FUNCTION ... RETURNS ... BEGIN` line isn't
+itself a body statement, so without special handling it would never
+appear in the trace at all -- step 1 would jump straight to whatever
+the first body statement happens to be. `Interpreter.run()`'s
+`entry_node` parameter fixes this: when set, one extra DebugStep is
+recorded *before* the body's own first step, at the definition's own
+line, with `nodeType` equal to the AST's own `"type"` (`"FunctionNode"`
+or `"ProcedureNode"`) and `statementText` rendered by
+`render_definition_header`. Its `variables` snapshot reflects whatever
+`initial_params`/OUT-seeding already put in scope (see "Procedures with
+declared params" below) -- i.e. what's true *at* entry, before any
+DECLARE/SET in the body has run. The bare/legacy Procedure form has no
+such line and never gets one; see the module-level `run()`.
+
+-- Procedures with declared params ---------------------------------------
+
+A ProcedureNode's params (see app.parser) carry a mode, and the
+module-level `run()` treats each one differently before the
+Interpreter ever starts executing statements:
+
+  - IN params get no special treatment at all -- their value has to
+    already be in the caller-supplied `initial_params`, same as any
+    externally-referenced variable in a bare Procedure body has always
+    worked. Referencing one that wasn't supplied is the same "not
+    declared" InterpreterError it always was.
+  - OUT params are auto-seeded to `None` if `initial_params` didn't
+    already supply a value -- exactly like a DECLAREd variable with no
+    DEFAULT -- since a pure output naturally starts with nothing from
+    the caller. The procedure body is expected to SET it before the
+    run ends, but nothing forces that; an OUT param that's never
+    assigned just stays `None` in the final snapshot, same as any
+    other declared-but-unset variable would.
+  - INOUT params behave like IN for their starting value (must already
+    be supplied) but are ALSO tracked as an output, same as OUT.
+
+Being an output is purely informational: every DebugStep's `variables`
+snapshot marks OUT/INOUT names with `isOutput: true` (see
+`_snapshot_variables`), so a caller can tell which scope variables are
+this procedure's declared outputs -- there is no runtime behavior
+difference between an "output" variable and any other; a plain
+Procedure or FunctionNode's variables are simply never marked this way
+(`isOutput` is always `false` for them, since neither has OUT/INOUT
+params by construction).
 """
 
 from __future__ import annotations
@@ -151,6 +215,14 @@ _HANDLER_LABELS = {
 }
 
 
+class _ReturnSignal(Exception):
+    """Internal control-flow signal, never surfaced to callers: raised
+    by `_exec_return` once its DebugStep has been recorded, to unwind
+    out of any nested IF/WHILE blocks and stop executing further
+    statements. Caught only in `Interpreter.run()`. See the module
+    docstring's "Functions" section."""
+
+
 @dataclass
 class DebugStep:
     step_number: int
@@ -162,6 +234,7 @@ class DebugStep:
     loop: dict | None = None
     cursor: dict | None = None
     error: dict | None = None
+    return_value: dict | None = None
 
     def to_dict(self) -> dict:
         """Serialize using the camelCase keys the frontend expects."""
@@ -180,6 +253,8 @@ class DebugStep:
             step["cursor"] = self.cursor
         if self.error is not None:
             step["error"] = self.error
+        if self.return_value is not None:
+            step["returnValue"] = self.return_value
         return step
 
 
@@ -237,7 +312,25 @@ def render_statement_header(node: dict) -> str:
         # render_statement_header(action) already ends in ';' -- no
         # extra trailing punctuation needed here.
         return f"DECLARE CONTINUE HANDLER FOR {node['condition']} {render_statement_header(node['action'])}"
+    if kind == "ReturnNode":
+        return f"RETURN {render_expr(node['value'])};"
     raise InterpreterError(f"Cannot render unknown statement node {kind!r}")
+
+
+def render_definition_header(ast: dict) -> str:
+    """Render the CREATE FUNCTION/CREATE PROCEDURE signature line
+    itself -- the one line in a wrapped definition that isn't a body
+    statement, so it has no node of its own for render_statement_header
+    to handle. Used only to label the synthetic "entry" DebugStep (see
+    Interpreter.run) recorded once, before the body's own first step."""
+    kind = ast["type"]
+    if kind == "FunctionNode":
+        params = ", ".join(f"{p['name']} {p['type']}" for p in ast.get("params") or [])
+        return f"CREATE FUNCTION {ast['name']}({params}) RETURNS {ast['returnType']}"
+    if kind == "ProcedureNode":
+        params = ", ".join(f"{p.get('mode', 'IN')} {p['name']} {p['type']}" for p in ast.get("params") or [])
+        return f"CREATE PROCEDURE {ast['name']}({params})"
+    raise InterpreterError(f"Cannot render an entry step for AST type {kind!r}")
 
 
 # -- value <-> debugger type name ---------------------------------------------
@@ -256,13 +349,26 @@ def _type_name(value) -> str:
 
 
 class Interpreter:
-    def __init__(self, initial_params: dict, db_connection: sqlite3.Connection | None = None):
+    def __init__(
+        self,
+        initial_params: dict,
+        db_connection: sqlite3.Connection | None = None,
+        output_param_names: set[str] | None = None,
+    ):
         self.scope: dict = dict(initial_params)
         self.steps: list[DebugStep] = []
         self._step_number = 0
         # Baseline for diffing "changed": start from the params as given,
         # so a param that's never touched shows changed=False throughout.
         self._previous_values: dict = dict(initial_params)
+
+        # Names of ProcedureNode OUT/INOUT params (see module
+        # docstring's "Procedures with declared params" section) --
+        # purely informational, surfaced per-variable as `isOutput` in
+        # every DebugStep's snapshot so a caller can identify which
+        # scope variables are this procedure's outputs, without the
+        # interpreter otherwise treating them any differently.
+        self._output_param_names: set[str] = set(output_param_names or ())
 
         # Cursors, keyed by name -- deliberately separate from `scope`
         # (see module docstring's "Cursors" section). Each entry:
@@ -283,8 +389,36 @@ class Interpreter:
 
     # -- public API -----------------------------------------------------------
 
-    def run(self, body: list[dict]) -> list[DebugStep]:
-        self._execute_block(body)
+    def run(
+        self,
+        body: list[dict],
+        require_return: bool = False,
+        function_name: str | None = None,
+        entry_node: dict | None = None,
+    ) -> list[DebugStep]:
+        # A wrapped CREATE FUNCTION/CREATE PROCEDURE definition gets one
+        # extra DebugStep first, for the CREATE .../BEGIN signature line
+        # itself -- there's no AST node inside `body` for that line, so
+        # without this, step 1 would jump straight to whatever the first
+        # body statement happens to be (its DECLARE, if it has one, or
+        # further still if it doesn't) and the definition line would
+        # never appear in the trace at all. The bare/legacy Procedure
+        # form (no CREATE wrapper) has no such line to represent, so
+        # `entry_node` is None for it and this is skipped entirely --
+        # its first step is exactly what it always was.
+        if entry_node is not None:
+            self._record_step(entry_node, render_definition_header(entry_node))
+
+        returned = False
+        try:
+            self._execute_block(body)
+        except _ReturnSignal:
+            returned = True
+
+        if require_return and not returned:
+            label = f"Function '{function_name}'" if function_name else "This function"
+            raise InterpreterError(f"{label} completed without executing a RETURN statement")
+
         return self.steps
 
     # -- statement execution ----------------------------------------------
@@ -313,6 +447,8 @@ class Interpreter:
             self._exec_close_cursor(node)
         elif kind == "HandlerDeclNode":
             self._exec_declare_handler(node)
+        elif kind == "ReturnNode":
+            self._exec_return(node)
         else:
             raise InterpreterError(
                 f"Don't know how to execute node type {kind!r}", node.get("line")
@@ -405,6 +541,27 @@ class Interpreter:
             if not result:
                 break
             self._execute_block(node["body"])
+
+    def _exec_return(self, node: dict) -> None:
+        error_info = None
+        try:
+            value = self._evaluate(node["value"])
+        except _DivisionByZeroSignal as signal:
+            # Same DIVISION_BY_ZERO handling as every other statement
+            # boundary: non-fatal only if a handler is registered, else
+            # this re-raises as the ordinary InterpreterError.
+            error_info = self._handle_division_by_zero(signal)
+            value = None
+
+        return_value = {"value": value, "type": _type_name(value)}
+        self._record_step(node, render_statement_header(node), error=error_info, return_value=return_value)
+        self._run_handler_if_triggered(error_info)
+
+        # Stops the function immediately -- unwinds out of however many
+        # nested IF/WHILE blocks this RETURN is inside, all the way up
+        # to Interpreter.run(). No statement after this one ever runs,
+        # even a later one in the same block.
+        raise _ReturnSignal()
 
     # -- exception handlers -----------------------------------------------
 
@@ -646,6 +803,7 @@ class Interpreter:
                 "value": value,
                 "type": _type_name(value),
                 "changed": previous is _UNSET or previous != value,
+                "isOutput": name in self._output_param_names,
             }
         self._previous_values = dict(self.scope)
         return snapshot
@@ -658,6 +816,7 @@ class Interpreter:
         loop: dict | None = None,
         cursor: dict | None = None,
         error: dict | None = None,
+        return_value: dict | None = None,
     ) -> DebugStep:
         self._step_number += 1
         step = DebugStep(
@@ -670,6 +829,7 @@ class Interpreter:
             loop=loop,
             cursor=cursor,
             error=error,
+            return_value=return_value,
         )
         self.steps.append(step)
         return step
@@ -683,13 +843,27 @@ def run(
     initial_params: dict | None = None,
     db_connection: sqlite3.Connection | None = None,
 ) -> list[DebugStep]:
-    """Execute a ProcedureNode AST and return its full DebugStep trace.
+    """Execute a Procedure, ProcedureNode, or FunctionNode AST and
+    return its full DebugStep trace.
 
     Args:
-        ast: the ``{"type": "Procedure", "body": [...]}`` root produced
-            by ``app.parser.parse``.
-        initial_params: starting values for the procedure's input
-            parameters (e.g. ``{"price": 20, "quantity": 6}``).
+        ast: the root produced by ``app.parser.parse`` -- one of
+            ``{"type": "Procedure", "body": [...]}`` (bare, no params),
+            ``{"type": "ProcedureNode", "name", "params", "body"}``
+            (wrapped, params carry a "mode"), or
+            ``{"type": "FunctionNode", "name", "params", "returnType",
+            "body"}`` (params never carry a mode).
+        initial_params: starting values for the procedure/function's
+            variables and parameters (e.g. ``{"price": 20, "quantity":
+            6}``). IN and INOUT params are looked up here by name, the
+            exact same mechanism a bare procedure body's externally-
+            referenced variables and a FunctionNode's params already
+            use -- referencing one that wasn't supplied raises the
+            usual "not declared" InterpreterError. A ProcedureNode's
+            OUT params are the one exception: they're auto-seeded to
+            `None` if not already present in `initial_params`, exactly
+            like a DECLAREd variable with no DEFAULT, since a pure
+            output naturally has no caller-supplied starting value.
         db_connection: the SQLite connection cursor statements run
             their queries against. Defaults to a fresh, empty
             in-memory database (closed again once this run finishes) --
@@ -698,7 +872,19 @@ def run(
 
     Returns:
         One DebugStep per executed statement (and, for WHILE, one
-        extra DebugStep per condition check), in execution order.
+        extra DebugStep per condition check), in execution order. For a
+        FunctionNode or ProcedureNode, step 1 is an extra "entry" step
+        for the CREATE .../BEGIN line itself (see the module docstring's
+        "Functions" section) -- the bare/legacy Procedure form has no
+        such step, and its trace is exactly what it always was. Every
+        step's `variables` entries carry an `isOutput` flag, True only
+        for a ProcedureNode's declared OUT/INOUT params -- so an OUT
+        param's final value is visible (and identifiable as an output)
+        in the last step's snapshot, the same way any other variable's
+        final value already is. For a FunctionNode, execution stops at
+        the first RETURN -- see the module docstring's "Functions"
+        section -- so no step after that one appears, even if there
+        was more source left unexecuted.
 
     Raises:
         InterpreterError: on undefined variables, an unhandled
@@ -707,13 +893,41 @@ def run(
             WHILE loop that exceeds MAX_LOOP_ITERATIONS, a cursor error
             (undeclared/already-open/not-open cursor, a query that
             fails against the database, or a FETCH whose target count
-            doesn't match the query's column count), or a duplicate
-            CONTINUE HANDLER for the same condition. NOT_FOUND never
-            raises -- see "Cursors" above.
+            doesn't match the query's column count), a duplicate
+            CONTINUE HANDLER for the same condition, or -- for a
+            FunctionNode only -- a body that completes without ever
+            executing a RETURN. NOT_FOUND never raises -- see "Cursors"
+            above.
     """
-    interpreter = Interpreter(initial_params or {}, db_connection=db_connection)
+    initial_params = dict(initial_params or {})
+    output_param_names: set[str] = set()
+
+    # Only a ProcedureNode's params carry a mode at all (a bare
+    # Procedure has no "params" key, and a FunctionNode's params never
+    # have OUT/INOUT semantics -- see parser module docstring), so this
+    # is a no-op for both of those.
+    if ast.get("type") == "ProcedureNode":
+        for param in ast.get("params") or []:
+            mode = param.get("mode", "IN")
+            if mode in ("OUT", "INOUT"):
+                output_param_names.add(param["name"])
+            if mode == "OUT" and param["name"] not in initial_params:
+                initial_params[param["name"]] = None
+
+    interpreter = Interpreter(initial_params, db_connection=db_connection, output_param_names=output_param_names)
     try:
-        return interpreter.run(ast["body"])
+        require_return = ast.get("type") == "FunctionNode"
+        # Only the two wrapped forms have a CREATE .../BEGIN line to
+        # give its own entry step -- the bare/legacy Procedure form
+        # (no "name"/"params" at all) is intentionally excluded, so its
+        # trace is byte-for-byte what it always was.
+        entry_node = ast if ast.get("type") in ("FunctionNode", "ProcedureNode") else None
+        return interpreter.run(
+            ast["body"],
+            require_return=require_return,
+            function_name=ast.get("name"),
+            entry_node=entry_node,
+        )
     finally:
         if interpreter._owns_db:
             interpreter._db.close()

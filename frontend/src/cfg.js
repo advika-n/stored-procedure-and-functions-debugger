@@ -204,9 +204,16 @@ export function renderMermaidDefinition(graph, diagramState) {
   })
   lines.push('')
 
-  lines.push('  classDef current fill:#ffd54f,stroke:#8a6d00,stroke-width:3px,color:#000;')
-  lines.push('  classDef visited fill:#e6f4ea,stroke:#1e7e34,stroke-width:1px,color:#1e7e34;')
-  lines.push('  classDef terminal fill:#eee,stroke:#999,color:#333;')
+  // Literal hex only -- Mermaid's own `classDef`/`linkStyle` mini
+  // grammar parses these as plain color tokens and rejects CSS
+  // functions like var(...) or rgba(...) (confirmed: it throws a
+  // parse error the moment it hits the '(' ). These values are
+  // hand-matched to the amber/teal/hairline tokens in theme.css --
+  // amber = current node, teal = visited/taken, the same two semantic
+  // accents used everywhere else in the app, no flowchart-only palette.
+  lines.push('  classDef current fill:#3a2e18,stroke:#e8a23d,stroke-width:3px,color:#edeff4;')
+  lines.push('  classDef visited fill:#1c332f,stroke:#4fb0a5,stroke-width:1px,color:#edeff4;')
+  lines.push('  classDef terminal fill:#1d2538,stroke:#2a3348,color:#8891a6;')
 
   const currentNode = graph.nodes.find((n) => n.line === currentLine)
   const visitedNodeIds = graph.nodes
@@ -217,10 +224,10 @@ export function renderMermaidDefinition(graph, diagramState) {
   if (currentNode) lines.push(`  class ${currentNode.id} current;`)
 
   for (const index of takenLinkStyleIndexes) {
-    lines.push(`  linkStyle ${index} stroke:#2ea043,stroke-width:3px;`)
+    lines.push(`  linkStyle ${index} stroke:#4fb0a5,stroke-width:3px;`)
   }
   for (const index of notTakenLinkStyleIndexes) {
-    lines.push(`  linkStyle ${index} stroke:#bbb,stroke-width:1px,stroke-dasharray:4 3;`)
+    lines.push(`  linkStyle ${index} stroke:#2a3348,stroke-width:1px,stroke-dasharray:4 3;`)
   }
 
   return lines.join('\n')

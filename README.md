@@ -68,11 +68,29 @@ Once both are running, open the frontend URL in a browser — you should see
 The interpreter runs a small procedural-SQL subset, not full MySQL/PL-SQL.
 Supported:
 
+- **Two ways to write a procedure**, both first-class:
+  1. A bare statement body, no wrapper at all — the original, and still
+     permanent, form. Every History entry saved before `CREATE PROCEDURE`
+     support existed is stored exactly this way and keeps working forever.
+  2. `CREATE PROCEDURE name(params) BEGIN ... END` — params are
+     `[IN | OUT | INOUT] name TYPE`, mode defaults to `IN` when omitted.
+     `IN`/`INOUT` values come from the caller (the same mechanism a bare
+     body's externally-referenced variables already use); `OUT` auto-seeds
+     to `null` if the caller didn't supply one. Every variable in the trace
+     carries an `isOutput` flag, `true` only for a declared `OUT`/`INOUT`
+     param, so its final value is identifiable as this procedure's output.
+- **Functions**: `CREATE FUNCTION name(params) RETURNS type BEGIN ...
+  END` — params are plain `name TYPE`, no mode. `RETURN expr;` is a
+  statement like any other (valid inside `IF`/`WHILE` too); executing one
+  stops the function immediately — no statement after it ever runs, even
+  later ones in the same block — and its DebugStep carries a `returnValue`
+  field. A function body that completes without ever executing a `RETURN`
+  is a clear `InterpreterError`, never a silent `null`.
 - **Variables**: `DECLARE name TYPE [DEFAULT expr];`, `SET name = expr;`
 - **Control flow**: `IF ... THEN ... [ELSE ...] END IF;`,
   `WHILE ... DO ... END WHILE;`
 - **Expressions**: `+ - * /`, comparisons `> < = !=`, string/number
-  literals, parentheses — no `>=`/`<=`, no procedure parameters
+  literals, parentheses — no `>=`/`<=`
 - **Cursors** (MySQL-style): `DECLARE cur CURSOR FOR SELECT ...;`,
   `OPEN`/`FETCH ... INTO ...`/`CLOSE`. The embedded `SELECT` is captured
   as raw text and run against SQLite as-is — it isn't parsed by this
@@ -96,9 +114,17 @@ Supported:
   once a handler is actually registered for it — unhandled, it still
   aborts the run exactly as it always did.
 
-Not supported at all: stored functions/`RETURN`, `CASE`, `LOOP`/`LEAVE`,
-cursor parameters, transactions, and anything not listed above. The
-in-app **Theory** tab documents each supported piece with a runnable
-example; the sample library's **ProductPriceTotal** and
-**SafeAverageWithHandlers** procedures are runnable demonstrations of
-cursors and exception handling respectively.
+Not supported at all: `CALL`, `CASE`, `LOOP`/`LEAVE`, cursor parameters,
+transactions, table statements (`UPDATE`/`INSERT`/...), and anything not
+listed above. The in-app **Theory** tab documents each supported piece
+with a runnable example; the sample library's **ComputeTax** procedure
+demonstrates a declared `OUT` param, and **ProductPriceTotal** /
+**SafeAverageWithHandlers** are runnable demonstrations of cursors and
+exception handling respectively. All eight samples use the full
+`CREATE PROCEDURE(...) BEGIN...END` wrapper — a deliberate choice for
+consistency with the syntax the Theory tab teaches, made once `CREATE
+PROCEDURE` support existed and migrating was a pure find-and-replace;
+see `frontend/src/samples.js`'s header comment for the full rationale.
+The bare, wrapper-less form isn't gone — it's simply no longer what any
+*sample* demonstrates, since it's the backward-compatibility path, not
+the recommended way to write a new one.

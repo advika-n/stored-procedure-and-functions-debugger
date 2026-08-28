@@ -216,3 +216,26 @@ def test_not_found_and_notfound_are_distinct_keywords():
     # tokens -- see app.parser's module docstring.
     tokens = tokenize("NOT_FOUND NOTFOUND")
     assert _pairs(tokens) == [("KEYWORD", "NOT_FOUND"), ("KEYWORD", "NOTFOUND")]
+
+
+# -- CREATE FUNCTION ------------------------------------------------------
+
+
+def test_create_function_header_tokens():
+    tokens = tokenize("CREATE FUNCTION GetTotal(price DECIMAL) RETURNS DECIMAL")
+    assert _pairs(tokens) == [
+        ("KEYWORD", "CREATE"),
+        ("KEYWORD", "FUNCTION"),
+        ("IDENTIFIER", "GetTotal"),
+        ("PUNCTUATION", "("),
+        ("IDENTIFIER", "price"),
+        ("IDENTIFIER", "DECIMAL"),
+        ("PUNCTUATION", ")"),
+        ("KEYWORD", "RETURNS"),
+        ("IDENTIFIER", "DECIMAL"),
+    ]
+
+
+def test_return_statement_tokens():
+    tokens = tokenize("RETURN total * 0.9;")
+    assert _pairs(tokens)[0] == ("KEYWORD", "RETURN")

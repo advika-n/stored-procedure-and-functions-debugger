@@ -15,7 +15,8 @@ Each token is a dict with the shape::
 Supported keywords (case-insensitive):
     DECLARE, SET, IF, THEN, ELSE, END, WHILE, DO, BEGIN, IN, OUT, DEFAULT,
     CURSOR, FOR, OPEN, FETCH, INTO, CLOSE, SELECT, FROM, WHERE,
-    FOUND, NOTFOUND, CONTINUE, HANDLER, NOT_FOUND, DIVISION_BY_ZERO
+    FOUND, NOTFOUND, CONTINUE, HANDLER, NOT_FOUND, DIVISION_BY_ZERO,
+    CREATE, FUNCTION, RETURNS, RETURN, PROCEDURE, INOUT
 
 Supported operators:
     +  -  *  /  >  <  =  !=
@@ -73,6 +74,19 @@ KEYWORDS = {
     "HANDLER",
     "NOT_FOUND",
     "DIVISION_BY_ZERO",
+    # -- CREATE FUNCTION (see app.parser / app.interpreter) --
+    "CREATE",
+    "FUNCTION",
+    "RETURNS",
+    "RETURN",
+    # -- CREATE PROCEDURE (see app.parser / app.interpreter) --
+    # BEGIN, IN, and OUT above were already keywords from earlier
+    # phases; PROCEDURE and INOUT were NOT and are added here --
+    # despite what an earlier task description assumed, INOUT in
+    # particular did not already tokenize as a single keyword (it
+    # would otherwise have fallen through as a plain IDENTIFIER).
+    "PROCEDURE",
+    "INOUT",
 }
 
 # Order matters: longer/more-specific patterns must come before shorter

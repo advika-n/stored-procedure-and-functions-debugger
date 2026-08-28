@@ -50,15 +50,15 @@ def test_calculate_discount_prints_step_trace():
     assert step1["line"] == 1
     assert step1["nodeType"] == "DeclareStatement"
     assert step1["statementText"] == "DECLARE total NUMBER DEFAULT 0;"
-    assert step1["variables"]["total"] == {"value": 0, "type": "number", "changed": True}
-    assert step1["variables"]["price"] == {"value": 20, "type": "number", "changed": False}
-    assert step1["variables"]["quantity"] == {"value": 6, "type": "number", "changed": False}
+    assert step1["variables"]["total"] == {"value": 0, "type": "number", "changed": True, "isOutput": False}
+    assert step1["variables"]["price"] == {"value": 20, "type": "number", "changed": False, "isOutput": False}
+    assert step1["variables"]["quantity"] == {"value": 6, "type": "number", "changed": False, "isOutput": False}
     assert "discount" not in step1["variables"]  # not declared yet
 
     step3 = steps[2].to_dict()
     assert step3["nodeType"] == "SetStatement"
     assert step3["statementText"] == "SET total = price * quantity;"
-    assert step3["variables"]["total"] == {"value": 120, "type": "number", "changed": True}
+    assert step3["variables"]["total"] == {"value": 120, "type": "number", "changed": True, "isOutput": False}
 
     step4 = steps[3].to_dict()
     assert step4["nodeType"] == "IfStatement"
@@ -71,12 +71,12 @@ def test_calculate_discount_prints_step_trace():
     step5 = steps[4].to_dict()
     assert step5["nodeType"] == "SetStatement"
     assert step5["line"] == 5
-    assert step5["variables"]["discount"] == {"value": 12.0, "type": "number", "changed": True}
+    assert step5["variables"]["discount"] == {"value": 12.0, "type": "number", "changed": True, "isOutput": False}
 
     step6 = steps[5].to_dict()
     assert step6["nodeType"] == "SetStatement"
     assert step6["line"] == 9
-    assert step6["variables"]["total"] == {"value": 108.0, "type": "number", "changed": True}
+    assert step6["variables"]["total"] == {"value": 108.0, "type": "number", "changed": True, "isOutput": False}
     assert step6["variables"]["discount"]["changed"] is False
 
 
@@ -415,7 +415,7 @@ CLOSE prod_cursor;
     triggering_index = step_dicts.index(triggering_fetch)
     handler_step = step_dicts[triggering_index + 1]
     assert handler_step["nodeType"] == "SetStatement"
-    assert handler_step["variables"]["done"] == {"value": 1, "type": "number", "changed": True}
+    assert handler_step["variables"]["done"] == {"value": 1, "type": "number", "changed": True, "isOutput": False}
 
     # The loop then exits cleanly on its next condition check (done=1
     # now) -- no crash, no leftover partial trace.
@@ -471,7 +471,7 @@ SET total = total + 1;
         "handler": "DIVISION_BY_ZERO handler",
     }
     # The assignment never happened -- total keeps its previous value.
-    assert failing_set["variables"]["total"] == {"value": 0, "type": "number", "changed": False}
+    assert failing_set["variables"]["total"] == {"value": 0, "type": "number", "changed": False, "isOutput": False}
 
     # The handler's action runs immediately after, as its own step.
     failing_index = step_dicts.index(failing_set)
@@ -523,3 +523,355 @@ DECLARE CONTINUE HANDLER FOR NOT_FOUND SET x = 2;
     ast = parse(tokenize(code))
     with pytest.raises(InterpreterError, match="already declared"):
         run(ast, {"x": 0})
+
+
+# -- CREATE FUNCTION / RETURN ------------------------------------------------
+
+GET_DISCOUNTED_PRICE = """\
+CREATE FUNCTION GetDiscountedPrice(price DECIMAL, quantity INT)
+RETURNS DECIMAL
+BEGIN
+    DECLARE total DECIMAL;
+    SET total = price * quantity;
+    IF total > 1000 THEN
+        RETURN total * 0.9;
+    ELSE
+        RETURN total;
+    END IF;
+END
+"""
+
+
+def test_function_takes_the_discount_branch_and_stops_right_after_return():
+    """price * quantity = 2000, over the 1000 threshold -- the THEN
+    branch's RETURN should be the trace's last step, full stop."""
+    ast = parse(tokenize(GET_DISCOUNTED_PRICE))
+    steps = run(ast, {"price": 200, "quantity": 10})
+    step_dicts = [s.to_dict() for s in steps]
+
+    print("\n--- discount-branch step trace ---")
+    print(json.dumps(step_dicts, indent=2))
+
+    assert [s["nodeType"] for s in step_dicts] == [
+        "FunctionNode",  # the CREATE FUNCTION ... BEGIN line itself -- see test_function_entry_step_* below
+        "DeclareStatement",
+        "SetStatement",
+        "IfStatement",
+        "ReturnNode",
+    ]
+    assert step_dicts[3]["branch"] == {"condition": "total > 1000", "result": True, "path": "then"}
+
+    last_step = step_dicts[-1]
+    assert last_step["nodeType"] == "ReturnNode"
+    assert last_step["statementText"] == "RETURN total * 0.9;"
+    assert last_step["returnValue"] == {"value": 1800.0, "type": "number"}
+
+    # returnValue is absent everywhere except the RETURN step itself.
+    for step in step_dicts[:-1]:
+        assert "returnValue" not in step
+
+
+def test_function_takes_the_plain_total_branch_and_stops_right_after_return():
+    """price * quantity = 200, under the threshold -- the ELSE branch's
+    RETURN should be the trace's last step; the THEN branch's RETURN
+    (and the rest of the procedure, if there were any) never runs."""
+    ast = parse(tokenize(GET_DISCOUNTED_PRICE))
+    steps = run(ast, {"price": 20, "quantity": 10})
+    step_dicts = [s.to_dict() for s in steps]
+
+    assert [s["nodeType"] for s in step_dicts] == [
+        "FunctionNode",
+        "DeclareStatement",
+        "SetStatement",
+        "IfStatement",
+        "ReturnNode",
+    ]
+    assert step_dicts[3]["branch"] == {"condition": "total > 1000", "result": False, "path": "else"}
+
+    last_step = step_dicts[-1]
+    assert last_step["statementText"] == "RETURN total;"
+    assert last_step["returnValue"] == {"value": 200, "type": "number"}
+
+
+def test_return_stops_execution_of_later_statements_in_the_same_block():
+    # A trailing statement after the IF/ELSE must never run once RETURN
+    # inside one of its branches has already fired.
+    code = """\
+CREATE FUNCTION F(x NUMBER) RETURNS NUMBER
+BEGIN
+    DECLARE marker NUMBER DEFAULT 0;
+    IF x > 0 THEN
+        RETURN x;
+    ELSE
+        RETURN 0;
+    END IF;
+    SET marker = 999;
+END
+"""
+    ast = parse(tokenize(code))
+    steps = run(ast, {"x": 5})
+    step_dicts = [s.to_dict() for s in steps]
+
+    assert step_dicts[-1]["nodeType"] == "ReturnNode"
+    assert not any(s["nodeType"] == "SetStatement" and "marker = 999" in s["statementText"] for s in step_dicts)
+    # marker itself was never touched past its DECLARE default.
+    assert step_dicts[-1]["variables"]["marker"]["value"] == 0
+
+
+def test_return_inside_a_nested_while_unwinds_the_whole_function():
+    code = """\
+CREATE FUNCTION FindFirst(limit NUMBER) RETURNS NUMBER
+BEGIN
+    DECLARE i NUMBER DEFAULT 0;
+    WHILE i < limit DO
+        IF i = 2 THEN
+            RETURN i;
+        END IF;
+        SET i = i + 1;
+    END WHILE;
+    RETURN -1;
+END
+"""
+    ast = parse(tokenize(code))
+    steps = run(ast, {"limit": 10})
+    step_dicts = [s.to_dict() for s in steps]
+
+    assert step_dicts[-1]["nodeType"] == "ReturnNode"
+    assert step_dicts[-1]["returnValue"] == {"value": 2, "type": "number"}
+    # The WHILE loop never got anywhere near its full 10 iterations, and
+    # the trailing `RETURN -1;` never ran either -- only ever one
+    # RETURN step in the whole trace.
+    assert len([s for s in step_dicts if s["nodeType"] == "WhileStatement"]) == 3  # i=0,1,2 checks
+    assert len([s for s in step_dicts if s["nodeType"] == "ReturnNode"]) == 1
+
+
+def test_function_that_falls_through_without_returning_raises_a_clear_error():
+    # No ELSE branch: when the condition is false, nothing executes and
+    # the function body simply ends -- this must be a clear
+    # InterpreterError, never a silent None return.
+    code = """\
+CREATE FUNCTION MaybeReturn(x NUMBER) RETURNS NUMBER
+BEGIN
+    IF x > 0 THEN
+        RETURN x;
+    END IF;
+END
+"""
+    ast = parse(tokenize(code))
+
+    with pytest.raises(InterpreterError, match="MaybeReturn.*without executing a RETURN"):
+        run(ast, {"x": -5})
+
+    # The THEN branch, when it IS taken, still returns normally.
+    steps = run(ast, {"x": 5})
+    assert steps[-1].to_dict()["returnValue"] == {"value": 5, "type": "number"}
+
+
+def test_a_procedure_is_never_held_to_the_must_return_rule():
+    # Procedures (bare statement bodies, no CREATE wrapper) have no
+    # RETURN concept and must never raise for "not returning".
+    ast = parse(tokenize("DECLARE x NUMBER DEFAULT 1;"))
+    steps = run(ast, {})
+    assert steps[-1].to_dict()["nodeType"] == "DeclareStatement"
+
+
+def test_existing_procedure_samples_still_run_unaffected():
+    # Explicit regression check: CalculateDiscount and SumUntilLimit
+    # (two of the app's own sample procedures) must produce exactly the
+    # trace they always did -- CREATE FUNCTION support must not have
+    # touched the bare-statement-body path at all.
+    discount_code = """\
+DECLARE total NUMBER DEFAULT 0;
+DECLARE discount NUMBER DEFAULT 0;
+SET total = price * quantity;
+IF total > 100 THEN
+    SET discount = total * 0.1;
+ELSE
+    SET discount = total * 0.05;
+END IF;
+SET total = total - discount;
+"""
+    ast = parse(tokenize(discount_code))
+    steps = run(ast, {"price": 20, "quantity": 6})
+    assert len(steps) == 6
+    assert steps[-1].to_dict()["variables"]["total"]["value"] == 108.0
+
+    sum_code = "DECLARE total NUMBER DEFAULT 0;\nDECLARE counter NUMBER DEFAULT 1;\nWHILE total < 15 DO\n    SET total = total + counter;\n    SET counter = counter + 1;\nEND WHILE;\n"
+    ast2 = parse(tokenize(sum_code))
+    steps2 = run(ast2, {})
+    assert steps2[-1].to_dict()["variables"]["total"]["value"] == 15
+
+
+# -- CREATE PROCEDURE ---------------------------------------------------
+
+APPLY_DISCOUNT_PROCEDURE = """\
+CREATE PROCEDURE ApplyDiscount(IN price NUMBER, IN quantity NUMBER, OUT total NUMBER)
+BEGIN
+    SET total = price * quantity;
+    IF total > 100 THEN
+        SET total = total * 0.9;
+    END IF;
+END
+"""
+
+
+def test_create_procedure_wrapper_parses_and_runs_with_params_seeded():
+    """Case 1 from the task: a procedure written with the full
+    CREATE PROCEDURE (...) BEGIN...END wrapper -- confirm it parses
+    and runs correctly, params seeded properly."""
+    ast = parse(tokenize(APPLY_DISCOUNT_PROCEDURE))
+    assert ast["type"] == "ProcedureNode"
+
+    steps = run(ast, {"price": 20, "quantity": 6})  # IN params supplied by the caller
+    step_dicts = [s.to_dict() for s in steps]
+
+    print("\n--- CREATE PROCEDURE wrapper step trace ---")
+    print(json.dumps(step_dicts, indent=2))
+
+    # total = 20 * 6 = 120 (> 100), so it gets the 0.9 discount applied.
+    final_total = step_dicts[-1]["variables"]["total"]
+    assert final_total["value"] == pytest.approx(108.0)
+
+
+def test_create_procedure_out_param_is_flagged_and_visible_in_final_step():
+    ast = parse(tokenize(APPLY_DISCOUNT_PROCEDURE))
+    steps = run(ast, {"price": 20, "quantity": 6})
+    step_dicts = [s.to_dict() for s in steps]
+
+    # `total` is OUT -- flagged isOutput on every step, including the
+    # very first one (now the ProcedureNode's own entry step, recorded
+    # before any body statement runs -- see test_procedure_entry_step_*
+    # below -- so `total` is still None there, just already flagged).
+    # Its real computed value is visible in the last step.
+    assert step_dicts[0]["nodeType"] == "ProcedureNode"
+    assert step_dicts[0]["variables"]["total"] == {"value": None, "type": "null", "changed": False, "isOutput": True}
+    assert step_dicts[-1]["variables"]["total"]["isOutput"] is True
+    assert step_dicts[-1]["variables"]["total"]["value"] == pytest.approx(108.0)
+
+    # IN params are never flagged as outputs.
+    assert step_dicts[0]["variables"]["price"]["isOutput"] is False
+    assert step_dicts[0]["variables"]["quantity"]["isOutput"] is False
+
+
+def test_create_procedure_in_param_not_supplied_raises_not_declared():
+    ast = parse(tokenize(APPLY_DISCOUNT_PROCEDURE))
+    with pytest.raises(InterpreterError, match="not declared"):
+        run(ast, {"price": 20})  # quantity missing
+
+
+def test_create_procedure_inout_param_is_seeded_and_flagged_as_output():
+    code = """\
+CREATE PROCEDURE Increment(INOUT counter NUMBER)
+BEGIN
+    SET counter = counter + 1;
+END
+"""
+    ast = parse(tokenize(code))
+    steps = run(ast, {"counter": 5})
+    step_dicts = [s.to_dict() for s in steps]
+
+    assert step_dicts[-1]["variables"]["counter"] == {
+        "value": 6,
+        "type": "number",
+        "changed": True,
+        "isOutput": True,
+    }
+
+
+def test_create_procedure_out_param_stays_none_if_never_assigned():
+    code = "CREATE PROCEDURE Noop(OUT result NUMBER) BEGIN DECLARE x NUMBER DEFAULT 1; END"
+    ast = parse(tokenize(code))
+    steps = run(ast, {})
+    final_vars = steps[-1].to_dict()["variables"]
+    assert final_vars["result"] == {"value": None, "type": "null", "changed": False, "isOutput": True}
+
+
+def test_bare_procedure_body_is_never_flagged_as_having_outputs():
+    # No params key at all -- isOutput must be False for everything.
+    ast = parse(tokenize("DECLARE x NUMBER DEFAULT 1;\nSET x = 2;\n"))
+    steps = run(ast, {})
+    for step in steps:
+        for entry in step.to_dict()["variables"].values():
+            assert entry["isOutput"] is False
+
+
+# Case 2 from the task -- an EXISTING bare-statement-list sample,
+# completely unchanged, run through the exact same interpreter.run()
+# path as everything above. This is the critical regression check.
+def test_existing_bare_sample_runs_identically_after_create_procedure_support():
+    ast = parse(tokenize(CALCULATE_DISCOUNT))
+    steps = run(ast, {"price": 20, "quantity": 6})
+    step_dicts = [s.to_dict() for s in steps]
+
+    assert len(step_dicts) == 6
+    assert step_dicts[-1]["variables"]["total"]["value"] == 108.0
+    # Every variable is a plain local/param -- never an output.
+    assert all(entry["isOutput"] is False for entry in step_dicts[-1]["variables"].values())
+
+
+# -- entry step (CREATE FUNCTION/PROCEDURE line itself) ---------------------
+#
+# Both wrapped forms get one extra DebugStep, first, for the definition
+# line itself -- otherwise it would never appear in the trace at all,
+# and step 1 would jump straight past it to whatever the first body
+# statement happens to be.
+
+
+def test_function_entry_step_is_first_and_reflects_the_create_function_line():
+    ast = parse(tokenize(GET_DISCOUNTED_PRICE))
+    steps = run(ast, {"price": 200, "quantity": 10})
+    entry = steps[0].to_dict()
+
+    assert entry["nodeType"] == "FunctionNode"
+    assert entry["line"] == 1  # the CREATE FUNCTION line, not the first body statement
+    assert entry["statementText"] == "CREATE FUNCTION GetDiscountedPrice(price DECIMAL, quantity INT) RETURNS DECIMAL"
+
+    # Params supplied by the caller are already visible at entry; `total`
+    # isn't -- its DECLARE hasn't run yet, so it doesn't exist in scope
+    # until step 2.
+    assert entry["variables"] == {
+        "price": {"value": 200, "type": "number", "changed": False, "isOutput": False},
+        "quantity": {"value": 10, "type": "number", "changed": False, "isOutput": False},
+    }
+
+    # Step 2 is the function's actual first body statement.
+    assert steps[1].to_dict()["nodeType"] == "DeclareStatement"
+
+
+def test_function_entry_step_variables_are_empty_with_no_external_params():
+    code = "CREATE FUNCTION Answer() RETURNS NUMBER BEGIN RETURN 42; END"
+    ast = parse(tokenize(code))
+    steps = run(ast, {})
+    entry = steps[0].to_dict()
+    assert entry["nodeType"] == "FunctionNode"
+    assert entry["variables"] == {}  # nothing in scope yet -- no params, no DECLARE has run
+
+
+def test_procedure_entry_step_is_first_and_reflects_the_create_procedure_line():
+    ast = parse(tokenize(APPLY_DISCOUNT_PROCEDURE))
+    steps = run(ast, {"price": 20, "quantity": 6})
+    entry = steps[0].to_dict()
+
+    assert entry["nodeType"] == "ProcedureNode"
+    assert entry["line"] == 1
+    assert entry["statementText"] == "CREATE PROCEDURE ApplyDiscount(IN price NUMBER, IN quantity NUMBER, OUT total NUMBER)"
+
+    # The OUT param is already seeded (to None) and already flagged at
+    # entry, before the body's first SET has run.
+    assert entry["variables"] == {
+        "price": {"value": 20, "type": "number", "changed": False, "isOutput": False},
+        "quantity": {"value": 6, "type": "number", "changed": False, "isOutput": False},
+        "total": {"value": None, "type": "null", "changed": False, "isOutput": True},
+    }
+
+    assert steps[1].to_dict()["nodeType"] == "SetStatement"
+
+
+def test_bare_procedure_never_gets_an_entry_step():
+    # The critical regression check for this specific feature: the
+    # bare/legacy form has no CREATE line to represent, so it must
+    # never gain one -- step 1 is exactly what it always was.
+    ast = parse(tokenize(CALCULATE_DISCOUNT))
+    steps = run(ast, {"price": 20, "quantity": 6})
+    assert steps[0].to_dict()["nodeType"] == "DeclareStatement"
+    assert all(s.to_dict()["nodeType"] not in ("Procedure", "ProcedureNode", "FunctionNode") for s in steps)

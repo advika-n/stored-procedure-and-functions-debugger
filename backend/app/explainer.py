@@ -99,6 +99,31 @@ def _build_prompt(step: dict, previous_variables: dict | None) -> str:
             f"{loop.get('result')} on iteration {loop.get('iteration')}."
         )
 
+    cursor = step.get("cursor")
+    if cursor:
+        current_row = cursor.get("currentRow")
+        if current_row is not None:
+            row_desc = f"current row (index {cursor.get('rowIndex')}): {current_row!r}"
+        elif step.get("nodeType") == "FetchCursorNode":
+            # currentRow is None on a FETCH specifically because it ran
+            # past the last row -- distinct from DECLARE/OPEN/CLOSE,
+            # where "no row" just means "not applicable right now".
+            row_desc = "no row -- cursor exhausted, this FETCH found nothing"
+        else:
+            row_desc = "no current row yet"
+        lines.append(f"Cursor `{cursor.get('name')}` state: {row_desc} (hasMore={cursor.get('hasMore')}).")
+
+    error = step.get("error")
+    if error:
+        handler = error.get("handler")
+        handler_desc = "no handler caught it (unhandled)" if handler == "unhandled" else f"caught by the {handler}"
+        lines.append(
+            f"IMPORTANT -- this step triggered the {error.get('condition')} condition: "
+            f"{error.get('message')}; {handler_desc}. Describe this handler/error event as "
+            "the primary thing that happened in this step, not as an ordinary successful "
+            "assignment or fetch."
+        )
+
     lines.append("Variables after this step:")
     for name, entry in (step.get("variables") or {}).items():
         marker = " (just changed)" if entry.get("changed") else ""

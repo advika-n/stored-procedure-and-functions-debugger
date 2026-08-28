@@ -47,10 +47,17 @@ END;
 
 SELECT DiscountedPrice(50);`}</pre>
       <p className="theory-note">
-        This debugger executes just a procedure's <em>body</em> -- the
-        <code>CREATE PROCEDURE</code>/<code>CALL</code>/<code>RETURN</code>{' '}
-        wrapper above is real SQL context, not something you'll type into
-        the editor here.
+        Both wrappers above ARE executable here: paste in the full{' '}
+        <code>CREATE PROCEDURE(...) BEGIN...END</code> or{' '}
+        <code>CREATE FUNCTION(...) RETURNS ... BEGIN...END</code> and it
+        runs, params and all. You can also skip the wrapper entirely and
+        paste in just the bare body -- that still works exactly as it
+        always has, and is how every persisted History entry saved before
+        <code>CREATE PROCEDURE</code> support existed is stored.{' '}
+        <code>CALL</code> and the <code>UPDATE</code> statement in this
+        specific example are still just real SQL context, though -- this
+        grammar doesn't support table updates or invoking one procedure
+        from another.
       </p>
     </>
   )
@@ -299,18 +306,28 @@ export function PuttingItTogetherTopic() {
         throughout this tool. Step through it there and each numbered
         line below corresponds to exactly one entry in the trace.
       </p>
-      <pre className="theory-code theory-code-annotated">{`DECLARE price NUMBER DEFAULT 20;      -- (1)
-DECLARE quantity NUMBER DEFAULT 6;    -- (1)
-DECLARE total NUMBER DEFAULT 0;       -- (1)
-DECLARE discount NUMBER DEFAULT 0;    -- (1)
-SET total = price * quantity;         -- (2)
-IF total > 100 THEN                   -- (3)
-    SET discount = total * 0.1;
-ELSE
-    SET discount = total * 0.05;
-END IF;
-SET total = total - discount;         -- (2)`}</pre>
+      <pre className="theory-code theory-code-annotated">{`CREATE PROCEDURE CalculateDiscount()  -- (0)
+BEGIN
+    DECLARE price NUMBER DEFAULT 20;      -- (1)
+    DECLARE quantity NUMBER DEFAULT 6;    -- (1)
+    DECLARE total NUMBER DEFAULT 0;       -- (1)
+    DECLARE discount NUMBER DEFAULT 0;    -- (1)
+    SET total = price * quantity;         -- (2)
+    IF total > 100 THEN                   -- (3)
+        SET discount = total * 0.1;
+    ELSE
+        SET discount = total * 0.05;
+    END IF;
+    SET total = total - discount;         -- (2)
+END`}</pre>
       <ol className="theory-list">
+        <li>
+          <strong>(0) The wrapper</strong> -- <code>CREATE PROCEDURE
+          CalculateDiscount() BEGIN ... END</code> is parsed and executed
+          just like the body inside it; no params are declared here since
+          the sample is fully self-contained. It doesn't produce a step of
+          its own -- only the statements inside <code>BEGIN...END</code> do.
+        </li>
         <li>
           <strong>(1) Variables</strong> -- four <code>DECLARE</code>s give
           the procedure its working storage, each with a default so the
@@ -326,7 +343,7 @@ SET total = total - discount;         -- (2)`}</pre>
           <strong>(3) IF/ELSE</strong> -- the condition is checked exactly
           once, and only the branch it picks contributes a step to the
           trace. That's why the flowchart's untaken branch never turns
-          green: it genuinely didn't run.
+          teal: it genuinely didn't run.
         </li>
       </ol>
     </>

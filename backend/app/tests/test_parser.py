@@ -248,3 +248,192 @@ def test_a_regular_declare_still_parses_after_adding_handler_support():
     # the ordinary `DECLARE name TYPE DEFAULT expr` path.
     ast = parse(tokenize("DECLARE total NUMBER DEFAULT 0;"))
     assert ast["body"][0]["type"] == "DeclareStatement"
+
+
+# -- CREATE FUNCTION ------------------------------------------------------
+
+GET_DISCOUNTED_PRICE = """\
+CREATE FUNCTION GetDiscountedPrice(price DECIMAL, quantity INT)
+RETURNS DECIMAL
+BEGIN
+    DECLARE total DECIMAL;
+    SET total = price * quantity;
+    IF total > 1000 THEN
+        RETURN total * 0.9;
+    ELSE
+        RETURN total;
+    END IF;
+END
+"""
+
+
+def test_create_function_parses_to_a_function_node():
+    ast = parse(tokenize(GET_DISCOUNTED_PRICE))
+
+    assert ast["type"] == "FunctionNode"
+    assert ast["name"] == "GetDiscountedPrice"
+    assert ast["params"] == [{"name": "price", "type": "DECIMAL"}, {"name": "quantity", "type": "INT"}]
+    assert ast["returnType"] == "DECIMAL"
+    assert ast["line"] == 1
+
+
+def test_create_function_body_contains_return_nodes_inside_if_branches():
+    ast = parse(tokenize(GET_DISCOUNTED_PRICE))
+    body = ast["body"]
+
+    assert [s["type"] for s in body] == ["DeclareStatement", "SetStatement", "IfStatement"]
+    if_stmt = body[2]
+    assert if_stmt["then_body"][0]["type"] == "ReturnNode"
+    assert if_stmt["else_body"][0]["type"] == "ReturnNode"
+
+
+def test_return_node_shape():
+    ast = parse(tokenize("RETURN total * 0.9;"))
+    node = ast["body"][0]
+    assert node == {
+        "type": "ReturnNode",
+        "value": {
+            "type": "BinaryExpr",
+            "operator": "*",
+            "left": {"type": "Identifier", "name": "total", "line": 1},
+            "right": {"type": "NumberLiteral", "value": 0.9, "line": 1},
+            "line": 1,
+        },
+        "line": 1,
+    }
+
+
+def test_function_with_no_params():
+    ast = parse(tokenize("CREATE FUNCTION Constant() RETURNS NUMBER BEGIN RETURN 42; END"))
+    assert ast["params"] == []
+
+
+def test_function_without_trailing_semicolon_after_end_is_fine():
+    # The sample task's own example has no ';' after the closing END.
+    ast = parse(tokenize("CREATE FUNCTION F() RETURNS NUMBER BEGIN RETURN 1; END"))
+    assert ast["type"] == "FunctionNode"
+
+
+def test_function_with_trailing_semicolon_after_end_also_fine():
+    ast = parse(tokenize("CREATE FUNCTION F() RETURNS NUMBER BEGIN RETURN 1; END;"))
+    assert ast["type"] == "FunctionNode"
+
+
+def test_ordinary_procedure_body_still_parses_as_procedure_not_function():
+    # A leading CREATE routes to the function grammar; anything else
+    # still routes to the ordinary bare-statement-list procedure body,
+    # completely unchanged.
+    ast = parse(tokenize("DECLARE total NUMBER DEFAULT 0;\nSET total = 1;\n"))
+    assert ast["type"] == "Procedure"
+
+
+def test_create_procedure_wrapper_now_parses_to_a_procedure_node():
+    # Superseded by full CREATE PROCEDURE support -- see
+    # test_create_procedure.py for the dedicated coverage. This just
+    # confirms the specific case the old (now-removed) "not supported"
+    # assertion covered actually parses correctly today.
+    ast = parse(tokenize("CREATE PROCEDURE Foo() BEGIN SET x = 1; END"))
+    assert ast["type"] == "ProcedureNode"
+    assert ast["name"] == "Foo"
+
+
+def test_create_with_neither_function_nor_procedure_raises_a_clear_error():
+    with pytest.raises(ParserError, match="Expected FUNCTION or PROCEDURE"):
+        parse(tokenize("CREATE TABLE Foo (x NUMBER);"))
+
+
+def test_return_is_parseable_inside_a_while_loop_too():
+    # RETURN dispatches through the ordinary _parse_statement, so it's
+    # valid anywhere a statement is -- not just inside IF.
+    ast = parse(tokenize("WHILE x < 10 DO RETURN x; END WHILE;"))
+    while_stmt = ast["body"][0]
+    assert while_stmt["body"][0]["type"] == "ReturnNode"
+
+
+# -- CREATE PROCEDURE ---------------------------------------------------
+
+APPLY_DISCOUNT_PROCEDURE = """\
+CREATE PROCEDURE ApplyDiscount(IN price NUMBER, IN quantity NUMBER, OUT total NUMBER)
+BEGIN
+    SET total = price * quantity;
+    IF total > 100 THEN
+        SET total = total * 0.9;
+    END IF;
+END
+"""
+
+
+def test_create_procedure_parses_to_a_procedure_node():
+    ast = parse(tokenize(APPLY_DISCOUNT_PROCEDURE))
+
+    assert ast["type"] == "ProcedureNode"
+    assert ast["name"] == "ApplyDiscount"
+    assert ast["params"] == [
+        {"name": "price", "mode": "IN", "type": "NUMBER"},
+        {"name": "quantity", "mode": "IN", "type": "NUMBER"},
+        {"name": "total", "mode": "OUT", "type": "NUMBER"},
+    ]
+    assert ast["line"] == 1
+    assert "returnType" not in ast  # that's a FunctionNode-only field
+
+
+def test_create_procedure_body_parses_normally():
+    ast = parse(tokenize(APPLY_DISCOUNT_PROCEDURE))
+    assert [s["type"] for s in ast["body"]] == ["SetStatement", "IfStatement"]
+
+
+def test_procedure_param_mode_defaults_to_in_when_omitted():
+    ast = parse(tokenize("CREATE PROCEDURE P(x NUMBER) BEGIN SET x = 1; END"))
+    assert ast["params"] == [{"name": "x", "mode": "IN", "type": "NUMBER"}]
+
+
+def test_procedure_param_supports_inout_mode():
+    ast = parse(tokenize("CREATE PROCEDURE P(INOUT x NUMBER) BEGIN SET x = 1; END"))
+    assert ast["params"] == [{"name": "x", "mode": "INOUT", "type": "NUMBER"}]
+
+
+def test_procedure_with_no_params():
+    ast = parse(tokenize("CREATE PROCEDURE P() BEGIN SET x = 1; END"))
+    assert ast["params"] == []
+
+
+def test_procedure_without_trailing_semicolon_after_end_is_fine():
+    ast = parse(tokenize("CREATE PROCEDURE P() BEGIN SET x = 1; END"))
+    assert ast["type"] == "ProcedureNode"
+
+
+def test_procedure_with_trailing_semicolon_after_end_also_fine():
+    ast = parse(tokenize("CREATE PROCEDURE P() BEGIN SET x = 1; END;"))
+    assert ast["type"] == "ProcedureNode"
+
+
+def test_bare_statement_list_procedure_is_completely_unaffected():
+    """The critical regression check: an existing sample's exact code,
+    parsed with no CREATE wrapper at all, must produce the exact same
+    AST shape it always has -- plain "Procedure", no name/params/line-
+    of-a-wrapper, nothing new leaking in."""
+    code = """\
+DECLARE price NUMBER DEFAULT 20;
+DECLARE quantity NUMBER DEFAULT 6;
+DECLARE total NUMBER DEFAULT 0;
+DECLARE discount NUMBER DEFAULT 0;
+SET total = price * quantity;
+IF total > 100 THEN
+    SET discount = total * 0.1;
+ELSE
+    SET discount = total * 0.05;
+END IF;
+SET total = total - discount;
+"""
+    ast = parse(tokenize(code))
+    assert ast["type"] == "Procedure"
+    assert set(ast.keys()) == {"type", "body"}  # no name/params/line leaking in
+    assert [s["type"] for s in ast["body"]] == [
+        "DeclareStatement",
+        "DeclareStatement",
+        "DeclareStatement",
+        "DeclareStatement",
+        "SetStatement",
+        "IfStatement",
+        "SetStatement",
+    ]
