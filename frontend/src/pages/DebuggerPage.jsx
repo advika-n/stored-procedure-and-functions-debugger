@@ -5,25 +5,8 @@ import mermaid from 'mermaid'
 import { buildFlowchartGraph, computeDiagramState, renderMermaidDefinition } from '../cfg'
 import { SAMPLES } from '../samples'
 import { writeLastProcedure } from '../lastProcedure'
-
-// 'base' + explicit themeVariables (rather than the light 'neutral'
-// theme this used before the restyle) so default, unclassed flowchart
-// nodes match the "Debugger Notebook" dark palette out of the box;
-// classDef overrides in cfg.js still win for current/visited/terminal
-// nodes specifically.
-mermaid.initialize({
-  startOnLoad: false,
-  theme: 'base',
-  securityLevel: 'strict',
-  themeVariables: {
-    background: '#161d2e',
-    primaryColor: '#1d2538',
-    primaryBorderColor: '#2a3348',
-    primaryTextColor: '#edeff4',
-    lineColor: '#2a3348',
-    fontFamily: "'IBM Plex Mono', monospace",
-  },
-})
+import { useTheme } from '../ThemeContext'
+import { getMermaidPalette } from '../mermaidColors'
 
 function formatValue(entry) {
   if (entry.value === null || entry.value === undefined) return null // caller shows a placeholder
@@ -51,6 +34,7 @@ function checkGuess(guessRaw, entry) {
 function DebuggerPage() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { theme } = useTheme()
 
   const [health, setHealth] = useState(null)
   const [healthError, setHealthError] = useState(null)
@@ -465,6 +449,31 @@ function DebuggerPage() {
     updateCaretAndConnectors()
   }, [currentStepIndex, currentStep, isEditorReady, updateCaretAndConnectors])
 
+  // Re-applies mermaid's global config whenever Day/Night Mode changes
+  // (or on first mount) -- 'base' + explicit themeVariables (rather than
+  // the light 'neutral' theme this used before the restyle) so default,
+  // unclassed flowchart nodes match the active theme out of the box;
+  // classDef overrides in cfg.js still win for current/visited/terminal
+  // nodes specifically. Declared before the mermaidDefinition memo/render
+  // effect below so, within the same commit, the new palette is already
+  // applied by the time mermaid.render() runs for a theme-driven redraw.
+  useEffect(() => {
+    const palette = getMermaidPalette(theme)
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      securityLevel: 'strict',
+      themeVariables: {
+        background: palette.background,
+        primaryColor: palette.primaryColor,
+        primaryBorderColor: palette.primaryBorderColor,
+        primaryTextColor: palette.textPrimary,
+        lineColor: palette.lineColor,
+        fontFamily: "'IBM Plex Mono', monospace",
+      },
+    })
+  }, [theme])
+
   // The graph's shape comes purely from the AST and is rebuilt only when
   // a new procedure is parsed -- not on every step.
   const flowchartGraph = useMemo(() => (ast ? buildFlowchartGraph(ast) : null), [ast])
@@ -476,10 +485,14 @@ function DebuggerPage() {
     return computeDiagramState(flowchartGraph, steps, currentStepIndex)
   }, [flowchartGraph, hasSteps, steps, currentStepIndex])
 
+  // Depends on `theme` too (not just the graph/state) -- flipping Day/
+  // Night Mode needs to regenerate the mermaid *source* (its classDef
+  // colors are baked in as literal hex, see cfg.js), which in turn
+  // reruns the render effect below since it depends on this value.
   const mermaidDefinition = useMemo(() => {
     if (!flowchartGraph || !diagramState) return null
-    return renderMermaidDefinition(flowchartGraph, diagramState)
-  }, [flowchartGraph, diagramState])
+    return renderMermaidDefinition(flowchartGraph, diagramState, theme)
+  }, [flowchartGraph, diagramState, theme])
 
   useEffect(() => {
     // Nothing to render yet (no successful Debug run) -- handleDebug
@@ -689,7 +702,7 @@ function DebuggerPage() {
             <Editor
               height="360px"
               defaultLanguage="sql"
-              theme="vs-dark"
+              theme={theme === 'light' ? 'vs' : 'vs-dark'}
               value={code}
               onChange={(value) => {
                 const newCode = value ?? ''

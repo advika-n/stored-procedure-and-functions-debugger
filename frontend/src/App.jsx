@@ -6,6 +6,7 @@ import DebuggerPage from './pages/DebuggerPage'
 import HistoryPage from './pages/HistoryPage'
 import QuizPage from './pages/QuizPage'
 import AboutPage from './pages/AboutPage'
+import { ThemeProvider } from './ThemeContext'
 import './theme.css'
 import './App.css'
 
@@ -20,18 +21,20 @@ function TheoryPage() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/debugger" element={<DebuggerPage />} />
-          <Route path="/theory" element={<TheoryPage />} />
-          <Route path="/history" element={<HistoryPage />} />
-          <Route path="/quiz" element={<QuizPage />} />
-          <Route path="/about" element={<AboutPage />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/debugger" element={<DebuggerPage />} />
+            <Route path="/theory" element={<TheoryPage />} />
+            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/quiz" element={<QuizPage />} />
+            <Route path="/about" element={<AboutPage />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </ThemeProvider>
   )
 }
 

@@ -5,8 +5,12 @@
 // This is deliberately AST-driven, not step-driven: the diagram's
 // shape (which nodes exist, how they connect) comes entirely from the
 // procedure's structure and is built once per Debug run. Only the
-// *styling* -- which node is "current", which branch lit up as taken --
-// is recomputed as the user steps through the execution trace.
+// *styling* -- which node is "current", which branch lit up as taken,
+// and (see renderMermaidDefinition's `theme` param) which color
+// palette Day/Night Mode is currently using -- is recomputed as the
+// user steps through the execution trace or flips the theme toggle.
+
+import { getMermaidPalette } from './mermaidColors'
 
 // -- rendering AST expression/statement nodes back to source text ----------
 // (mirrors backend/app/interpreter.py's render_expr / render_statement_header)
@@ -200,9 +204,13 @@ function nodeMermaidText(node) {
   return `  ${node.id}["${label}"]`
 }
 
-/** Render the graph + current playback state into a Mermaid flowchart definition. */
-export function renderMermaidDefinition(graph, diagramState) {
+/** Render the graph + current playback state into a Mermaid flowchart
+ * definition. `theme` ("dark" | "light", default "dark") picks which of
+ * mermaidColors.js's two palettes the classDef/linkStyle colors below
+ * come from -- see that file for why they can't just be var(...). */
+export function renderMermaidDefinition(graph, diagramState, theme = 'dark') {
   const { currentLine, visitedLines, takenKindByLine } = diagramState
+  const palette = getMermaidPalette(theme)
   const lines = ['flowchart TD']
 
   for (const node of graph.nodes) {
@@ -236,13 +244,13 @@ export function renderMermaidDefinition(graph, diagramState) {
   // Literal hex only -- Mermaid's own `classDef`/`linkStyle` mini
   // grammar parses these as plain color tokens and rejects CSS
   // functions like var(...) or rgba(...) (confirmed: it throws a
-  // parse error the moment it hits the '(' ). These values are
-  // hand-matched to the amber/teal/hairline tokens in theme.css --
-  // amber = current node, teal = visited/taken, the same two semantic
-  // accents used everywhere else in the app, no flowchart-only palette.
-  lines.push('  classDef current fill:#3a2e18,stroke:#e8a23d,stroke-width:3px,color:#edeff4;')
-  lines.push('  classDef visited fill:#1c332f,stroke:#4fb0a5,stroke-width:1px,color:#edeff4;')
-  lines.push('  classDef terminal fill:#1d2538,stroke:#2a3348,color:#8891a6;')
+  // parse error the moment it hits the '(' ). These values come from
+  // mermaidColors.js's per-theme palette -- amber = current node, teal
+  // = visited/taken, the same two semantic accents used everywhere
+  // else in the app, no flowchart-only palette.
+  lines.push(`  classDef current fill:${palette.amberDim},stroke:${palette.amber},stroke-width:3px,color:${palette.textPrimary};`)
+  lines.push(`  classDef visited fill:${palette.tealDim},stroke:${palette.teal},stroke-width:1px,color:${palette.textPrimary};`)
+  lines.push(`  classDef terminal fill:${palette.terminalFill},stroke:${palette.terminalBorder},color:${palette.terminalText};`)
   // Entry (amber "start") and RETURN (teal "end") are permanent bookend
   // colors, not just current/visited overlays -- a RETURN can only ever
   // be the *last* step of a trace (execution halts there), so it would
@@ -252,9 +260,9 @@ export function renderMermaidDefinition(graph, diagramState) {
   // reaching either one is still visibly distinct from merely having it
   // on screen -- same current-step highlighting guarantee every other
   // node gets, just recolored to fit the bookend semantics.
-  lines.push('  classDef entryNode fill:#3a2e18,stroke:#e8a23d,stroke-width:1px,color:#edeff4;')
-  lines.push('  classDef returnNode fill:#1c332f,stroke:#4fb0a5,stroke-width:1px,color:#edeff4;')
-  lines.push('  classDef returnCurrent fill:#1c332f,stroke:#4fb0a5,stroke-width:3px,color:#edeff4;')
+  lines.push(`  classDef entryNode fill:${palette.amberDim},stroke:${palette.amber},stroke-width:1px,color:${palette.textPrimary};`)
+  lines.push(`  classDef returnNode fill:${palette.tealDim},stroke:${palette.teal},stroke-width:1px,color:${palette.textPrimary};`)
+  lines.push(`  classDef returnCurrent fill:${palette.tealDim},stroke:${palette.teal},stroke-width:3px,color:${palette.textPrimary};`)
 
   const currentNode = graph.nodes.find((n) => n.line === currentLine)
 
@@ -286,10 +294,10 @@ export function renderMermaidDefinition(graph, diagramState) {
   }
 
   for (const index of takenLinkStyleIndexes) {
-    lines.push(`  linkStyle ${index} stroke:#4fb0a5,stroke-width:3px;`)
+    lines.push(`  linkStyle ${index} stroke:${palette.teal},stroke-width:3px;`)
   }
   for (const index of notTakenLinkStyleIndexes) {
-    lines.push(`  linkStyle ${index} stroke:#2a3348,stroke-width:1px,stroke-dasharray:4 3;`)
+    lines.push(`  linkStyle ${index} stroke:${palette.lineColor},stroke-width:1px,stroke-dasharray:4 3;`)
   }
 
   return lines.join('\n')

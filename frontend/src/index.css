@@ -1,6 +1,7 @@
-/* Global reset. Design tokens live in theme.css; this file only sets
-   up box-sizing and the page's base surface/color so nothing renders
-   unstyled before App.css loads. */
+/* Global reset. Design tokens (including the dark/light values these
+   reference) live in theme.css, loaded before this file gets its
+   variables resolved; color-scheme itself is set there too (on :root),
+   since it's a per-theme value like everything else. */
 
 *,
 *::before,
@@ -8,17 +9,14 @@
   box-sizing: border-box;
 }
 
-html {
-  color-scheme: dark;
-}
-
 body {
   margin: 0;
-  background: #0e1420;
-  color: #edeff4;
+  background: var(--bg-base);
+  color: var(--text-primary);
   font-family: 'IBM Plex Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 150ms ease, color 150ms ease;
 }
 
 #root {

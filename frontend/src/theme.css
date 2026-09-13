@@ -1,7 +1,20 @@
 /* "Debugger Notebook" design system -- an engineer's debugging notebook,
    not a generic dark SaaS dashboard. Three semantic colors only (amber /
    teal / coral), hairline borders instead of shadows, flat surfaces.
-   See CLAUDE session notes for the full spec this implements. */
+
+   Two themes share this one token set: "Night Mode" (dark -- the
+   original, default look; defined directly on :root, byte-for-byte the
+   same values that were here before Day Mode existed) and "Day Mode"
+   (light, opt-in via [data-theme="light"] on <html>, toggled by
+   ThemeContext.jsx). Every token *name* is identical between the two --
+   only the values differ -- so no component CSS needs to know which
+   theme is active; it just uses var(--whatever) as always.
+
+   Mermaid can't consume CSS custom properties (its own classDef/
+   linkStyle grammar rejects var(...) -- see cfg.js's comment on this),
+   so mermaidColors.js hand-mirrors the accent/surface values below in
+   JS for the flowchart. Keep the two in sync by hand when editing
+   either one. */
 
 :root {
   /* -- surfaces --------------------------------------------------------- */
@@ -25,10 +38,55 @@
 
   --border-hairline: #2a3348; /* 1px hairline -- the primary separator, not shadows */
 
+  /* -- editor-specific (mirrors Monaco's own vs-dark canvas colors) ------ */
+  --editor-bg: #1e1e1e;
+  --current-line-bg: rgba(232, 162, 61, 0.1);
+  --chip-scrim-bg: rgba(0, 0, 0, 0.2); /* small recessed "chip" on top of a colored banner */
+
   /* -- type ----------------------------------------------------------- */
   --font-display: 'Space Grotesk', 'IBM Plex Sans', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
   --font-body: 'IBM Plex Sans', system-ui, sans-serif;
 
   --radius: 4px; /* sharp-ish corners, 4px max, everywhere */
+
+  color-scheme: dark; /* native form controls/scrollbars match */
+}
+
+/* Day Mode -- same token names, re-tuned for a light background instead
+   of overridden ad hoc per component. Two deliberate rules kept the
+   accents' *identity* while fixing contrast:
+     1. --accent-amber/teal/coral become a darkened shade of the same
+        hue for anywhere they're used as text/border/icon color -- the
+        original bright hex reads fine on a dark panel (contrast ~7-8:1)
+        but fails WCAG AA on a light one (~2:1). Verified via the
+        standard relative-luminance contrast formula: every accent here
+        is >=4.6:1 against both --bg-panel and --bg-base below.
+     2. --accent-*-bg keeps the ORIGINAL bright hue (never the darkened
+        one) as a translucent wash, just a touch more opaque than the
+        dark theme's -- a low-alpha overlay reads fainter on a light
+        surface than on a dark one at the same alpha. */
+:root[data-theme='light'] {
+  --bg-base: #f5f6f8;
+  --bg-panel: #ffffff;
+  --bg-panel-raised: #eef0f4;
+
+  --text-primary: #16202e;
+  --text-muted: #5b6472;
+
+  --accent-amber: #8a4a08;
+  --accent-teal: #0c645d; /* darker than the other two accents' text shade -- teal-on-its-own-tint (e.g. .status-ok) undershot AA (4.36:1) at the lighter #0f766e, verified via the WCAG contrast formula against the actual composited badge background */
+  --accent-coral: #b91c1c;
+
+  --accent-amber-bg: rgba(232, 162, 61, 0.18);
+  --accent-teal-bg: rgba(79, 176, 165, 0.18);
+  --accent-coral-bg: rgba(225, 82, 82, 0.16);
+
+  --border-hairline: #cdd3dc;
+
+  --editor-bg: #fffffe; /* Monaco's built-in "vs" light theme canvas */
+  --current-line-bg: rgba(232, 162, 61, 0.22);
+  --chip-scrim-bg: rgba(0, 0, 0, 0.08);
+
+  color-scheme: light;
 }
