@@ -8,8 +8,10 @@ stable project facts (architecture, schema, design tokens) see `CLAUDE.md` inste
 
 ## 1. Last updated
 
-**2026-09-13**, end of the session that created this file and `CLAUDE.md`, immediately
-following the session that built Day/Night Mode + the Developed By modal.
+**2026-09-13**, end of the session that built the **Learn tab** and created
+`PROMPT_LOG.md` (see §2/§4/§5). Follows the session that built the Help tab, which itself
+followed the session that created this file/`CLAUDE.md` and built Day/Night Mode + the
+Developed By modal.
 
 ---
 
@@ -53,6 +55,47 @@ not restated from memory:
   for what's still open on it.
 - **Developed By modal** — trigger + modal, dismissible via close button/backdrop/Escape,
   theme-aware. Code-complete; content is placeholder (see §3, §6).
+- **Help tab** (`frontend/src/pages/HelpPage.jsx`, route `/help`) — full step-by-step user
+  manual, seven accordion sections (`<details>`/`<summary>`, native, keyboard/screen-reader
+  friendly, no JS state): what the app does, what inputs it accepts, how to provide input,
+  every real button/control (enumerated by reading `Layout.jsx`/`DebuggerPage.jsx`/
+  `History.jsx`/`QuizPage.jsx` directly, not invented), how processing works in plain
+  language, how to interpret the output, and a pointer to the other pages. Nav entry sits
+  in the top-right utility cluster next to the theme toggle and Developed By trigger (its
+  own `.help-nav-trigger`/`.help-nav-trigger-active` styling, matching the amber active
+  state the main nav tabs use) rather than in the page-tab row, since it's a persistent
+  cross-page reference. Fully theme-aware — new CSS in `App.css`'s "Help page" block, no
+  hard-coded colors, uses only existing `theme.css` tokens. Live-verified via a headless
+  Chrome screenshot against the actual running dev server in both collapsed and expanded
+  states (accordion, code chips, the parameters callout, the active nav state all render
+  correctly); light-mode was not separately screenshotted this session (see §3) but reuses
+  only tokens already contrast-audited elsewhere.
+  **One accurate scope note baked into the content itself**: the manual correctly
+  documents that there is currently no UI for entering external `IN` parameter values
+  before running (the frontend always sends `params: {}` — see `DebuggerPage.jsx`'s
+  `handleDebug`) — it tells the user to self-contain values via `DECLARE ... DEFAULT`
+  rather than describing a parameter-input control that doesn't exist.
+- **Learn tab** (`frontend/src/pages/LearnPage.jsx`, route `/learn`) — **Done
+  (placeholder content — needs real video + references before submission).** Three
+  always-visible panel sections, not an accordion (unlike Help — this is graded content
+  meant to be read in order): CONCEPT EXPLANATION (a draft write-up of "Stored Procedures
+  &amp; Functions in Databases, and Debugging Them" — what they are, why they exist,
+  procedure-vs-function differences via a comparison table, and why debugging them is
+  non-trivial — flagged both with a file-level code comment and a visible `DRAFT` badge
+  in the UI), ANIMATED VIDEO (a real, working YouTube iframe embed pointed at the literal
+  placeholder `YOUR_VIDEO_ID_HERE`, marked with a code `TODO` and a visible coral
+  "PLACEHOLDER" badge so it can't ship unnoticed), and REFERENCES (all five required
+  categories — Books/Websites/Research Papers/Educational Resources/Videos — 2-3 entries
+  each in correct citation format, every single entry individually badge-marked as a
+  placeholder needing a real source). Nav entry added as the **rightmost main tab**
+  (`Layout.jsx`'s `NAV_ITEMS`, next to the Help/theme/Developed-By cluster — i.e. the
+  actual top-right of the header), with its own permanent amber-outlined
+  `.top-nav-item-emphasize` styling (solid amber fill when active) so it stands out from
+  its muted siblings per the course's "must be prominent" requirement, rather than only
+  `.top-nav-item-active`'s already-existing amber styling. Fully theme-aware — new CSS in
+  `App.css`'s "Learn page" block, no hard-coded colors. Live-verified via headless-Chrome
+  screenshots in **both** dark and light mode this time (unlike the Help phase, which
+  only screenshotted dark), plus a 400px phone-width check.
 
 ---
 
@@ -91,11 +134,6 @@ pages), but is **not finished as a deliverable** yet:
 
 ## 4. Not started yet
 
-- **Help tab** — full user manual. No file, no route, no nav entry exists.
-- **Learn tab** — concept explanation + video + references, top-right nav. No file, no
-  route, no nav entry exists. (The existing `/theory` page is *not* this — six
-  write-ups, no video, no references section, not positioned top-right. It may be
-  reusable source material, but the Learn tab itself is unbuilt.)
 - **Download feature upgrade** — the mandatory requirement is PDF/Document/Text export
   of inputs, steps, intermediate results, output, and graphs. What exists today
   (`handleExport` in `DebuggerPage.jsx`, the "⭳ Export Run" button) only produces a
@@ -114,16 +152,16 @@ Finish all 5 mandatory sections first, in this order:
 
 1. ~~Day/Night mode + Developed By~~ — code-complete, **commit + real content still
    needed** (§3) before calling this done.
-2. Help tab
-3. Learn tab
+2. ~~Help tab~~ — code-complete (§2), not yet committed (§6).
+3. ~~Learn tab~~ — code-complete, **placeholder content** (draft concept explanation,
+   placeholder video ID, placeholder references — §2), not yet committed (§6).
 4. Download feature upgrade
 
 Then: Quiz page enhancements (if any beyond the current General-Theory/This-Procedure
 version — undefined, needs the user to scope), then the four innovation features.
 
 **Text-to-Speech is already done** (§2) — it was in the original "later" queue in the
-plan but has already been built; no action needed on it before moving to Help/Learn/
-Download.
+plan but has already been built; no action needed on it before moving to Download.
 
 ---
 
@@ -141,15 +179,39 @@ Scanned directly (`grep` for `TODO`/`FIXME`/`XXX`/`HACK`/placeholder markers acr
   Recommend deleting it in a future session — **has not been touched**, since removing
   tracked files wasn't in scope for this doc-writing session and deleting things needs
   explicit confirmation.
-- **No AI prompt log exists.** Checked for `PROMPT_LOG.md`, a `docs/` folder, or any
-  equivalent under version control — none found anywhere in the repo. This is listed as
-  a required deliverable in the working conventions but isn't being kept. Needs a file
-  created and then actually maintained going forward.
+- **`PROMPT_LOG.md` now exists** (created this session, at the project root) — every
+  phase from "Help Tab" onward is logged there with the literal prompt text; the three
+  initial commits and the Day/Night+Developed-By phase are backfilled as reconstructed
+  summaries (rebuilt from `git show` diffs and this file's own history, clearly marked as
+  reconstructed since no literal prompt was recorded for them at the time). Keep
+  appending to it — don't let it go stale again.
 - **Day/Night + Developed By work is uncommitted** (detailed in §3) — the single biggest
   immediate risk right now: if this working tree is lost/reset before a commit, this
   entire phase's work (theming system, modal, contrast fixes) is gone.
+- **Help tab work is also uncommitted** — `frontend/src/pages/HelpPage.jsx` (new),
+  `Layout.jsx`/`App.jsx`/`App.css` (modified further on top of the already-uncommitted
+  Day/Night changes). Same risk as the line above: nothing from this phase is in git
+  history yet either.
+- **Learn tab work is also uncommitted** — `frontend/src/pages/LearnPage.jsx` (new),
+  `Layout.jsx`/`App.jsx`/`App.css` (modified further still, on top of both prior
+  uncommitted phases), plus the new `PROMPT_LOG.md` at the root. Same risk again: three
+  phases' worth of work now sit in the working tree with nothing in git history.
 - **Developed By modal ships with placeholder content** (§3) — not a code bug, but will
   read as "unfinished" to a grader until real values are filled in.
+- **Learn tab ships with placeholder content by design** (§2) — draft concept-explanation
+  prose (unreviewed against the actual course rubric), a literal `YOUR_VIDEO_ID_HERE`
+  video embed, and placeholder references in every category. All three are visibly
+  flagged in the UI (a `DRAFT` badge and coral `PLACEHOLDER` badges) so this can't be
+  mistaken for finished content, but it still needs a real video ID and real, verified
+  references before submission.
+- **Pre-existing mobile nav overflow, surfaced (not fixed) this session**: at ~400px
+  viewport width the top nav (`.top-nav` in `App.css`, no `flex-wrap`) overflows
+  horizontally instead of wrapping onto a second line. Confirmed via
+  `git show HEAD:frontend/src/App.css` that the missing `flex-wrap` predates the Learn
+  tab — adding an 8th nav item made an already-tight row overflow more visibly, but did
+  not introduce the underlying issue. Left unfixed since it's shared header layout, not
+  in scope for either the Help or Learn phase; worth a small dedicated fix later (e.g.
+  `flex-wrap: wrap` on `.top-nav` itself, not just `.site-header-right`).
 - **Download doesn't meet the stated requirement** (§4) — JSON-only export exists;
   PDF/Doc/Text + graph inclusion do not.
 - **No frontend automated test suite** — `npm run lint` (oxlint) + `npm run build` are
@@ -165,10 +227,15 @@ Scanned directly (`grep` for `TODO`/`FIXME`/`XXX`/`HACK`/placeholder markers acr
 
 ## 7. Immediate next step
 
-1. **Commit the Day/Night Mode + Developed By modal work** currently sitting uncommitted
-   in the working tree (§3) — this is the most time-sensitive item, everything else can
-   wait, losing this can't be undone.
+1. **Commit everything currently sitting uncommitted in the working tree** — Day/Night
+   Mode + Developed By modal, the Help tab, and now the Learn tab (§3, §6) — this is the
+   most time-sensitive item, everything else can wait, losing three phases of
+   uncommitted work can't be undone.
 2. Get the real student photo, name, and register number from the user and drop them
    into `DevelopedByModal.jsx` (replacing the three placeholders listed in §3/§6).
-3. Once both of the above are done, Day/Night + Developed By is genuinely finished —
-   move to the **Help tab** next, per the agreed build order in §5.
+3. Get a real educational video (swap `YOUR_VIDEO_ID_HERE` in `LearnPage.jsx`) and real,
+   verified references (replacing every badge-marked placeholder entry) for the Learn
+   tab (§2/§6) — and have the concept-explanation draft reviewed against the actual
+   course rubric.
+4. Once all of the above are done, move to the **Download feature upgrade** next, per
+   the agreed build order in §5.

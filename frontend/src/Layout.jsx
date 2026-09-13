@@ -10,6 +10,12 @@ const NAV_ITEMS = [
   { to: '/history', label: 'History' },
   { to: '/quiz', label: 'Quiz' },
   { to: '/about', label: 'About' },
+  // Course requirement: the Learn tab must be "prominent" and "positioned
+  // top-right" -- rightmost of the main tabs (right next to the Help/theme/
+  // Developed-By cluster, i.e. the far top-right of the header) plus its
+  // own emphasized styling (see .top-nav-item-emphasize in App.css) so it
+  // doesn't just blend in as one more muted tab like its neighbors.
+  { to: '/learn', label: '🎓 Learn', emphasize: true },
 ]
 
 function Layout() {
@@ -33,7 +39,15 @@ function Layout() {
                   key={item.to}
                   to={item.to}
                   end={item.end}
-                  className={({ isActive }) => (isActive ? 'top-nav-item top-nav-item-active' : 'top-nav-item')}
+                  className={({ isActive }) =>
+                    [
+                      'top-nav-item',
+                      isActive && 'top-nav-item-active',
+                      item.emphasize && 'top-nav-item-emphasize',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
+                  }
                 >
                   {item.label}
                 </NavLink>
@@ -41,6 +55,12 @@ function Layout() {
             </nav>
 
             <div className="header-utility-cluster">
+              <NavLink
+                to="/help"
+                className={({ isActive }) => (isActive ? 'help-nav-trigger help-nav-trigger-active' : 'help-nav-trigger')}
+              >
+                Help
+              </NavLink>
               <button
                 type="button"
                 className="theme-toggle"

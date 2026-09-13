@@ -146,6 +146,30 @@ h2 {
   font-weight: 600;
 }
 
+/* Learn is a graded, mandatory-prominent tab (course requirement) -- it
+   gets a permanent amber outline even when not the active route, unlike
+   every other main tab which is only tinted amber once active. Active
+   state inverts to a solid fill (same amber-solid/bg-base pairing
+   .home-cta already uses on hover) so "currently on Learn" reads even
+   more strongly than the shared .top-nav-item-active treatment alone. */
+.top-nav-item-emphasize {
+  border-color: var(--accent-amber);
+  color: var(--accent-amber);
+  background: var(--accent-amber-bg);
+  font-weight: 600;
+}
+
+.top-nav-item-emphasize:hover {
+  background: var(--accent-amber);
+  color: var(--bg-base);
+}
+
+.top-nav-item-emphasize.top-nav-item-active {
+  background: var(--accent-amber);
+  color: var(--bg-base);
+  border-color: var(--accent-amber);
+}
+
 /* Nav tabs + the theme toggle/Developed-By cluster share one flex row
    so `justify-content: space-between` on .site-header-inner still only
    ever splits two things (brand | everything else) -- adding a third
@@ -198,6 +222,36 @@ h2 {
   color: var(--text-primary);
   background: var(--bg-panel-raised);
   border-color: var(--accent-teal);
+}
+
+/* Help sits in the same top-right utility cluster as the theme toggle
+   and Developed By trigger (rather than the main page-tab nav) since
+   it's a persistent, cross-page reference rather than a content page
+   of the app itself. Styled to match developed-by-trigger's sizing,
+   with the active state borrowing the same amber highlight the main
+   nav tabs use so "you are here" reads the same way everywhere. */
+.help-nav-trigger {
+  padding: 0.4rem 0.85rem;
+  font-size: 0.82rem;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  text-decoration: none;
+  display: inline-block;
+}
+
+.help-nav-trigger:hover {
+  color: var(--text-primary);
+  background: var(--bg-panel-raised);
+  border-color: var(--accent-amber);
+}
+
+.help-nav-trigger-active {
+  color: var(--accent-amber);
+  border-color: var(--accent-amber);
+  background: var(--accent-amber-bg);
+  font-weight: 600;
 }
 
 /* -- Developed By modal ----------------------------------------------------
@@ -465,6 +519,353 @@ h2 {
   background: var(--bg-panel-raised);
   padding: 0.05rem 0.35rem;
   border-radius: var(--radius);
+}
+
+/* ==========================================================================
+   Help page
+   ========================================================================== */
+
+.help-page h1 {
+  margin-bottom: 0.3rem;
+}
+
+.help-section {
+  position: relative;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  padding: 0 1.25rem;
+  margin-top: 0.9rem;
+}
+
+.help-section[open] {
+  padding-bottom: 1.1rem;
+}
+
+.help-section-summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1.1rem 0;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.02rem;
+  color: var(--text-primary);
+}
+
+/* Suppress the default disclosure triangle in both engines -- the
+   caret span below is the one visual indicator, so there's exactly
+   one, and it can rotate on [open] like every other affordance in
+   this design system. */
+.help-section-summary::-webkit-details-marker {
+  display: none;
+}
+
+.help-section-caret {
+  color: var(--accent-teal);
+  font-size: 0.85rem;
+  transition: transform 150ms ease;
+  flex-shrink: 0;
+}
+
+.help-section[open] .help-section-caret {
+  transform: rotate(90deg);
+}
+
+.help-section-summary:hover .help-section-title {
+  color: var(--accent-teal);
+}
+
+.help-section-body {
+  border-top: 1px solid var(--border-hairline);
+  padding-top: 0.9rem;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.help-section-body p {
+  margin: 0 0 0.7rem;
+}
+
+.help-section-body p:last-child {
+  margin-bottom: 0;
+}
+
+.help-steps {
+  margin: 0.4rem 0 0.7rem;
+  padding-left: 1.3rem;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  line-height: 1.75;
+}
+
+.help-steps:last-child {
+  margin-bottom: 0;
+}
+
+.help-control-list {
+  margin: 0.4rem 0 0.9rem;
+  padding-left: 1.2rem;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  line-height: 1.75;
+}
+
+.help-control-list:last-child {
+  margin-bottom: 0;
+}
+
+.help-control-list code,
+.help-steps code {
+  font-family: var(--font-mono);
+  background: var(--bg-panel-raised);
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--radius);
+  font-size: 0.85em;
+}
+
+.help-note {
+  background: var(--accent-amber-bg);
+  border: 1px solid var(--accent-amber);
+  border-radius: var(--radius);
+  padding: 0.75rem 0.9rem;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.help-note code {
+  font-family: var(--font-mono);
+  background: var(--bg-panel-raised);
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--radius);
+  font-size: 0.85em;
+}
+
+/* ==========================================================================
+   Learn page
+   ========================================================================== */
+
+.learn-page h1 {
+  margin-bottom: 0.3rem;
+}
+
+.learn-panel {
+  padding-top: 1.75rem;
+}
+
+/* Draft-content flag on the Concept Explanation panel -- deliberately
+   understated (muted, not coral/amber) since unlike the video/reference
+   placeholders below, this prose is real, submittable content that's
+   just unreviewed, not a broken/fake slot that would break the page if
+   shipped as-is. */
+.learn-draft-flag {
+  display: inline-block;
+  margin-bottom: 0.9rem;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  padding: 0.1rem 0.45rem;
+}
+
+.learn-concept h2 {
+  font-size: 1.3rem;
+  margin-bottom: 1rem;
+}
+
+.learn-concept-section {
+  margin-top: 1.2rem;
+}
+
+.learn-concept-section:first-child {
+  margin-top: 0;
+}
+
+.learn-concept-section h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--accent-teal);
+  margin: 0 0 0.5rem;
+}
+
+.learn-concept-section p {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  line-height: 1.65;
+  margin: 0 0 0.7rem;
+}
+
+.learn-concept-section p:last-child {
+  margin-bottom: 0;
+}
+
+.learn-concept-section code {
+  font-family: var(--font-mono);
+  background: var(--bg-panel-raised);
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--radius);
+  font-size: 0.85em;
+}
+
+.learn-bullets {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.learn-bullets code {
+  font-family: var(--font-mono);
+  background: var(--bg-panel-raised);
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--radius);
+  font-size: 0.85em;
+}
+
+.learn-table-scroll {
+  overflow-x: auto;
+}
+
+.learn-compare-table {
+  width: 100%;
+  min-width: 480px;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.learn-compare-table th,
+.learn-compare-table td {
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--border-hairline);
+  vertical-align: top;
+}
+
+.learn-compare-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.learn-compare-table td {
+  color: var(--text-primary);
+}
+
+.learn-compare-table code {
+  font-family: var(--font-mono);
+  background: var(--bg-panel-raised);
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--radius);
+  font-size: 0.85em;
+}
+
+.learn-video-caption {
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  line-height: 1.6;
+  margin: 0 0 1rem;
+}
+
+.learn-video-caption code {
+  font-family: var(--font-mono);
+  background: var(--bg-panel-raised);
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--radius);
+  font-size: 0.85em;
+}
+
+/* Responsive 16:9 embed frame -- width-driven so it never overflows the
+   panel at phone width, height derived instead of a fixed pixel value. */
+.learn-video-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  aspect-ratio: 16 / 9;
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.learn-video-iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* Loud, impossible-to-miss marker on anything that must not ship as-is --
+   the video embed's placeholder ID and every reference entry. Coral is
+   this design system's existing "needs attention" accent (same family as
+   the unhandled-error banner), reused here for the same reason: it reads
+   as "stop, look at this" rather than blending in as routine content. */
+.learn-placeholder-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--accent-coral);
+  background: var(--accent-coral-bg);
+  border: 1px solid var(--accent-coral);
+  border-radius: var(--radius);
+  padding: 0.1rem 0.45rem;
+  white-space: nowrap;
+}
+
+.learn-ref-category {
+  margin-top: 1.3rem;
+}
+
+.learn-ref-category:first-of-type {
+  margin-top: 0;
+}
+
+.learn-ref-category h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.learn-ref-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--text-primary);
+  font-size: 0.87rem;
+  line-height: 1.85;
+}
+
+.learn-ref-list li {
+  margin-bottom: 0.4rem;
+}
+
+.learn-ref-list li:last-child {
+  margin-bottom: 0;
+}
+
+.learn-ref-url {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  color: var(--accent-teal);
+  word-break: break-all;
 }
 
 /* ==========================================================================
