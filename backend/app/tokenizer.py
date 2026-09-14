@@ -16,7 +16,7 @@ Supported keywords (case-insensitive):
     DECLARE, SET, IF, THEN, ELSE, END, WHILE, DO, BEGIN, IN, OUT, DEFAULT,
     CURSOR, FOR, OPEN, FETCH, INTO, CLOSE, SELECT, FROM, WHERE,
     FOUND, NOTFOUND, CONTINUE, HANDLER, NOT_FOUND, DIVISION_BY_ZERO,
-    CREATE, FUNCTION, RETURNS, RETURN, PROCEDURE, INOUT, CALL
+    CREATE, FUNCTION, RETURNS, RETURN, PROCEDURE, INOUT, CALL, CASE, WHEN
 
 Supported operators:
     +  -  *  /  >  <  =  !=
@@ -89,6 +89,11 @@ KEYWORDS = {
     "INOUT",
     # -- CALL (procedure calling procedure -- see app.parser / app.interpreter) --
     "CALL",
+    # -- CASE statement (see app.parser / app.interpreter) -- THEN/ELSE/END
+    # above are reused as-is, exactly like IF already reuses them; only
+    # CASE and WHEN are genuinely new keywords.
+    "CASE",
+    "WHEN",
 }
 
 # Order matters: longer/more-specific patterns must come before shorter

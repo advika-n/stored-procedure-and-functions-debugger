@@ -19,7 +19,7 @@ Supported grammar (informal, keywords in CAPS are literal tokens):
     proc_param    := (IN | OUT | INOUT)? IDENT IDENT
 
     statement   := declare_stmt | declare_cursor_stmt | declare_handler_stmt
-                    | set_stmt | if_stmt | while_stmt | return_stmt
+                    | set_stmt | if_stmt | while_stmt | case_stmt | return_stmt
                     | open_cursor_stmt | fetch_cursor_stmt | close_cursor_stmt
                     | call_stmt
 
@@ -32,6 +32,9 @@ Supported grammar (informal, keywords in CAPS are literal tokens):
                      (ELSE statement*)?
                      END IF ';'
     while_stmt   := WHILE expr DO statement* END WHILE ';'
+    case_stmt    := CASE expr? (WHEN expr THEN statement*)+
+                     (ELSE statement*)?
+                     END CASE ';'
     return_stmt  := RETURN expr ';'
     open_cursor_stmt  := OPEN IDENT ';'
     fetch_cursor_stmt := FETCH IDENT INTO IDENT (',' IDENT)* ';'
@@ -191,6 +194,54 @@ attribute expression, and anything else means an ordinary Identifier
 -- these three are mutually exclusive by construction (a variable
 name is never immediately followed by `(` in this grammar otherwise),
 so there is no real ambiguity to resolve, just a peek.
+
+-- CASE statement -----------------------------------------------------------
+
+Both common CASE forms are supported, and -- deliberately -- as ONE AST
+node type, not two, since a simple CASE is just syntactic sugar over a
+searched CASE (compare each WHEN value against the same operand,
+instead of evaluating each WHEN as its own independent condition); one
+node type means app.interpreter, app.advisor, and cfg.js each only ever
+need one case for CASE, not two nearly-identical ones.
+
+  - Simple CASE:   ``CASE expr WHEN val1 THEN ... WHEN val2 THEN ... ELSE ... END CASE;``
+  - Searched CASE: ``CASE WHEN cond1 THEN ... WHEN cond2 THEN ... ELSE ... END CASE;``
+
+`_parse_case` tells the two forms apart with a single-token lookahead
+right after CASE: a WHEN next means searched (no operand); anything
+else is parsed as `expr` and becomes the simple form's operand. Every
+WHEN clause after that parses identically regardless of form -- an
+expression (the comparison value for simple CASE, the boolean
+condition for searched CASE; app.interpreter is what actually
+distinguishes them at evaluation time, not the parser), then THEN,
+then a statement block. Each WHEN clause's body, and the optional
+ELSE's body, are parsed with `_parse_block` -- the exact same
+block-parsing helper `if_stmt`/`while_stmt` already use, with
+terminators `{WHEN, ELSE, END}` for a WHEN body (so it naturally stops
+at the next WHEN, an ELSE, or END) and `{END}` for the ELSE body,
+mirroring `if_stmt`'s own `then_body`/`else_body` terminator sets
+exactly -- no new block-parsing pattern was invented for this. Just
+like `if_stmt`/`while_stmt`, the statement is closed by `END CASE ';'`
+-- the same "END <KEYWORD> ';'" shape every other block statement in
+this grammar already uses. At least one WHEN clause is required (a
+bare `CASE expr END CASE;` with none is a clear ParserError, not a
+silently-accepted no-op statement).
+
+Produces:
+
+    {
+        "type": "CaseStatement",
+        "operand": expr | None,        # None => searched CASE
+        "when_clauses": [
+            {"when": expr, "body": [statement, ...], "line": int}, ...
+        ],
+        "else_body": [statement, ...] | None,
+        "line": int,
+    }
+
+See app.interpreter's own "CASE statement" module docstring section for
+how `operand`/`when_clauses`/`else_body` actually get evaluated
+(including what happens when nothing matches and there's no ELSE).
 
 -- Cursors -----------------------------------------------------------------
 
@@ -414,6 +465,8 @@ class Parser:
             return self._parse_if()
         if self._check("KEYWORD", "WHILE"):
             return self._parse_while()
+        if self._check("KEYWORD", "CASE"):
+            return self._parse_case()
         if self._check("KEYWORD", "OPEN"):
             return self._parse_open_cursor()
         if self._check("KEYWORD", "FETCH"):
@@ -426,7 +479,7 @@ class Parser:
             return self._parse_call()
 
         raise self._error(
-            "Expected DECLARE, SET, IF, WHILE, RETURN, OPEN, FETCH, CLOSE, or CALL", token
+            "Expected DECLARE, SET, IF, WHILE, CASE, RETURN, OPEN, FETCH, CLOSE, or CALL", token
         )
 
     def _parse_return(self) -> dict:
@@ -626,6 +679,44 @@ class Parser:
             "type": "WhileStatement",
             "condition": condition,
             "body": body,
+            "line": start["line"],
+        }
+
+    def _parse_case(self) -> dict:
+        """Both CASE forms, as one node type -- see the module
+        docstring's "CASE statement" section for the full design."""
+        start = self._keyword("CASE")
+
+        # A WHEN right after CASE means searched (no operand); anything
+        # else is the simple form's operand expression.
+        operand = None
+        if not self._check("KEYWORD", "WHEN"):
+            operand = self._parse_expr()
+
+        when_clauses: list[dict] = []
+        while self._check("KEYWORD", "WHEN"):
+            when_start = self._keyword("WHEN")
+            when_expr = self._parse_expr()
+            self._keyword("THEN")
+            body = self._parse_block({"WHEN", "ELSE", "END"})
+            when_clauses.append({"when": when_expr, "body": body, "line": when_start["line"]})
+
+        if not when_clauses:
+            raise self._error("Expected at least one WHEN clause in CASE")
+
+        else_body = None
+        if self._match("KEYWORD", "ELSE"):
+            else_body = self._parse_block({"END"})
+
+        self._keyword("END")
+        self._keyword("CASE")
+        self._expect("PUNCTUATION", ";")
+
+        return {
+            "type": "CaseStatement",
+            "operand": operand,
+            "when_clauses": when_clauses,
+            "else_body": else_body,
             "line": start["line"],
         }
 

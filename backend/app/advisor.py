@@ -72,6 +72,18 @@ computed the input for.
           value as a condition" and other constant-condition shapes
           multiply the cases fast for little real payoff) -- IF/ELSE
           branch-level dead code is the well-scoped, high-value case.
+       c. (added alongside CASE statement support) a SEARCHED CASE's
+          WHEN whose own condition is a compile-time constant -- a
+          constant-false WHEN's own body can never run; a constant-true
+          WHEN always matches first, so every WHEN/ELSE after it can
+          never run either. Deliberately scoped to searched CASE only
+          (`operand is None`) -- folding a SIMPLE CASE's `operand =
+          value` equality would need `_fold_constant` to also handle
+          STRING literals and non-numeric equality (it currently only
+          ever produces a number or a bool from purely numeric/
+          comparison expressions), which is a real, separate piece of
+          work rather than a natural extension of what already exists
+          for IF; left out rather than half-built.
   8. unused-variable          -- a DECLAREd local whose value is never
      read by ANY expression anywhere in the procedure/function (a
      condition, another statement's right-hand side, a RETURN, or a
@@ -156,8 +168,8 @@ def _issue(*, category: str, severity: str, title: str, line: int | None, messag
 
 def _iter_statements(statements: list[dict]) -> Iterator[dict]:
     """Yield every statement in `statements`, recursively descending into
-    IF/WHILE bodies and a handler's single action statement -- every place
-    this grammar allows a nested statement to appear."""
+    IF/WHILE/CASE bodies and a handler's single action statement -- every
+    place this grammar allows a nested statement to appear."""
     for stmt in statements:
         yield stmt
         kind = stmt["type"]
@@ -167,6 +179,16 @@ def _iter_statements(statements: list[dict]) -> Iterator[dict]:
                 yield from _iter_statements(stmt["else_body"])
         elif kind == "WhileStatement":
             yield from _iter_statements(stmt["body"])
+        elif kind == "CaseStatement":
+            # CASE (see app.parser's "CASE statement" section -- added in
+            # a later phase than the six original checks below) has N
+            # WHEN bodies, not just one then_body, plus an optional
+            # else_body -- descend into all of them, same reasoning as
+            # IfStatement just above.
+            for clause in stmt["when_clauses"]:
+                yield from _iter_statements(clause["body"])
+            if stmt["else_body"] is not None:
+                yield from _iter_statements(stmt["else_body"])
         elif kind == "HandlerDeclNode":
             yield from _iter_statements([stmt["action"]])
 
@@ -208,6 +230,17 @@ def _statement_exprs(stmt: dict) -> Iterator[dict]:
         yield from _iter_exprs(stmt["value"])
     elif kind in ("IfStatement", "WhileStatement"):
         yield from _iter_exprs(stmt["condition"])
+    elif kind == "CaseStatement":
+        # The operand (simple CASE only -- None for searched CASE) plus
+        # every WHEN clause's own test expression; each clause's `body`
+        # is a nested statement list, not an expression, so it's NOT
+        # yielded here -- combine with `_iter_statements`/
+        # `_iter_statement_lists` for that, same convention as
+        # IfStatement's then_body/else_body.
+        if stmt["operand"] is not None:
+            yield from _iter_exprs(stmt["operand"])
+        for clause in stmt["when_clauses"]:
+            yield from _iter_exprs(clause["when"])
     elif kind == "ReturnNode":
         yield from _iter_exprs(stmt["value"])
 
@@ -231,6 +264,11 @@ def _iter_statement_lists(statements: list[dict]) -> Iterator[list[dict]]:
                 yield from _iter_statement_lists(stmt["else_body"])
         elif kind == "WhileStatement":
             yield from _iter_statement_lists(stmt["body"])
+        elif kind == "CaseStatement":
+            for clause in stmt["when_clauses"]:
+                yield from _iter_statement_lists(clause["body"])
+            if stmt["else_body"] is not None:
+                yield from _iter_statement_lists(stmt["else_body"])
         elif kind == "HandlerDeclNode":
             yield from _iter_statement_lists([stmt["action"]])
 
@@ -399,6 +437,15 @@ def _check_nested_loops(statements: list[dict], issues: list[dict]) -> None:
                 walk(stmt["then_body"], enclosing_loop_line)
                 if stmt["else_body"] is not None:
                     walk(stmt["else_body"], enclosing_loop_line)
+            elif kind == "CaseStatement":
+                # Not built on `_iter_statements` (this walker threads its
+                # own `enclosing_loop_line` state through the recursion),
+                # so it needs its own CaseStatement case -- same shape as
+                # the IfStatement one just above.
+                for clause in stmt["when_clauses"]:
+                    walk(clause["body"], enclosing_loop_line)
+                if stmt["else_body"] is not None:
+                    walk(stmt["else_body"], enclosing_loop_line)
             elif kind == "HandlerDeclNode":
                 walk([stmt["action"]], enclosing_loop_line)
 
@@ -435,6 +482,23 @@ def _find_unguarded_fetch(statements: list[dict], guarded_cursors: frozenset[str
             found = _find_unguarded_fetch(stmt["body"], frozenset(inner_guarded))
             if found is not None:
                 return found
+        elif kind == "CaseStatement":
+            # Also not built on `_iter_statements`/`_iter_statement_lists`
+            # (it threads its own `guarded_cursors` set through the
+            # recursion, growing it inside a WHILE the same way a WHILE's
+            # own condition does), so it needs its own CaseStatement case
+            # too -- same shape as the IfStatement one above. A WHEN's own
+            # test expression can't itself be a %FOUND guard (that's only
+            # meaningful as a WHILE's condition), so `guarded_cursors`
+            # passes through unchanged into every branch.
+            for clause in stmt["when_clauses"]:
+                found = _find_unguarded_fetch(clause["body"], guarded_cursors)
+                if found is not None:
+                    return found
+            if stmt["else_body"] is not None:
+                found = _find_unguarded_fetch(stmt["else_body"], guarded_cursors)
+                if found is not None:
+                    return found
         elif kind == "HandlerDeclNode":
             found = _find_unguarded_fetch([stmt["action"]], guarded_cursors)
             if found is not None:
@@ -627,6 +691,67 @@ def _check_unreachable_code(statements: list[dict], issues: list[dict]) -> None:
                 ),
             )
         )
+
+    # c) a SEARCHED CASE's WHEN whose own condition is a compile-time
+    #    constant -- see the module docstring's item 7c for why this is
+    #    scoped to searched CASE only, not simple CASE.
+    for stmt in _iter_statements(statements):
+        if stmt["type"] != "CaseStatement" or stmt["operand"] is not None:
+            continue
+        when_clauses = stmt["when_clauses"]
+        for index, clause in enumerate(when_clauses):
+            folded = _fold_constant(clause["when"])
+            if folded is None:
+                continue
+            rendered = _render_constant_expr(clause["when"])
+            if not bool(folded):
+                if not clause["body"]:
+                    continue
+                first_line = clause["body"][0]["line"]
+                issues.append(
+                    _issue(
+                        category="unreachable-code",
+                        severity="warning",
+                        title="WHEN branch can never execute",
+                        line=first_line,
+                        message=(
+                            f"This WHEN's condition ({rendered}) is a fixed constant that always "
+                            f"evaluates to false, so the branch starting at line {first_line} can "
+                            "never run."
+                        ),
+                        suggestion=(
+                            "Remove the dead WHEN clause, or check whether the condition was meant "
+                            "to reference a variable instead of two literal values."
+                        ),
+                    )
+                )
+                continue
+            # folded True -- this WHEN always matches first, so every
+            # WHEN/ELSE after it can never run.
+            remainder = [s for later in when_clauses[index + 1 :] for s in later["body"]]
+            if stmt["else_body"]:
+                remainder += stmt["else_body"]
+            if not remainder:
+                break
+            first_line = remainder[0]["line"]
+            issues.append(
+                _issue(
+                    category="unreachable-code",
+                    severity="warning",
+                    title="Later WHEN/ELSE can never execute",
+                    line=first_line,
+                    message=(
+                        f"This WHEN's condition ({rendered}) is a fixed constant that always "
+                        "evaluates to true, so it always matches first -- every WHEN/ELSE after it "
+                        f"(starting at line {first_line}) can never run."
+                    ),
+                    suggestion=(
+                        "Remove the dead WHEN/ELSE clauses after this one, or check whether this "
+                        "condition was meant to reference a variable instead of two literal values."
+                    ),
+                )
+            )
+            break  # nothing after an always-true WHEN needs checking further
 
 
 # -- 8. Unused variables ---------------------------------------------------------

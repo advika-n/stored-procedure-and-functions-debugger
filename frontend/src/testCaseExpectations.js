@@ -165,4 +165,27 @@ export const TEST_CASE_EXPECTATIONS = {
     kind: 'variables',
     variables: { price: 250, quantity: 3, subtotal: 750, finalTotal: 600 },
   },
+
+  // Added for the CASE statement support phase -- exercises both CASE
+  // forms in one sample (see samples.js's own comment for why the two
+  // genuine Advisor findings on this sample -- magic-number, unused-
+  // variable -- are left in rather than dodged).
+  //
+  // Simple CASE: tier = 2 (DEFAULT) matches WHEN 2 exactly ->
+  // discountRate = 0.1 (WHEN 1/WHEN 3/ELSE never run).
+  // total = (quantity * unitPrice) * (1 - discountRate)
+  //       = (12 * 15) * (1 - 0.1) = 180 * 0.9 = 162.
+  // Searched CASE: is total > 200? 162 > 200 is false. Is total > 100?
+  // 162 > 100 is true -> sizeLabel = 20 (the ELSE, 10, never runs).
+  ClassifyOrder: {
+    kind: 'variables',
+    variables: {
+      quantity: 12,
+      unitPrice: 15,
+      tier: 2,
+      discountRate: 0.1,
+      total: 162,
+      sizeLabel: 20,
+    },
+  },
 }

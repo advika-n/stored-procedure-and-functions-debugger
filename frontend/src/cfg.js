@@ -56,6 +56,12 @@ function renderStatementHeader(node) {
       return `IF ${renderExpr(node.condition)} THEN`
     case 'WhileStatement':
       return `WHILE ${renderExpr(node.condition)} DO`
+    case 'CaseStatement':
+      // Mirrors backend/app/interpreter.py's render_statement_header
+      // exactly: the operand's text for simple CASE, or bare "CASE" for
+      // searched CASE (no single condition to show -- each WHEN gets
+      // its own labeled edge instead, built in emitBlock below).
+      return node.operand !== null ? `CASE ${renderExpr(node.operand)}` : 'CASE'
     case 'CursorDeclNode':
       return `DECLARE ${node.name} CURSOR FOR ${node.query};`
     case 'OpenCursorNode':
@@ -92,14 +98,16 @@ const END_ID = 'endNode' // `end` is a reserved Mermaid keyword, so avoid it
 // Walks a list of statements, threading dangling "tails" (edges waiting
 // for a destination) through it. Each tail is { nodeId, kind } where
 // `kind` becomes the edge's kind once it's finally connected --
-// 'seq' | 'then' | 'else' | 'loop' | 'loop-exit'.
+// 'seq' | 'then' | 'else' | 'loop' | 'loop-exit' | 'when-<N>' (CASE's
+// own N-way branches -- see isConditionalEdgeKind/edgeLabelFor below
+// for where the open-ended 'when-<N>' set is actually handled).
 function emitBlock(statements, entryTails, nodes, edges) {
   let tails = entryTails
 
   for (const stmt of statements) {
     const nodeId = `n${stmt.line}`
 
-    if (stmt.type === 'IfStatement' || stmt.type === 'WhileStatement') {
+    if (stmt.type === 'IfStatement' || stmt.type === 'WhileStatement' || stmt.type === 'CaseStatement') {
       nodes.push({ id: nodeId, label: renderStatementHeader(stmt), shape: 'diamond', line: stmt.line, kind: stmt.type })
     } else if (stmt.type === 'ReturnNode') {
       // Stadium shape (same bracket syntax as the Start/End terminals),
@@ -120,6 +128,23 @@ function emitBlock(statements, entryTails, nodes, edges) {
         ? emitBlock(stmt.else_body, [{ nodeId, kind: 'else' }], nodes, edges)
         : [{ nodeId, kind: 'else' }]
       tails = [...thenTails, ...elseTails]
+    } else if (stmt.type === 'CaseStatement') {
+      // One outgoing edge per WHEN clause (kind 'when-<index>', an
+      // open-ended set unlike IF's fixed 'then'/'else' pair -- see
+      // isConditionalEdgeKind/edgeLabelFor below), plus one more for
+      // ELSE -- synthesized as a dangling tail exactly like IfStatement
+      // does above when there's no else_body, representing "no WHEN
+      // matched, fell through" (backend/app/interpreter.py's `path:
+      // 'none'` case -- see computeDiagramState below for why that
+      // fallthrough edge is never highlighted as "taken", mirroring
+      // IF's own already-established behavior).
+      const whenTails = stmt.when_clauses.flatMap((clause, index) =>
+        emitBlock(clause.body, [{ nodeId, kind: `when-${index}` }], nodes, edges),
+      )
+      const elseTails = stmt.else_body
+        ? emitBlock(stmt.else_body, [{ nodeId, kind: 'else' }], nodes, edges)
+        : [{ nodeId, kind: 'else' }]
+      tails = [...whenTails, ...elseTails]
     } else if (stmt.type === 'WhileStatement') {
       const bodyTails = emitBlock(stmt.body, [{ nodeId, kind: 'loop' }], nodes, edges)
       for (const tail of bodyTails) {
@@ -128,9 +153,10 @@ function emitBlock(statements, entryTails, nodes, edges) {
       tails = [{ nodeId, kind: 'loop-exit' }]
     } else if (stmt.type === 'ReturnNode') {
       // Execution halts here -- no continuation edge to whatever
-      // statement would textually follow (even inside an IF/WHILE
-      // block). If this was one branch of an IF, the other branch's
-      // own tails (already computed independently) are unaffected.
+      // statement would textually follow (even inside an IF/WHILE/CASE
+      // block). If this was one branch of an IF/CASE, the other
+      // branches' own tails (already computed independently) are
+      // unaffected.
       tails = []
     } else {
       tails = [{ nodeId, kind: 'seq' }]
@@ -174,21 +200,26 @@ export function buildFlowchartGraph(ast) {
 /**
  * Given the graph, the full step trace, and how far the user has
  * stepped, work out: which node is "current", which nodes have been
- * passed already, and -- for each IF/WHILE node reached so far --
+ * passed already, and -- for each IF/WHILE/CASE node reached so far --
  * which of its outgoing branches was actually taken most recently
  * (a node can be revisited if it's inside a loop).
  */
 export function computeDiagramState(graph, steps, currentStepIndex) {
   const visitedLines = new Set()
-  const takenKindByLine = new Map() // line -> 'then' | 'else' | 'loop' | 'loop-exit'
+  const takenKindByLine = new Map() // line -> 'then' | 'else' | 'loop' | 'loop-exit' | 'when-<N>'
 
   const executed = steps.slice(0, currentStepIndex + 1)
   for (const step of executed) {
     visitedLines.add(step.line)
     if (step.branch) {
-      if (step.branch.path === 'then') takenKindByLine.set(step.line, 'then')
-      else if (step.branch.path === 'else') takenKindByLine.set(step.line, 'else')
-      // path === 'none': condition false, no ELSE -- nothing taken to mark
+      // Generic over IfStatement's fixed 'then'/'else' pair AND
+      // CaseStatement's open-ended 'when-<N>'/'else' set -- `path` IS
+      // the edge kind that was taken, whatever it says, in both cases.
+      // 'none' (nothing matched, no ELSE) is the one value that never
+      // marks an edge taken -- mirrors IfStatement's own pre-existing
+      // "condition false, no ELSE -- nothing taken to mark" behavior,
+      // now shared by CASE's identical fallthrough case.
+      if (step.branch.path !== 'none') takenKindByLine.set(step.line, step.branch.path)
     } else if (step.loop) {
       takenKindByLine.set(step.line, step.loop.result ? 'loop' : 'loop-exit')
     }
@@ -215,6 +246,24 @@ function nodeMermaidText(node) {
  * definition. `theme` ("dark" | "light", default "dark") picks which of
  * mermaidColors.js's two palettes the classDef/linkStyle colors below
  * come from -- see that file for why they can't just be var(...). */
+
+// 'then'/'loop'/'loop-exit' are exactly IF/WHILE's fixed edge kinds;
+// CASE's own kinds are open-ended ('when-0', 'when-1', ... -- one per
+// WHEN clause, however many a given CASE happens to have), so they
+// can't live in a fixed lookup table the way the others do.
+const _STATIC_EDGE_LABELS = { then: 'then', else: 'else', loop: 'loop', 'loop-exit': 'exit' }
+const _WHEN_EDGE_KIND_RE = /^when-(\d+)$/
+
+function edgeLabelFor(kind) {
+  if (_STATIC_EDGE_LABELS[kind]) return _STATIC_EDGE_LABELS[kind]
+  const match = _WHEN_EDGE_KIND_RE.exec(kind)
+  return match ? `when ${Number(match[1]) + 1}` : null
+}
+
+function isConditionalEdgeKind(kind) {
+  return kind in _STATIC_EDGE_LABELS || _WHEN_EDGE_KIND_RE.test(kind)
+}
+
 export function renderMermaidDefinition(graph, diagramState, theme = 'dark') {
   const { currentLine, visitedLines, takenKindByLine } = diagramState
   const palette = getMermaidPalette(theme)
@@ -227,17 +276,17 @@ export function renderMermaidDefinition(graph, diagramState, theme = 'dark') {
 
   // Emit edges in a fixed order and remember each one's index, since
   // Mermaid's `linkStyle` addresses edges positionally.
-  const edgeLabel = { then: 'then', else: 'else', loop: 'loop', 'loop-exit': 'exit' }
   const takenLinkStyleIndexes = []
   const notTakenLinkStyleIndexes = []
 
   graph.edges.forEach((edge, index) => {
-    const label = edgeLabel[edge.kind]
+    const label = edgeLabelFor(edge.kind)
     lines.push(label ? `  ${edge.from} -->|${label}| ${edge.to}` : `  ${edge.from} --> ${edge.to}`)
 
-    if (edge.kind === 'then' || edge.kind === 'else' || edge.kind === 'loop' || edge.kind === 'loop-exit') {
-      // This edge is one of a conditional pair leaving a node whose
-      // line we may have visited -- look up which side was taken.
+    if (isConditionalEdgeKind(edge.kind)) {
+      // This edge is one of a conditional group (2+ for IF/WHILE, N+1
+      // for CASE) leaving a node whose line we may have visited -- look
+      // up which one was taken.
       const sourceNode = graph.nodes.find((n) => n.id === edge.from)
       const taken = sourceNode && takenKindByLine.get(sourceNode.line)
       if (taken) {

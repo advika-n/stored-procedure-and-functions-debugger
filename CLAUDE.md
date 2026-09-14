@@ -130,8 +130,32 @@ Documentation (5), Innovation (5).
   client-side. Recursion, mutual recursion, and function-calling-function all work by
   the same generalized mechanism (verified directly, not assumed — see
   `backend/app/tests/test_function_call_expression.py`).
+- **CASE statement (added in a later phase than function calls)** — both simple
+  (`CASE expr WHEN v THEN ...`) and searched (`CASE WHEN cond THEN ...`) forms, as ONE
+  AST node type (`CaseStatement`), not two: a simple CASE is just a searched CASE where
+  each WHEN's own test is "equals the operand" instead of an independent boolean, so
+  `interpreter._exec_case` and `parser._parse_case` each need only one code path.
+  `_parse_case` disambiguates the two forms with a one-token lookahead (a WHEN right
+  after CASE means searched); every WHEN/ELSE body is parsed via `_parse_block` — **the
+  same block-parsing helper IF/WHILE already use**. Missing ELSE is a silent no-op,
+  confirmed to match `_exec_if`'s own established convention by reading it first, not
+  invented fresh; DIVISION_BY_ZERO while evaluating the operand/a WHEN expression stops
+  evaluation immediately and falls through to ELSE/none, same as IF's own "condition
+  couldn't be evaluated" behavior generalized to a sequence. **Reuses IfStatement's own
+  `branch` DebugStep field verbatim** (`path` is `"when-<N>"`/`"else"`/`"none"` instead
+  of IF's fixed `"then"`/`"else"`/`"none"`) — no new DebugStep field. Needed real
+  cross-cutting fixes in more places than `FunctionCallExpr` did: `frontend/src/cfg.js`'s
+  flowchart builder had **zero** CASE support before this (would have silently dropped
+  every WHEN/ELSE body from the diagram) — fixed with a diamond node + one labeled edge
+  per WHEN (open-ended, not fixed like IF's then/else) plus ELSE; `backend/app/
+  advisor.py` needed five separate fixes (three shared AST walkers plus two
+  hand-rolled ones — `_check_nested_loops`'s own walker and `_find_unguarded_fetch` —
+  that don't use the shared ones); `backend/app/explainer.py`'s template fallback had no
+  CaseStatement case at all. All verified directly by reading each file, not assumed
+  generic by analogy — see `backend/app/tests/test_case_statement.py` and the expanded
+  `test_advisor.py`.
 - **Execution is simulated, not hooked into a real DB engine.** The interpreter
-  evaluates procedural-SQL constructs (DECLARE/SET/IF/WHILE/cursors/handlers) itself; the
+  evaluates procedural-SQL constructs (DECLARE/SET/IF/WHILE/CASE/cursors/handlers) itself; the
   one place real SQL actually runs is cursor `SELECT` queries, executed against a small,
   fixed, auto-seeded in-memory SQLite dataset (`backend/app/demo_db.py`: one table,
   `products(name, price)`, 3 rows, reseeded fresh every `/debug` call — no
@@ -256,7 +280,7 @@ JS for this reason; keep it in sync with `theme.css` by hand when either changes
   {
     stepNumber, line, nodeType, statementText,
     variables: { [name]: { value, type, changed, isOutput } },
-    branch?:   { condition, result, path },        // IfStatement steps only
+    branch?:   { condition, result, path },        // IfStatement AND CaseStatement steps
     loop?:     { condition, result, iteration },    // WhileStatement steps only
     cursor?:   { name, rowIndex, currentRow, hasMore },
     error?:    { condition, message, handler },
@@ -297,10 +321,12 @@ JS for this reason; keep it in sync with `theme.css` by hand when either changes
   expressions" phase touched the interpreter core again and re-measured the same way:
   `CheckoutTotal` (two function-call-expression invocations) averaged **0.607ms**, a
   5-level self-recursive function-call chain (`Fact`) averaged **0.478ms** — both still
-  well under 1ms, no measurable overhead from this phase either. Re-time via the
-  live-server approach (loop the sample list, hit `/debug`, measure wall time) if the
-  interpreter, cursor handling, or history-write path changes again, and note the new
-  numbers here.
+  well under 1ms, no measurable overhead from this phase either. The CASE statement
+  support phase touched the interpreter core a third time and re-measured the same way:
+  `ClassifyOrder` (both CASE forms, two separate CaseStatement evaluations) averaged
+  **0.407ms** — still well under 1ms. Re-time via the live-server approach (loop the
+  sample list, hit `/debug`, measure wall time) if the interpreter, cursor handling, or
+  history-write path changes again, and note the new numbers here.
 
 ---
 

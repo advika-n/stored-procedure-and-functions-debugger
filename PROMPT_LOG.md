@@ -1130,7 +1130,7 @@ process (found still holding the port after the parent reloader process was kill
 
 ## 15. Test-Case Runner (pass/fail regression panel over the 13 built-in samples)
 
-**Date:** 2026-09-14 · **Not yet committed** (see `HANDOFF.md` §3)
+**Date:** 2026-09-14 · **Committed** (`e322915`, together with §16/§17 below)
 
 **Prompt (verbatim):**
 
@@ -1238,7 +1238,7 @@ launched with instead.
 
 ## 16. Extended Static Analysis Warnings (SQL Anti-Pattern Advisor, 6 -> 9 checks)
 
-**Date:** 2026-09-14 · **Not yet committed** (see `HANDOFF.md` §3)
+**Date:** 2026-09-14 · **Committed** (`e322915`, together with §15 above/§17 below)
 
 **Prompt (verbatim):**
 
@@ -1370,7 +1370,7 @@ matches the established baseline; the temporary Chrome profile directory was rem
 
 ## 17. Function calls inside procedures
 
-**Date:** 2026-09-14 · **Not yet committed** (see `HANDOFF.md` §3)
+**Date:** 2026-09-14 · **Committed** (`e322915`, together with §15/§16 above)
 
 **Prompt (verbatim):**
 
@@ -1518,6 +1518,181 @@ session launched (the throwaway backend on 8001, the static-file-server-plus-pro
 5175, headless Chrome) was tracked by its own specific PID, confirmed via `tasklist`
 immediately before each kill that the PID was genuinely the process just launched, and
 killed individually (`taskkill /F /PID <n>`) — never a blanket kill by image name.
+
+**Cleanup**: history rows created during this session's live verification deleted via
+direct SQL delete afterward, confirmed the surviving max id (94) still matches the
+established baseline; the temporary Chrome profile directory was removed.
+
+---
+
+## 18. CASE statement support
+
+**Date:** 2026-09-14 · **Not yet committed** (see `HANDOFF.md` §3)
+
+**Prompt (verbatim):**
+
+> Implement CASE statement support — both the grammar and the interpreter.
+>
+> Scope:
+>
+> Parser: support both common CASE forms — simple CASE (CASE expr WHEN val1 THEN ...
+> WHEN val2 THEN ... ELSE ... END CASE) and searched CASE (CASE WHEN cond1 THEN ... WHEN
+> cond2 THEN ... ELSE ... END CASE), consistent with however this grammar already names/
+> handles IF/WHILE. Match existing statement-block conventions (whatever terminates
+> IF/WHILE bodies today) rather than inventing a new pattern.
+> Interpreter: evaluate the CASE expression/conditions in order, execute the first
+> matching branch's statements, fall through to ELSE if present, and no-op if no branch
+> matches and there's no ELSE — confirm what this grammar's convention is for missing
+> ELSE (some SQL dialects error, some no-op) and follow whatever pattern IF already uses
+> for a missing ELSE, don't invent a new one.
+> Step-trace: make sure CASE branch selection is visible/traceable in the existing
+> DebugStep step-by-step view, the same way IF branch-taken is currently shown — reuse
+> that mechanism rather than building a new one.
+> Nesting: CASE nested inside IF/WHILE/another CASE should work if the existing
+> block-execution mechanism supports it generally — verify, don't assume.
+> Cross-cutting checks: same category of gap as last phase — check whether cfg.js's
+> flowchart renderer and advisor.py's AST walker (unreachable-code, unused-variable,
+> never-read-variable) already handle a new statement/expression node type or need an
+> explicit CASE case added, the way FunctionCallExpr did last time. Don't assume they're
+> generic over new node types — verify directly.
+>
+> Add at least one new sample procedure exercising both CASE forms (simple and
+> searched), with hand-derived expected output cross-checked against a real interpreter
+> run, documented inline in testCaseExpectations.js per existing convention.
+>
+> Full verification: backend pytest suite, lint/build, live check both themes with zero
+> console errors, Call Stack / Variable Timeline / Advisor / Test-Case Runner all
+> confirmed working against the new sample. Kill any browser/server processes you launch
+> by specific PID only — never touch a pre-existing process you didn't start (checked
+> port usage before binding, per last phase's snag).
+
+**Design decision made before implementing, matching this phase's own explicit
+instruction to reuse rather than build parallel mechanisms**: both CASE forms are ONE
+AST node type (`CaseStatement`), not two, since a simple CASE is just syntactic sugar
+over a searched CASE (compare each WHEN value against the same operand, instead of
+evaluating each WHEN as its own independent condition) — one node type means
+`_exec_case`/`_parse_case`/every cross-cutting consumer only ever needs one code path.
+`_parse_case` tells the two forms apart with a single-token lookahead right after CASE (a
+WHEN next means searched); every WHEN/ELSE body is parsed via `_parse_block` — the exact
+same block-parsing helper `if_stmt`/`while_stmt` already use, terminators `{WHEN, ELSE,
+END}`/`{END}` mirroring `if_stmt`'s own `then_body`/`else_body` terminators exactly, per
+this phase's own "match existing statement-block conventions" instruction.
+
+**Missing-ELSE convention confirmed by reading `_exec_if` first, not invented**: a silent
+no-op (the CaseStatement's own DebugStep still recorded, no InterpreterError) — exactly
+IF's own established behavior, not a fresh design decision. DIVISION_BY_ZERO while
+evaluating the operand or any WHEN expression also mirrors `_exec_if` exactly
+("condition couldn't be evaluated -- don't guess a branch"), generalized to a whole
+sequence: evaluation stops the moment a signal is raised, no later WHEN is even checked,
+and it falls through to ELSE/none — including the somewhat non-obvious detail (found by
+re-reading `_exec_if`'s actual code, not just its comment) that ELSE still runs even
+though the error is what caused the fallthrough, confirmed by a dedicated test.
+
+**Step-trace: reuses IfStatement's own `branch` field verbatim, per this phase's own
+"reuse that mechanism" instruction — no new DebugStep field needed at all.** `path` is
+`"when-<N>"` (0-based matched WHEN index) instead of IF's fixed `"then"`, or `"else"`/
+`"none"` (identical to IF). `condition` is the operand's rendered text for simple CASE,
+or the literal string `"CASE"` for searched CASE.
+
+**Cross-cutting checks were verified directly, not assumed generic — and found real gaps
+in MORE places than the previous phase's `FunctionCallExpr` fix needed, per this phase's
+own explicit warning that this was "the same category of gap... verify directly"**:
+- `frontend/src/cfg.js`'s flowchart builder (`emitBlock`) had a hardcoded
+  IfStatement/WhileStatement/ReturnNode dispatch with **zero** CaseStatement
+  understanding — confirmed by reading the function directly before writing any fix. A
+  CASE would have rendered as a generic rect with literal "CaseStatement" text, and
+  **every WHEN/ELSE body would have been silently dropped from the diagram entirely**
+  (no recursion into them at all -- not a cosmetic label gap like `FunctionCallExpr`'s
+  was, a structural one). Fixed with a real design: a diamond node per CASE, one labeled
+  edge per WHEN (`"when 1"`, `"when 2"`, ... -- open-ended, unlike IF's fixed pair, so the
+  old fixed `edgeLabel` lookup object was replaced with `edgeLabelFor`/
+  `isConditionalEdgeKind` functions) plus one for ELSE (synthesized when absent, mirroring
+  IF's own "no ELSE" tail), and `computeDiagramState`'s taken-edge highlighting
+  generalized from a hardcoded `'then'`/`'else'` check to "whatever `branch.path` says,
+  unless it's `'none'`" — verified live: a "CASE tier" diamond with 4 labeled edges,
+  correct one highlighted teal, in both themes.
+- `backend/app/advisor.py` needed CASE support in **five** places, not the single
+  `_iter_exprs` fix `FunctionCallExpr` needed: the three shared walkers
+  (`_iter_statements`, `_statement_exprs`, `_iter_statement_lists`) PLUS two separate
+  hand-rolled recursive walkers that don't use the shared ones at all
+  (`_check_nested_loops`'s own `walk`, and `_find_unguarded_fetch`) — found by reading
+  each one individually rather than assuming the shared-walker fix would cover
+  everything. Without these two extra fixes, a FETCH inside a CASE branch would have
+  been invisible to `missing-error-handling`, and a WHILE nested inside a CASE nested
+  inside another WHILE would not have been detected as nested — both confirmed as real
+  gaps with a failing test written first. One new detection also added (not just
+  plumbing): a searched CASE's WHEN with a compile-time-constant condition is now flagged
+  the same way IF's constant-condition check already works, deliberately scoped to
+  searched CASE only (folding simple CASE's operand-equality would need `_fold_constant`
+  to handle STRING literals too, a separate piece of work, documented as out of scope
+  rather than silently skipped).
+- `backend/app/explainer.py`'s deterministic template fallback dispatches by `nodeType`
+  with **no case for CaseStatement** before this phase — would have degraded to the
+  generic "Executed line N: ..." fallback. Added a proper CASE branch. The Gemini-backed
+  prompt-building (`_build_prompt`/`_build_ask_prompt`) needed **no fix** — already fully
+  generic, confirmed by reading it directly, and confirmed live (the real configured
+  Gemini key produced a correct, coherent explanation for an actual CASE step with zero
+  backend changes for that path).
+- `backend/app/report.py` and `frontend/src/compareTraces.js` were both checked and
+  confirmed already fully generic over `branch.path` — no fix needed, verified by
+  reading both rather than assumed safe by analogy.
+- `frontend/src/pages/DebuggerPage.jsx`'s Predict Mode branch-guessing quiz checks
+  `nodeType === 'IfStatement'` specifically (its UI is a fixed Then/Else button pair,
+  nowhere to put CASE's open-ended N-way choice) — a CASE step correctly, gracefully
+  offers no branch-prediction prompt rather than crashing; documented with a code
+  comment at the exact check site as a deliberate scope decision, not silently left
+  unexplained.
+
+**What shipped**: `backend/app/tokenizer.py` (CASE/WHEN keywords -- THEN/ELSE/END
+reused as-is), `backend/app/parser.py` (`_parse_case`, the `CaseStatement` node shape),
+`backend/app/interpreter.py` (`_exec_case`, `render_statement_header`'s CaseStatement
+case), `backend/app/advisor.py` (5 fixes above), `backend/app/explainer.py` (template
+fallback case), `frontend/src/cfg.js` (flowchart support above),
+`frontend/src/pages/DebuggerPage.jsx` (Predict Mode scope-decision comment). New sample:
+`ClassifyOrder` (`frontend/src/samples.js`) exercising both CASE forms in one procedure
+— a simple CASE picks a discount rate off a tier code, then a searched CASE classifies
+the discounted total into a size label. Two genuine Advisor findings on this sample
+(`magic-number` on tier's own `DEFAULT 2` colliding with `WHEN 2`; `unused-variable` on
+`sizeLabel`, the same "final classification result" pattern `GradeClassifier`'s `grade`
+already demonstrates) were investigated and left in rather than dodged, matching this
+project's "investigate and disclose, don't hide" precedent. `testCaseExpectations.js`
+got a matching hand-derived, cross-checked entry.
+
+**Testing**: 25 new `backend/app/tests/test_case_statement.py` tests (tokenizer; parser
+— both forms, structural errors, nesting inside IF/WHILE/another CASE; interpreter —
+first-match-wins both forms, ELSE, no-ELSE no-op, short-circuit evaluation proven via a
+later WHEN calling an undefined function that's never reached, three-level nesting
+including CASE-inside-CASE, RETURN inside a WHEN body, a function call as operand and as
+a WHEN value, all 3 DIVISION_BY_ZERO combinations, the exact `branch` shape for both
+forms, and a CASE inside a CALLed procedure carrying the correct `call` field) plus 13
+new `test_advisor.py` regression tests. Full backend suite: **343 passing** (305 before
+this phase + 25 + 13 new).
+
+**Verified live**, not just via pytest, including a real cross-check tool built for this
+phase specifically: an in-process script (not just spot-checking individual samples)
+loaded ALL 16 samples' actual source from `samples.js`/`testCaseExpectations.js` at once
+(via a small Node dump script bridging ES modules to a Python verification script) and
+ran each through the real tokenizer/parser/interpreter/advisor pipeline, confirming
+zero regressions on every pre-CASE sample's own expected final state AND its own Advisor
+findings, not just the new sample. Live in the browser: `ClassifyOrder` loaded and
+Debugged (12 steps, zero errors, exactly the 2 predicted Advisor findings); the
+flowchart's two CASE diamonds ("CASE tier" and bare "CASE") both showed correctly
+labeled multi-way edges with the taken one highlighted teal, confirmed in both dark and
+light theme; the Call Stack panel showed a correct single "ClassifyOrder current" frame
+(no regression for a plain procedure); the Test-Case Runner reported 15/15 passed (14
+prior + `ClassifyOrder`), 1 skipped (`StaticAnalysisShowcase`, a pre-existing gap); a
+regression spot-check against `GradeClassifier` (an unrelated IF-based sample) confirmed
+unchanged behavior. Zero console errors across every run. `npm run lint`/`npm run build`
+both clean (same 2 pre-existing warnings).
+
+**Process hygiene, per this phase's own explicit instruction (a direct callback to the
+previous phase's own snag)**: port availability was confirmed via
+`Get-NetTCPConnection`/`netstat` *before* binding anything this time — port 8000
+confirmed still held by the same pre-existing PID 932 from last session (left
+untouched, again), ports 8001/5176/9336 confirmed free before use. Every process this
+session launched (throwaway backend, static-proxy server, headless Chrome) was tracked
+by its own specific PID and killed individually at cleanup, confirmed via `tasklist`
+immediately before each kill that the PID was genuinely the process just launched.
 
 **Cleanup**: history rows created during this session's live verification deleted via
 direct SQL delete afterward, confirmed the surviving max id (94) still matches the

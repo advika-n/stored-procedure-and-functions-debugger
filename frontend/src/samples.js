@@ -408,4 +408,51 @@ BEGIN
 END
 `,
   },
+  // Added specifically for the CASE statement support phase -- exercises
+  // BOTH CASE forms (backend/app/parser.py's "CASE statement" section) in
+  // one sample, the way this phase's prompt asked for: a SIMPLE CASE
+  // (`CASE tier WHEN 1 THEN ...`) picks a discount rate off a tier code,
+  // then a SEARCHED CASE (`CASE WHEN total > 200 THEN ...`) classifies
+  // the resulting total into a size label. Two genuine, minor
+  // Anti-Pattern Advisor findings are expected and left in on purpose,
+  // not dodged: `magic-number` (tier's own `DEFAULT 2` collides with its
+  // own `WHEN 2` -- an entirely natural coincidence for a tier-code demo,
+  // not a fabricated one) and `unused-variable` on `sizeLabel` (the
+  // classification result is left as the procedure's final state, same
+  // already-accepted "final result variable" pattern GradeClassifier's
+  // own `grade` already demonstrates elsewhere in this library).
+  {
+    name: 'ClassifyOrder',
+    kind: 'PROCEDURE',
+    description: 'Exercises both CASE forms: a SIMPLE CASE (CASE tier WHEN 1 THEN ...) picks a discount rate off a tier code, then a SEARCHED CASE (CASE WHEN total > 200 THEN ...) classifies the discounted total into a size label -- step through to watch the flowchart light up whichever WHEN clause matched.',
+    code: `CREATE PROCEDURE ClassifyOrder()
+BEGIN
+    DECLARE quantity NUMBER DEFAULT 12;
+    DECLARE unitPrice NUMBER DEFAULT 15;
+    DECLARE tier NUMBER DEFAULT 2;
+    DECLARE discountRate NUMBER DEFAULT 0;
+    DECLARE total NUMBER DEFAULT 0;
+    DECLARE sizeLabel NUMBER DEFAULT 0;
+    CASE tier
+        WHEN 1 THEN
+            SET discountRate = 0.05;
+        WHEN 2 THEN
+            SET discountRate = 0.1;
+        WHEN 3 THEN
+            SET discountRate = 0.15;
+        ELSE
+            SET discountRate = 0;
+    END CASE;
+    SET total = (quantity * unitPrice) * (1 - discountRate);
+    CASE
+        WHEN total > 200 THEN
+            SET sizeLabel = 30;
+        WHEN total > 100 THEN
+            SET sizeLabel = 20;
+        ELSE
+            SET sizeLabel = 10;
+    END CASE;
+END
+`,
+  },
 ]

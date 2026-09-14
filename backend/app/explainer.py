@@ -311,6 +311,22 @@ def generate_template_explanation(step: dict, previous_variables: dict | None) -
             return f"Checked whether {description} (iteration {loop.get('iteration')}); it did, so the loop body ran again."
         return f"Checked whether {description}; it didn't, so the loop exited."
 
+    if node_type == "CaseStatement":
+        # branch.path is "when-<N>" / "else" / "none" here, not
+        # IfStatement's "then"/"else"/"none" -- _describe_condition isn't
+        # used (it's built for a `LEFT OP RIGHT` comparison; a CASE's own
+        # `condition` is just the operand text or the literal "CASE",
+        # neither of which matches that shape).
+        branch = step.get("branch") or {}
+        path = branch.get("path") or ""
+        condition_text = branch.get("condition", "CASE")
+        if path.startswith("when-"):
+            which = int(path.split("-", 1)[1]) + 1
+            return f"Evaluated {condition_text} against each WHEN in order; WHEN #{which} matched, so that branch ran."
+        if path == "else":
+            return f"Evaluated {condition_text} against each WHEN in order; none matched, so the ELSE branch ran."
+        return f"Evaluated {condition_text} against each WHEN in order; none matched, and there was no ELSE branch to run."
+
     return f"Executed line {step.get('line')}: `{step.get('statementText', '')}`."
 
 

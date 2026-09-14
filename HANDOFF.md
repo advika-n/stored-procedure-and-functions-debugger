@@ -8,28 +8,27 @@ stable project facts (architecture, schema, design tokens) see `CLAUDE.md` inste
 
 ## 1. Last updated
 
-**2026-09-14**, end of the session that built **function calls inside procedures** — a
-procedure (or another function) can now invoke a FUNCTION from within an expression
-(an assignment, an IF/WHILE condition, another call's own argument) and use its RETURNed
-value, not just a standalone CALL of a procedure; see §2's new entry and
-`PROMPT_LOG.md` §17 for full detail. It followed the session that built **Extended Static
-Analysis Warnings** — three more checks (`unreachable-code`, `unused-variable`,
-`never-read-variable`) added directly into the existing SQL Anti-Pattern Advisor's own
-AST-analysis pass (`backend/app/advisor.py`), not a parallel analysis or a new panel; see
-§2's own entry and `PROMPT_LOG.md` §16. That followed the session that built the
-**Test-Case Runner** — a pass/fail regression panel over the built-in sample library,
-layered on top of (not part of) the original 5 mandatory sections / 4 innovation
-features / Tier 1 plan; see §2's Test-Case Runner entry and `PROMPT_LOG.md` §15. That
-followed the session that built the **Variable Timeline** — the second of the four
-Innovation features to ship
-(Variable Timeline/sparklines), leaving only Live Parameter Tuning (dropped, out of
-scope — §4) unaddressed from that original list. That followed the session that built
-the **Call Stack panel** (the fourth and final Tier 1 item, completing Tier 1 entirely),
-which followed the session that built **`CALL` support (procedure calling procedure)** —
-the third Tier 1 addition, and the first Tier 1 phase to touch the interpreter core —
-which followed the session that added "Continue" and "Restart" to the step navigator,
-which directly followed the session that built Breakpoints + Run-to-Breakpoint (the
-first Tier 1 addition). Tier 1 (Breakpoints, Step controls, Call Stack, `CALL` support)
+**2026-09-14**, end of the session that built **CASE statement support** — both simple
+CASE (`CASE expr WHEN v THEN ...`) and searched CASE (`CASE WHEN cond THEN ...`) now
+parse and execute, reusing IfStatement's own `branch` DebugStep field, block-parsing
+convention, and Advisor/flowchart integration points rather than building parallel
+mechanisms; see §2's new entry and `PROMPT_LOG.md` §18 for full detail. It followed the
+session that built **function calls inside procedures** — a procedure (or another
+function) can now invoke a FUNCTION from within an expression and use its RETURNed
+value, not just a standalone CALL of a procedure (§2, `PROMPT_LOG.md` §17). That followed
+the session that built **Extended Static Analysis Warnings** — three more checks
+(`unreachable-code`, `unused-variable`, `never-read-variable`) added directly into the
+existing SQL Anti-Pattern Advisor's own AST-analysis pass (§2, `PROMPT_LOG.md` §16). That
+followed the session that built the **Test-Case Runner** — a pass/fail regression panel
+over the built-in sample library (§2, `PROMPT_LOG.md` §15). That followed the session
+that built the **Variable Timeline** — the second of the four Innovation features to
+ship, leaving only Live Parameter Tuning (dropped, out of scope — §4) unaddressed from
+that original list. That followed the session that built the **Call Stack panel** (the
+fourth and final Tier 1 item, completing Tier 1 entirely), which followed the session
+that built **`CALL` support (procedure calling procedure)** — the third Tier 1 addition,
+and the first Tier 1 phase to touch the interpreter core — which followed the session
+that added "Continue" and "Restart" to the step navigator, which directly followed the
+session that built Breakpoints + Run-to-Breakpoint (the first Tier 1 addition). Tier 1
 was a reassessed push strengthening the project beyond the original mandatory/innovation
 scope, given extra time available; it followed the session that built Side-by-Side Run
 Comparison (the second Innovation feature at the time), which followed the SQL
@@ -39,36 +38,32 @@ created `PROMPT_LOG.md`), which followed the Help tab session, which followed th
 session that created this file/`CLAUDE.md` and built Day/Night Mode + the Developed By
 modal.
 
-**Re-verified via `git log`/`git status` at the start of this session, and again at the
-end** — `24ee5d8` ("Added Call Stack and Variable Timeline") is still genuinely the most
-recent commit; no external commit landed mid-session this time. What's uncommitted right
-now is **three** sessions' worth layered together: the Test-Case Runner session's own
-work (`App.jsx`/`Layout.jsx`/`App.css` edits, `TestCaseRunner.jsx`/
-`testCaseExpectations.js`/`pages/TestRunnerPage.jsx`), the Extended Static Analysis
-Warnings session's own work (`backend/app/advisor.py`/`backend/app/tests/
-test_advisor.py`/`frontend/src/samples.js`/`CLAUDE.md` edits), and this session's own work
-(`backend/app/parser.py`/`backend/app/interpreter.py`/`backend/app/advisor.py` again/
-`frontend/src/cfg.js`/`frontend/src/samples.js` again/`testCaseExpectations.js` again, plus
-the new `backend/app/tests/test_function_call_expression.py`) — see §3. Backend suite:
-**270 passing** at the start of this session (confirming the previous phase's own
-baseline), **305 passing** at the end (270 + 33 new `test_function_call_expression.py`
-tests + 2 more `test_advisor.py` regression tests for a cross-cutting fix this phase's own
-grammar change required — see §2). This is the second phase in a row to genuinely touch
-the interpreter/parser core (after `CALL` support itself), so this is a real correctness
-gate, not a sanity check on an untouched backend.
+**Re-verified via `git log`/`git status` at the start of this session** — the previous
+three sessions' worth of uncommitted work (Test-Case Runner, Extended Static Analysis
+Warnings, function calls inside procedures) was committed by the user outside this
+session, in one commit (`e322915`, "Added Test-case Runner, Extended Static Analysis and
+Function calls inside Procedure") sometime between that last session ending and this one
+starting — caught by checking `git log` fresh rather than trusting the previous session's
+own "still uncommitted" note, exactly the discipline this file keeps telling future
+sessions to apply. As of right now, `e322915` is genuinely committed and only **this
+session's own** work (`backend/app/parser.py`/`interpreter.py`/`advisor.py`/
+`explainer.py`/`tokenizer.py`, `frontend/src/cfg.js`/`samples.js`/`testCaseExpectations.js`/
+`pages/DebuggerPage.jsx`, the new `backend/app/tests/test_case_statement.py`) is
+uncommitted — see §3. Backend suite: **305 passing** at the start of this session
+(confirming the previous phase's own baseline), **343 passing** at the end (305 + 25 new
+`test_case_statement.py` tests + 13 more `test_advisor.py` regression tests for the
+cross-cutting CASE-awareness this phase's own new grammar node required — see §2). This
+is the third phase in a row to genuinely touch the interpreter/parser core, so this is a
+real correctness gate every time, not a sanity check on an untouched backend.
 
-**One real environment snag worth recording, not glossed over**: port 8000 (this
-project's own conventional dev-backend port) was already bound by a **pre-existing**
-`uvicorn --reload` process (PID 932, genuinely found via `Get-NetTCPConnection`/
-`Get-CimInstance`, not another "unverifiable-PID" case this time) that predates this
-session — it wasn't started by this session's own launches (none of which used
-`--reload`), so per this phase's own explicit instruction ("kill by the specific PID you
-launched, not a blanket kill"), **it was left running, untouched**, rather than assumed
-to be safe cruft. Verification instead used a throwaway backend on port 8001 plus a
-small dependency-free static-file-server-and-same-origin-proxy (serving the already-built
-`frontend/dist/`, proxying API paths to 8001) — the same pattern a prior session
-established for this exact kind of situation — rather than editing `vite.config.js`'s
-proxy target. See §2 for what this actually verified.
+**The same pre-existing port-8000 process from last session's own note is still
+running**: PID 932 (`uvicorn --reload`, genuinely findable via `Get-NetTCPConnection`),
+confirmed again via a fresh port check at the start of this session (not assumed to
+still be there from memory) — still not started by this session, so still left running,
+untouched, per the same explicit instruction as last time. Verification again used a
+throwaway backend (port 8001, confirmed free first) plus the same dependency-free
+static-file-server-and-same-origin-proxy pattern (serving `frontend/dist/`, this time on
+port 5176) rather than editing `vite.config.js`. See §2 for what this actually verified.
 
 ---
 
@@ -718,6 +713,146 @@ not restated from memory:
   - **Cleanup**: history rows created during this session's live verification deleted via
     direct SQL delete afterward, confirmed the surviving max id (94) still matches the
     established baseline.
+- **CASE statement support** (`backend/app/parser.py`, `backend/app/interpreter.py`) —
+  **Done**, another extra addition beyond the original scope. Both common SQL CASE forms
+  now work, as ONE AST node type (`CaseStatement`), not two — a simple CASE is just a
+  searched CASE where each WHEN's own test is "does it equal the operand" instead of an
+  independent boolean, so `_exec_case` (interpreter) and `_parse_case` (parser) each only
+  need one code path, not a parallel implementation per form.
+  - **Parser**: `CASE`/`WHEN` added as new keywords (THEN/ELSE/END are reused as-is,
+    exactly like IF already reuses them). `_parse_case` tells simple/searched apart with
+    a one-token lookahead (a WHEN right after CASE means searched); every WHEN clause's
+    own body, and the optional ELSE's body, are parsed via `_parse_block` — **the exact
+    same block-parsing helper IF/WHILE already use**, with terminators `{WHEN, ELSE,
+    END}` for a WHEN body and `{END}` for ELSE, mirroring `if_stmt`'s own
+    `then_body`/`else_body` terminator sets exactly, per this phase's own "match existing
+    statement-block conventions" instruction. Closed by `END CASE ';'`, the same
+    "`END <KEYWORD> ';'`" shape every other block statement here already uses. At least
+    one WHEN clause is required (a clear ParserError otherwise, not a silent no-op node).
+  - **Interpreter**: `_exec_case` evaluates the operand once (simple CASE only), then
+    each WHEN in order, short-circuiting at the first match (verified live via a WHEN
+    calling an undefined function that would raise if it were ever actually evaluated —
+    it never runs). **Missing ELSE follows IF's own established convention, confirmed by
+    re-reading `_exec_if` rather than assumed**: a silent no-op, the CaseStatement's own
+    DebugStep still recorded so the decision point is visible in the trace, no
+    InterpreterError. DIVISION_BY_ZERO while evaluating the operand or any WHEN
+    expression mirrors `_exec_if`'s "condition couldn't be evaluated -- don't guess a
+    branch" exactly, generalized to a whole sequence: evaluation stops immediately, no
+    later WHEN is even checked, and the statement falls through to ELSE/none — including
+    the same "ELSE still runs even though an error occurred" behavior `_exec_if` already
+    has, confirmed by first checking what IF actually does rather than inventing new
+    error semantics.
+  - **Step-trace: reuses IfStatement's own `branch` field verbatim, per this phase's own
+    "reuse that mechanism" instruction — no new DebugStep field.** `branch.path` is
+    `"when-<N>"` (0-based matched WHEN index), `"else"`, or `"none"` — the exact same
+    three-way shape IfStatement's `"then"`/`"else"`/`"none"` already is, just with an
+    open-ended `"when-<N>"` standing in for `"then"`. `branch.condition` is the operand's
+    rendered text for simple CASE, or the literal string `"CASE"` for searched CASE
+    (there's no single boolean expression to render the way IF has exactly one
+    condition).
+  - **Cross-cutting checks verified directly, not assumed to be generic — the same
+    category of gap FunctionCallExpr hit last phase, found again this phase in MORE
+    places**:
+    - `frontend/src/cfg.js`'s flowchart builder had **zero** understanding of CASE
+      before this phase (confirmed by reading `emitBlock`'s hardcoded
+      IfStatement/WhileStatement dispatch directly) — a CASE would have rendered as a
+      generic rect with literal "CaseStatement" text and **silently dropped every WHEN/
+      ELSE body from the diagram entirely** (no recursion into them at all). Fixed with a
+      real design, not a cosmetic label fix: a diamond node per CASE, one labeled
+      outgoing edge per WHEN (`"when 1"`, `"when 2"`, ... — an open-ended set, unlike
+      IF's fixed then/else pair, handled via a new `edgeLabelFor`/`isConditionalEdgeKind`
+      pair of helpers replacing the old fixed lookup table) plus one more for ELSE
+      (synthesized when absent, mirroring IF's own "no ELSE" tail exactly), and
+      `computeDiagramState`'s taken-edge highlighting generalized from a hardcoded
+      `'then'`/`'else'` check to "whatever `branch.path` says, unless it's `'none'`" —
+      verified live: the flowchart correctly shows a "CASE tier" diamond with 4 labeled
+      edges (when 1/2/3/else), the taken one highlighted teal exactly like an IF's taken
+      edge already is, screenshotted in both themes.
+    - `backend/app/advisor.py` needed CASE support in **five** places, not the one
+      `_iter_exprs` fix FunctionCallExpr needed last phase: the three shared walkers
+      (`_iter_statements`, `_statement_exprs`, `_iter_statement_lists`) plus **two
+      separate hand-rolled recursive walkers that don't use the shared ones at all**
+      (`_check_nested_loops`'s own `walk`, and `_find_unguarded_fetch`) — found by
+      reading each one directly rather than assuming the shared-walker fix would be
+      enough. Without these, a FETCH inside a CASE branch would have been invisible to
+      `missing-error-handling`, and a WHILE nested inside a CASE nested inside another
+      WHILE would not have been detected as nested — both confirmed as real gaps by
+      writing a failing test first, then fixing. **One new detection added, not just
+      plumbing fixes**: a searched CASE's WHEN with a compile-time-constant condition
+      (`_fold_constant`, reused from the unreachable-code check) is now flagged the same
+      way a constant-condition IF already is — deliberately scoped to searched CASE only,
+      not simple CASE (folding `operand = value` equality would need `_fold_constant` to
+      handle STRING literals and non-numeric equality, a separate piece of work, not a
+      natural extension — documented, not silently left as a gap).
+    - `backend/app/explainer.py`'s deterministic template fallback dispatches by
+      `nodeType` with **no case for CaseStatement at all** before this phase — a CASE
+      step would have degraded to the generic "Executed line N: ..." fallback (not
+      wrong, just far less specific than every other statement type's own bespoke
+      wording). Added a proper CASE branch reusing the same `branch.path` vocabulary.
+      `_build_prompt`/`_build_ask_prompt` (the Gemini-backed paths) needed **no fix at
+      all** — already fully generic, confirmed directly, and confirmed live: the actual
+      configured Gemini key produced a coherent, correct explanation for a live CASE step
+      with zero backend changes needed for that path.
+    - `backend/app/report.py`'s `_step_details` and `frontend/src/compareTraces.js`'s
+      divergence detection were both checked and confirmed **already fully generic** over
+      `branch.path`'s possible values (report.py just interpolates it into one line;
+      compareTraces.js just string-compares it) — no fix needed, verified by reading
+      both directly rather than assumed safe by analogy to the flowchart's own gap.
+    - `frontend/src/pages/DebuggerPage.jsx`'s Predict Mode branch-guessing quiz checks
+      `nodeType === 'IfStatement'` specifically — a CASE step correctly, gracefully
+      offers no branch-prediction prompt at all (its fixed UI is a Then/Else button
+      pair, with nowhere to put CASE's open-ended "which of N WHENs" choice) rather than
+      crashing or guessing wrong; a scope decision left as a real, N-way prediction
+      widget for a future phase, not silently patched around — documented with a code
+      comment at the exact check site, not left unexplained.
+  - **New sample**: `ClassifyOrder` (`frontend/src/samples.js`) — exercises BOTH CASE
+    forms in one procedure per this phase's own instruction: a simple CASE picks a
+    discount rate off a tier code, then a searched CASE classifies the discounted total
+    into a size label. Two genuine Anti-Pattern Advisor findings on this sample were
+    investigated and left in rather than dodged (`magic-number` — the tier's own
+    `DEFAULT 2` genuinely collides with its own `WHEN 2`; `unused-variable` on
+    `sizeLabel` — the same already-accepted "final classification result left as the
+    procedure's final state" pattern `GradeClassifier`'s own `grade` already
+    demonstrates elsewhere in this library), matching this project's established
+    "investigate and disclose, don't hide" precedent rather than artificially
+    restructuring the sample to force a clean Advisor run. `testCaseExpectations.js` got
+    a matching hand-derived entry, cross-checked against a real interpreter run.
+  - **Testing**: 25 new `backend/app/tests/test_case_statement.py` tests (tokenizer;
+    parser — both forms, missing-WHEN/missing-END/missing-semicolon errors, nesting
+    inside IF/WHILE/another CASE; interpreter — first-match-wins for both forms, ELSE,
+    no-ELSE no-op, short-circuit evaluation, nesting three levels deep including
+    CASE-inside-CASE, RETURN inside a WHEN body, a function call as the operand and as a
+    WHEN value, all 3 DIVISION_BY_ZERO combinations, the exact `branch` field shape for
+    both forms, and a CASE inside a CALLed procedure carrying the correct `call` field)
+    plus 13 new `test_advisor.py` regression tests for the cross-cutting fixes. Full
+    backend suite: **343 passing** (305 before this phase + 25 + 13 new).
+  - **Verified live**: real dev-server setup (throwaway backend + static-proxy, same
+    reasoning as the function-calls phase — see §1's port-8000 note), `ClassifyOrder`
+    loaded and Debugged (12 steps, zero errors, the exact 2 predicted Advisor findings
+    and no others). The flowchart's simple-CASE diamond ("CASE tier") showed all 4
+    labeled edges (when 1/2/3/else) with "when 2" correctly highlighted teal as taken;
+    the searched-CASE diamond ("CASE") showed 3 edges (when 1/2/else) with "when 2"
+    highlighted and its target node amber (current step) — both confirmed in dark AND
+    light theme. The Call Stack panel correctly showed a single "ClassifyOrder current"
+    frame (no regression for a plain, non-CALLed procedure). The Test-Case Runner
+    correctly reported 15/15 passed (14 prior samples + `ClassifyOrder`), 1 skipped
+    (`StaticAnalysisShowcase`, a pre-existing gap, not this phase's). A regression
+    spot-check against `GradeClassifier` (a plain IF-based sample, unrelated to CASE)
+    confirmed unchanged behavior. Zero console errors across every run. `npm run lint`/
+    `npm run build` both clean (same 2 pre-existing warnings). Also verified via an
+    in-process script (not just pytest) running the real tokenizer/parser/interpreter/
+    advisor against ALL 16 samples' actual source at once, confirming zero regressions on
+    every pre-CASE sample's own advisor findings and expected final state, not just
+    spot-checked.
+  - **Process hygiene, checked before binding, per this phase's own explicit
+    instruction**: port availability confirmed via `Get-NetTCPConnection`/`netstat`
+    *before* starting anything (8000 confirmed still held by the same pre-existing PID
+    932 from last session, left untouched; 8001/5176/9336 confirmed free first). Every
+    process this session launched was tracked by its own specific PID and killed
+    individually at cleanup, confirmed via `tasklist` immediately before each kill.
+  - **Cleanup**: history rows created during this session's live verification deleted via
+    direct SQL delete afterward, confirmed the surviving max id (94) still matches the
+    established baseline.
 
 ### Tier 1 additions (beyond the original mandatory/innovation scope)
 
@@ -1124,27 +1259,18 @@ extra time available, on top of the 5 mandatory sections and 4 innovation featur
 
 Nothing is genuinely half-built right now — every feature in §2 is code-complete.
 
-- **Three sessions' worth of work is now uncommitted, layered together** (Call Stack +
-  Variable Timeline were committed by the user partway through the Test-Case Runner
-  session — `24ee5d8` — see §1, and nothing new has been committed since). What's left
-  uncommitted right now:
-  - From the **Test-Case Runner** session: edits to `frontend/src/App.jsx`,
-    `frontend/src/Layout.jsx`, `frontend/src/App.css` (the `/tests` route/nav tab +
-    styling), the new `frontend/src/TestCaseRunner.jsx`,
-    `frontend/src/testCaseExpectations.js`, `frontend/src/pages/TestRunnerPage.jsx`.
-  - From the **Extended Static Analysis Warnings** session: `backend/app/advisor.py`,
-    `backend/app/tests/test_advisor.py`, `frontend/src/samples.js` (the
-    `StaticAnalysisShowcase` sample), `CLAUDE.md`.
-  - From **this session** (**function calls inside procedures**): `backend/app/parser.py`,
-    `backend/app/interpreter.py`, `backend/app/advisor.py` again (the
-    `FunctionCallExpr`/`_iter_exprs` fix), `frontend/src/cfg.js`, `frontend/src/
-    samples.js` again (`CheckoutTotal`), `frontend/src/testCaseExpectations.js` again,
-    `CLAUDE.md` again, plus the new `backend/app/tests/test_function_call_expression.py`.
-  - All three sessions' doc updates (`HANDOFF.md`/`PROMPT_LOG.md`).
-
-  Confirmed via `git status --short`. Three phases deep on top of each other now,
-  including two that touched the interpreter/parser core — worth committing before it
-  grows further. See §7.
+- **This session's own CASE statement work is uncommitted** (the previous three
+  sessions' work — Test-Case Runner, Extended Static Analysis Warnings, function calls
+  inside procedures — was committed by the user outside this session, `e322915` — see
+  §1). What's left uncommitted right now: `backend/app/parser.py`,
+  `backend/app/interpreter.py`, `backend/app/advisor.py`, `backend/app/explainer.py`,
+  `backend/app/tokenizer.py`, `frontend/src/cfg.js`, `frontend/src/samples.js`
+  (`ClassifyOrder`), `frontend/src/testCaseExpectations.js`, `frontend/src/pages/
+  DebuggerPage.jsx` (the Predict Mode scope-decision comment), the new
+  `backend/app/tests/test_case_statement.py`, plus this doc/`PROMPT_LOG.md`/`CLAUDE.md`.
+  Confirmed via `git status --short` — a single, clean layer this time (nothing left
+  over from before), touching the interpreter/parser core for the third session running.
+  See §7.
 - The student photo in the Developed By modal is still the placeholder inline SVG
   silhouette, not a real photo file (the text content itself is real and committed).
 - Day/Night Mode itself was only ever exercised in one headless-Chrome instance during
@@ -1360,20 +1486,17 @@ Scanned directly (`grep` for `TODO`/`FIXME`/`XXX`/`HACK`/placeholder markers acr
 
 ## 7. Immediate next step
 
-1. **Commit the Test-Case Runner + Extended Static Analysis Warnings + function-calls-
-   inside-procedures work together** (Call Stack + Variable Timeline were already
-   committed by the user mid-session, `24ee5d8` — see §1/§3): `frontend/src/App.jsx`,
-   `frontend/src/Layout.jsx`, `frontend/src/App.css`, `frontend/src/TestCaseRunner.jsx`,
-   `frontend/src/testCaseExpectations.js`, `frontend/src/pages/TestRunnerPage.jsx`,
-   `backend/app/advisor.py`, `backend/app/tests/test_advisor.py`,
-   `frontend/src/samples.js`, `backend/app/parser.py`, `backend/app/interpreter.py`,
-   `frontend/src/cfg.js`, `backend/app/tests/test_function_call_expression.py`,
-   `CLAUDE.md` (and this doc/`PROMPT_LOG.md`). Both **Tier 1** (Breakpoints, Step
-   controls, `CALL` support, Call Stack) and all four **Innovation features** (Advisor —
-   now with 9 checks, not the original 6 — Compare, Variable Timeline; Live Parameter
-   Tuning stays deliberately dropped, §4), plus the Test-Case Runner and function calls
-   inside procedures, are now fully complete — a good, natural commit boundary, and
-   overdue given three sessions have accumulated uncommitted.
+1. **Commit this session's CASE statement support work** (Test-Case Runner + Extended
+   Static Analysis Warnings + function calls inside procedures were already committed by
+   the user, `e322915` — see §1/§3): `backend/app/parser.py`,
+   `backend/app/interpreter.py`, `backend/app/advisor.py`, `backend/app/explainer.py`,
+   `backend/app/tokenizer.py`, `frontend/src/cfg.js`, `frontend/src/samples.js`,
+   `frontend/src/testCaseExpectations.js`, `frontend/src/pages/DebuggerPage.jsx`, the new
+   `backend/app/tests/test_case_statement.py` (and this doc/`PROMPT_LOG.md`/`CLAUDE.md`).
+   Both **Tier 1** and all four **Innovation features** (Live Parameter Tuning stays
+   deliberately dropped, §4), plus the Test-Case Runner, function calls inside
+   procedures, and CASE statement support, are now fully complete — a good, natural
+   commit boundary.
 2. **Restart the local dev backend before trying `CALL`/Call Stack live** (§2/§6) — the
    long-running process on port 8000 still hadn't picked up the `CALL` support changes as
    of the Call Stack session (the unverifiable-PID quirk); this session found both dev

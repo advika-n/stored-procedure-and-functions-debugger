@@ -497,6 +497,13 @@ function DebuggerPage() {
     if (upcoming.nodeType === 'IfStatement') {
       return { type: 'branch', actualPath: upcoming.branch?.path ?? 'none' }
     }
+    // Deliberately NOT extended to CaseStatement: this quiz's own UI is
+    // a fixed pair of Then/Else buttons (submitBranchGuess below), which
+    // has nowhere to put CASE's open-ended "which of N WHENs" choice --
+    // a real N-way prediction widget is a separate feature, not a
+    // natural extension of this one, so a CASE step simply offers no
+    // branch-prediction prompt (its own 'changed variable' prediction,
+    // if any, on the step AFTER it still works normally either way).
     return null
   }, [quizMode, hasSteps, isLastStep, steps, currentStepIndex])
 

@@ -16,9 +16,11 @@ Each DebugStep captures:
     statementText   -- the statement rendered back to readable source
     variables       -- {name: {value, type, changed}} for every
                        variable currently in scope
-    branch          -- for IfStatement steps only: {condition,
-                       result, path} describing which way the branch
-                       went; None for every other step
+    branch          -- for IfStatement AND CaseStatement steps:
+                       {condition, result, path} describing which way
+                       the branch went; None for every other step (see
+                       "CASE statement" below for CaseStatement's own
+                       `path` values)
 
 WhileStatement gets the same per-statement step treatment, plus one
 extra step per loop-condition check carrying an analogous `loop`
@@ -27,6 +29,65 @@ spec (which only calls out IfNode), but a natural extension so a
 WHILE loop is traceable the same way an IF is. To keep runaway
 procedures from hanging the interpreter, loops are capped at
 MAX_LOOP_ITERATIONS.
+
+-- CASE statement -------------------------------------------------------
+
+A CaseStatement (see app.parser's "CASE statement" section) covers both
+common SQL CASE forms with ONE evaluation path, not two, since a simple
+CASE (`CASE expr WHEN v1 THEN ... END CASE`) is just a searched CASE
+(`CASE WHEN cond1 THEN ... END CASE`) where each WHEN's own test is
+"does it equal the operand" instead of an independent boolean --
+`_exec_case` evaluates `node["operand"]` once up front (only present
+for simple CASE) and then, for each WHEN clause in order, compares it
+against that WHEN's own value (`when_value == operand_value`) or, for
+searched CASE (`operand is None`), just truthiness-checks the WHEN
+expression directly (`bool(when_value)`) -- exactly the same `bool()`
+coercion `_exec_if` already applies to its own condition. The FIRST
+matching WHEN wins; its body runs and no later WHEN is even evaluated,
+let alone run -- this is the same "short-circuit at the first match"
+behavior every SQL CASE has, not a design choice specific to this
+interpreter.
+
+**Missing ELSE follows IF's own established convention, not a new
+one**: no matching WHEN and no ELSE present is a silent no-op -- the
+CaseStatement's own DebugStep is still recorded (so the decision point
+itself is visible in the trace, exactly like an IF whose condition was
+false with no ELSE branch), but no statement runs, and no
+InterpreterError is raised. This mirrors `_exec_if` exactly (never
+raising just because a condition didn't match and there was nothing
+else to do) rather than adopting some other SQL dialect's
+"CASE_NOT_FOUND"-style hard error, since introducing a new "this
+particular statement can raise just by falling through" behavior would
+be inconsistent with how every other decision point in this grammar
+already works.
+
+**Step-trace: reuses IfStatement's own `branch` field verbatim, per
+this phase's own "reuse that mechanism" instruction** -- no new
+DebugStep field was added or needed. `branch.condition` is the
+operand's rendered text for simple CASE, or the literal string `"CASE"`
+for searched CASE (there's no single boolean expression to render the
+way an IF has exactly one condition); `branch.result` is `True` unless
+nothing matched and there was no ELSE (`path == "none"`); `branch.path`
+is `"when-<N>"` (0-based index of the matched WHEN clause), `"else"`,
+or `"none"` -- the exact same three-way shape IfStatement's own
+`"then"`/`"else"`/`"none"` already is, just with an open-ended
+`"when-<N>"` in place of `"then"` to name WHICH of the (possibly many)
+branches matched. Every existing consumer of `branch` needed to be
+checked for whether it was actually generic over `path`'s possible
+values or silently assumed IfStatement's exact two-value vocabulary --
+verified directly, not assumed (see `frontend/src/cfg.js` and
+`backend/app/explainer.py`, both of which needed a real fix; see their
+own comments at the fixed call sites).
+
+**DIVISION_BY_ZERO while evaluating the operand or any WHEN
+expression** stops evaluation immediately (mirrors `_exec_if`'s "the
+condition couldn't be evaluated -- don't guess a branch" exactly, just
+generalized to a whole sequence of evaluations instead of one): no
+further WHEN is checked, `matched_index` stays `None`, and the
+statement falls through to ELSE/none -- even a WHEN clause several
+positions later that would have matched is never reached, since a
+handled DIVISION_BY_ZERO already means "this decision could not be
+fully determined," not "skip just this one WHEN and keep going."
 
 -- Cursors ------------------------------------------------------------
 
@@ -472,6 +533,8 @@ def render_statement_header(node: dict) -> str:
         return f"IF {render_expr(node['condition'])} THEN"
     if kind == "WhileStatement":
         return f"WHILE {render_expr(node['condition'])} DO"
+    if kind == "CaseStatement":
+        return f"CASE {render_expr(node['operand'])}" if node["operand"] is not None else "CASE"
     if kind == "CursorDeclNode":
         return f"DECLARE {node['name']} CURSOR FOR {node['query']};"
     if kind == "OpenCursorNode":
@@ -635,6 +698,8 @@ class Interpreter:
             self._exec_if(node)
         elif kind == "WhileStatement":
             self._exec_while(node)
+        elif kind == "CaseStatement":
+            self._exec_case(node)
         elif kind == "CursorDeclNode":
             self._exec_declare_cursor(node)
         elif kind == "OpenCursorNode":
@@ -708,6 +773,53 @@ class Interpreter:
 
         if result:
             self._execute_block(node["then_body"])
+        elif node["else_body"] is not None:
+            self._execute_block(node["else_body"])
+
+    def _exec_case(self, node: dict) -> None:
+        """Execute a CaseStatement (both simple and searched CASE -- see
+        the module docstring's "CASE statement" section). Reuses the
+        exact same `branch` DebugStep field IfStatement already uses,
+        just with a `path` of `"when-<index>"` instead of `"then"` --
+        every existing `branch` consumer (the Call Stack/step-trace UI,
+        explainer.py, report.py, cfg.js's flowchart highlighting) reads
+        `path` as a plain string, so this needed no new field, per this
+        phase's own "reuse that mechanism" instruction."""
+        error_info = None
+        matched_index = None
+        try:
+            operand_value = self._evaluate(node["operand"]) if node["operand"] is not None else None
+            for index, clause in enumerate(node["when_clauses"]):
+                when_value = self._evaluate(clause["when"])
+                matches = when_value == operand_value if node["operand"] is not None else bool(when_value)
+                if matches:
+                    matched_index = index
+                    break
+        except _DivisionByZeroSignal as signal:
+            # Mirrors _exec_if exactly: couldn't finish evaluating the
+            # operand or one of the WHEN expressions, so don't guess a
+            # match -- fall through to ELSE/none, same as an IF whose
+            # condition itself couldn't be evaluated.
+            error_info = self._handle_division_by_zero(signal)
+            matched_index = None
+
+        if matched_index is not None:
+            path = f"when-{matched_index}"
+        elif node["else_body"] is not None:
+            path = "else"
+        else:
+            path = "none"
+
+        branch = {
+            "condition": render_expr(node["operand"]) if node["operand"] is not None else "CASE",
+            "result": path != "none",
+            "path": path,
+        }
+        self._record_step(node, render_statement_header(node), branch=branch, error=error_info)
+        self._run_handler_if_triggered(error_info)
+
+        if matched_index is not None:
+            self._execute_block(node["when_clauses"][matched_index]["body"])
         elif node["else_body"] is not None:
             self._execute_block(node["else_body"])
 

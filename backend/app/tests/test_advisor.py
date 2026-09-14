@@ -617,6 +617,265 @@ END
     assert "unused-variable" not in _categories(advisor.analyze(ast))
 
 
+# -- CASE statement cross-cutting coverage ---------------------------------------
+# CASE (added in a later phase than every check above) needed the shared AST
+# walkers (_iter_statements/_statement_exprs/_iter_statement_lists) plus two
+# hand-rolled walkers (_check_nested_loops's own `walk`, _find_unguarded_fetch)
+# taught about it explicitly -- these tests prove each check actually sees
+# inside a CASE branch, not just that CASE itself doesn't crash anything.
+
+
+def test_variable_read_only_in_a_case_operand_counts_as_a_read():
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE a NUMBER DEFAULT 1;
+    CASE a
+        WHEN 1 THEN
+            SET a = 2;
+    END CASE;
+END
+"""
+    )
+    assert "unused-variable" not in _categories(advisor.analyze(ast))
+
+
+def test_variable_read_only_in_a_searched_case_when_condition_counts_as_a_read():
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE a NUMBER DEFAULT 1;
+    CASE
+        WHEN a = 1 THEN
+            SET a = 2;
+    END CASE;
+END
+"""
+    )
+    assert "unused-variable" not in _categories(advisor.analyze(ast))
+
+
+def test_variable_read_only_inside_a_case_branch_body_counts_as_a_read():
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE a NUMBER DEFAULT 1;
+    DECLARE b NUMBER DEFAULT 0;
+    CASE b
+        WHEN 0 THEN
+            SET a = a + 1;
+    END CASE;
+END
+"""
+    )
+    assert "unused-variable" not in _categories(advisor.analyze(ast))
+
+
+def test_dead_store_detected_within_a_single_case_branch_body():
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE a NUMBER DEFAULT 1;
+    DECLARE total NUMBER DEFAULT 0;
+    CASE a
+        WHEN 1 THEN
+            SET total = 5;
+            SET total = 200;
+    END CASE;
+    SET total = total + 1;
+END
+"""
+    )
+    issues = advisor.analyze(ast)
+    hits = [i for i in issues if i["category"] == "never-read-variable"]
+    assert len(hits) == 1
+    assert "total" in hits[0]["title"]
+
+
+def test_writes_in_different_when_bodies_are_not_a_dead_store():
+    # Each WHEN's body is its own statement list (only one ever actually
+    # runs) -- two writes to the same name in DIFFERENT branches must
+    # not be treated as a same-block clobber, same as IF's then/else.
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE a NUMBER DEFAULT 1;
+    DECLARE label NUMBER DEFAULT 0;
+    CASE a
+        WHEN 1 THEN
+            SET label = 10;
+        WHEN 2 THEN
+            SET label = 20;
+    END CASE;
+    SET label = label + 1;
+END
+"""
+    )
+    assert "never-read-variable" not in _categories(advisor.analyze(ast))
+
+
+def test_unreachable_code_after_return_inside_a_when_body():
+    ast = _ast(
+        """CREATE FUNCTION Foo(n NUMBER) RETURNS NUMBER
+BEGIN
+    CASE
+        WHEN n > 1 THEN
+            RETURN 1;
+            RETURN 2;
+        ELSE
+            RETURN 0;
+    END CASE;
+END
+"""
+    )
+    issues = advisor.analyze(ast)
+    hits = [i for i in issues if i["category"] == "unreachable-code" and i["title"] == "Unreachable code after RETURN"]
+    assert len(hits) == 1
+
+
+def test_constant_false_when_condition_is_flagged_for_searched_case():
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE a NUMBER DEFAULT 0;
+    CASE
+        WHEN 1 > 2 THEN
+            SET a = 1;
+        WHEN a = 0 THEN
+            SET a = 2;
+    END CASE;
+END
+"""
+    )
+    issues = advisor.analyze(ast)
+    hits = [i for i in issues if i["category"] == "unreachable-code" and i["title"] == "WHEN branch can never execute"]
+    assert len(hits) == 1
+    assert hits[0]["line"] == 6
+
+
+def test_constant_true_when_condition_flags_everything_after_it():
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE a NUMBER DEFAULT 0;
+    CASE
+        WHEN 5 > 1 THEN
+            SET a = 1;
+        WHEN a = 0 THEN
+            SET a = 2;
+        ELSE
+            SET a = 3;
+    END CASE;
+END
+"""
+    )
+    issues = advisor.analyze(ast)
+    hits = [i for i in issues if i["category"] == "unreachable-code" and i["title"] == "Later WHEN/ELSE can never execute"]
+    assert len(hits) == 1
+    assert hits[0]["line"] == 8  # the next WHEN's own body, the first dead line
+
+
+def test_ordinary_when_condition_is_not_flagged():
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE a NUMBER DEFAULT 0;
+    CASE
+        WHEN a > 10 THEN
+            SET a = 1;
+        ELSE
+            SET a = 2;
+    END CASE;
+END
+"""
+    )
+    assert "unreachable-code" not in _categories(advisor.analyze(ast))
+
+
+def test_simple_case_constant_folding_is_deliberately_not_attempted():
+    # See advisor.py's own item 7c docstring for why: folding a simple
+    # CASE's operand-vs-WHEN-value equality is out of scope for this
+    # phase, even though `CASE 5 WHEN 5 THEN ...` is, logically, an
+    # always-matching WHEN just like the searched-CASE case above.
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE a NUMBER DEFAULT 0;
+    CASE 5
+        WHEN 5 THEN
+            SET a = 1;
+        WHEN 6 THEN
+            SET a = 2;
+    END CASE;
+END
+"""
+    )
+    assert "unreachable-code" not in _categories(advisor.analyze(ast))
+
+
+def test_magic_number_detected_in_case_operand_and_when_values():
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE a NUMBER DEFAULT 42;
+    DECLARE b NUMBER DEFAULT 0;
+    CASE a
+        WHEN 42 THEN
+            SET b = 1;
+    END CASE;
+END
+"""
+    )
+    issues = advisor.analyze(ast)
+    hits = [i for i in issues if i["category"] == "magic-number"]
+    assert len(hits) == 1
+    assert "42" in hits[0]["title"]
+
+
+def test_cursor_fetch_inside_a_case_branch_is_seen_by_missing_error_handling():
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE flag NUMBER DEFAULT 0;
+    DECLARE item_name STRING DEFAULT '';
+    DECLARE cur CURSOR FOR SELECT name FROM products;
+    OPEN cur;
+    CASE flag
+        WHEN 0 THEN
+            FETCH cur INTO item_name;
+    END CASE;
+    CLOSE cur;
+END
+"""
+    )
+    issues = advisor.analyze(ast)
+    hits = [i for i in issues if i["category"] == "missing-error-handling"]
+    assert len(hits) == 1
+    assert "cur" in hits[0]["title"]
+
+
+def test_while_nested_inside_case_nested_inside_while_is_detected():
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE i NUMBER DEFAULT 0;
+    DECLARE j NUMBER DEFAULT 0;
+    DECLARE flag NUMBER DEFAULT 1;
+    WHILE i < 3 DO
+        CASE flag
+            WHEN 1 THEN
+                WHILE j < 3 DO
+                    SET j = j + 1;
+                END WHILE;
+        END CASE;
+        SET i = i + 1;
+    END WHILE;
+END
+"""
+    )
+    assert "nested-loops" in _categories(advisor.analyze(ast))
+
+
 def test_program_node_with_multiple_definitions_is_not_analyzed_yet():
     # Two chained CREATE definitions wrap into a ProgramNode, whose
     # top-level `body` key doesn't exist (see app.parser's module
