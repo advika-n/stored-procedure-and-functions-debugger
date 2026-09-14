@@ -72,6 +72,35 @@ function DebuggerPage() {
   const decorationsRef = useRef([])
   const [isEditorReady, setIsEditorReady] = useState(false)
 
+  // -- Breakpoints + Run-to-Breakpoint --------------------------------
+  // Purely a frontend consumption-layer feature on top of the EXISTING
+  // step trace -- a breakpoint is just a line number, and "Run to
+  // Breakpoint" is nothing more than fast-forwarding currentStepIndex to
+  // the next step whose `line` is in this set. No interpreter/backend
+  // involvement at all: the trace is already fully computed by the time
+  // any of this runs. Deliberately a raw Set<lineNumber> (per this
+  // phase's own spec), not a Monaco decoration-ID map -- so a breakpoint
+  // is tied to a line NUMBER, not to "this specific piece of code" the
+  // way a real IDE's breakpoints track edits. Heavily editing the
+  // procedure (adding/removing lines above a breakpoint) can leave a
+  // marker sitting on now-different code, same simplification a lot of
+  // lightweight in-browser editors make; acceptable here since this
+  // isn't a persistent multi-file IDE. Breakpoints deliberately survive
+  // resetRunState/new sample loads (not cleared there) -- they're an
+  // editor-level concept, independent of any one Debug run, matching how
+  // real debuggers keep breakpoints across re-runs.
+  const [breakpoints, setBreakpoints] = useState(() => new Set())
+  const breakpointDecorationsRef = useRef([])
+
+  const toggleBreakpoint = useCallback((line) => {
+    setBreakpoints((prev) => {
+      const next = new Set(prev)
+      if (next.has(line)) next.delete(line)
+      else next.add(line)
+      return next
+    })
+  }, [])
+
   // -- "Debugger Notebook" gutter caret + cause->effect connector line --
   const editorShellRef = useRef(null)
   const caretRef = useRef(null)
@@ -363,6 +392,29 @@ function DebuggerPage() {
     setCurrentStepIndex((i) => (hasSteps && i < steps.length - 1 ? i + 1 : i))
   }, [hasSteps, steps])
 
+  // "Run to Breakpoint" -- fast-forwards through the EXISTING step trace
+  // (no re-execution) to the next step whose line is a breakpoint,
+  // searching strictly after the current position so pressing it again
+  // while already paused on one breakpoint advances to the next, rather
+  // than staying put. Deliberate design choice for the no-breakpoints
+  // case (the phase spec asked for one of two explicit options): runs to
+  // the END of the trace instead of being disabled -- the loop below
+  // simply never matches, so `targetIndex` falls through to the last
+  // step, i.e. identical behavior to "run to completion." This also
+  // means it works exactly the same way whether or not the run happens
+  // to define any breakpoints, rather than needing a separate mode.
+  const runToBreakpoint = useCallback(() => {
+    if (!hasSteps) return
+    let targetIndex = steps.length - 1
+    for (let i = currentStepIndex + 1; i < steps.length; i += 1) {
+      if (breakpoints.has(steps[i].line)) {
+        targetIndex = i
+        break
+      }
+    }
+    setCurrentStepIndex(targetIndex)
+  }, [hasSteps, steps, currentStepIndex, breakpoints])
+
   const goToPreviousStep = useCallback(() => {
     setCurrentStepIndex((i) => (i > 0 ? i - 1 : i))
   }, [])
@@ -504,7 +556,47 @@ function DebuggerPage() {
     setIsEditorReady(true)
     editor.onDidScrollChange(() => updateCaretAndConnectorsRef.current())
     editor.onDidLayoutChange(() => updateCaretAndConnectorsRef.current())
+
+    // Breakpoints: clicking either the glyph margin (where the red dot
+    // lives) or the line-number column itself toggles a breakpoint on
+    // that line -- Monaco's own MouseTargetType tells the two gutter
+    // strips apart from a click anywhere else in the editor.
+    // `toggleBreakpoint` is stable (empty-deps useCallback around a
+    // functional setState) so this closure never goes stale even though
+    // handleEditorMount itself only runs once, at mount.
+    editor.onMouseDown((event) => {
+      const targetType = event.target.type
+      const isGutterClick =
+        targetType === monacoInstance.editor.MouseTargetType.GUTTER_GLYPH_MARGIN ||
+        targetType === monacoInstance.editor.MouseTargetType.GUTTER_LINE_NUMBERS
+      if (!isGutterClick) return
+      const line = event.target.position?.lineNumber
+      if (line) toggleBreakpoint(line)
+    })
   }
+
+  // Keeps the glyph-margin red dots in sync with `breakpoints`. Clamped
+  // to the current model's actual line count so a breakpoint left over
+  // from a longer procedure never throws when a shorter one is loaded --
+  // it just has no glyph to show until a line that far down exists again.
+  useEffect(() => {
+    const editor = editorRef.current
+    const monacoInstance = monacoRef.current
+    if (!editor || !monacoInstance) return
+
+    const lineCount = editor.getModel()?.getLineCount() ?? 0
+    const decorations = Array.from(breakpoints)
+      .filter((line) => line >= 1 && line <= lineCount)
+      .map((line) => ({
+        range: new monacoInstance.Range(line, 1, line, 1),
+        options: {
+          isWholeLine: false,
+          glyphMarginClassName: 'breakpoint-glyph',
+          glyphMarginHoverMessage: { value: 'Breakpoint -- click the glyph margin or line number to remove' },
+        },
+      }))
+    breakpointDecorationsRef.current = editor.deltaDecorations(breakpointDecorationsRef.current, decorations)
+  }, [breakpoints, isEditorReady, code])
 
   // Move the current-line highlight (and the caret overlay + connector
   // lines) whenever the step changes.
@@ -520,15 +612,23 @@ function DebuggerPage() {
     }
 
     const line = currentStep.line
+    // A distinct (coral, not amber) current-line tint when execution is
+    // actually paused ON a breakpointed line -- lets "stopped here
+    // because of a breakpoint" read differently at a glance from
+    // ordinary step-by-step navigation landing on the same line.
+    const isPausedAtBreakpoint = breakpoints.has(line)
     decorationsRef.current = editor.deltaDecorations(decorationsRef.current, [
       {
         range: new monacoInstance.Range(line, 1, line, 1),
-        options: { isWholeLine: true, className: 'debug-current-line' },
+        options: {
+          isWholeLine: true,
+          className: isPausedAtBreakpoint ? 'debug-current-line debug-current-line-breakpoint' : 'debug-current-line',
+        },
       },
     ])
     editor.revealLineInCenter(line, monacoInstance.editor.ScrollType.Smooth)
     updateCaretAndConnectors()
-  }, [currentStepIndex, currentStep, isEditorReady, updateCaretAndConnectors])
+  }, [currentStepIndex, currentStep, isEditorReady, updateCaretAndConnectors, breakpoints])
 
   // Re-applies mermaid's global config whenever Day/Night Mode changes
   // (or on first mount) -- 'base' + explicit themeVariables (rather than
@@ -824,9 +924,19 @@ function DebuggerPage() {
                 }
               }}
               onMount={handleEditorMount}
-              options={{ minimap: { enabled: false }, fontSize: 14, lineHeight: 20, fontFamily: "'IBM Plex Mono', monospace" }}
+              options={{
+                minimap: { enabled: false },
+                fontSize: 14,
+                lineHeight: 20,
+                fontFamily: "'IBM Plex Mono', monospace",
+                glyphMargin: true,
+              }}
             />
           </div>
+          <p className="breakpoint-hint">
+            Click a line number (or the glyph margin beside it) to toggle a breakpoint.
+            {breakpoints.size > 0 && ` ${breakpoints.size} breakpoint${breakpoints.size === 1 ? '' : 's'} set.`}
+          </p>
 
           <div className="step-navigator">
             <button onClick={goToPreviousStep} disabled={isFirstStep}>
@@ -834,6 +944,17 @@ function DebuggerPage() {
             </button>
             <button onClick={handleAdvance} disabled={isLastStep || Boolean(upcomingQuiz)} title={upcomingQuiz ? 'Answer the prediction below to continue' : undefined}>
               Next ▶
+            </button>
+            <button
+              onClick={runToBreakpoint}
+              disabled={!hasSteps || isLastStep}
+              title={
+                breakpoints.size > 0
+                  ? 'Run forward through this trace until the next breakpointed line'
+                  : 'No breakpoints set -- runs to the end of the trace'
+              }
+            >
+              ⏵ Run to Breakpoint
             </button>
             <button onClick={resetSteps} disabled={!hasSteps}>
               Reset
@@ -851,6 +972,9 @@ function DebuggerPage() {
             <span className="step-label">
               {hasSteps ? `Step ${currentStepIndex + 1} of ${steps.length}` : 'No steps yet'}
             </span>
+            {hasSteps && currentStep && breakpoints.has(currentStep.line) && (
+              <span className="breakpoint-paused-badge">⏸ Paused at breakpoint</span>
+            )}
             {speechSupported && (
               <label className="auto-read-toggle">
                 <input

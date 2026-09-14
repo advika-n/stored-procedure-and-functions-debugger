@@ -8,27 +8,29 @@ stable project facts (architecture, schema, design tokens) see `CLAUDE.md` inste
 
 ## 1. Last updated
 
-**2026-09-14**, end of the session that built **Side-by-Side Run Comparison** (the
-second of the four Innovation features — see §2/§4). Follows the session that built the
-SQL Anti-Pattern Advisor (the first Innovation feature), which followed the session that
-built the Download feature (multi-format report export) — the last of the 5 mandatory
-course-graded sections — which itself followed the session that built the Learn tab and
-created `PROMPT_LOG.md`, which itself followed the session that built the Help tab, which
-itself followed the session that created this file/`CLAUDE.md` and built Day/Night Mode +
-the Developed By modal.
+**2026-09-14**, end of the session that built **Breakpoints + Run-to-Breakpoint** — the
+first addition under a newly reassessed **"Tier 1" push** (Breakpoints, Step controls,
+Call Stack, `CALL` support — strengthening the project beyond the original mandatory/
+innovation scope, given extra time available). Follows the session that built
+Side-by-Side Run Comparison (the second Innovation feature), which followed the session
+that built the SQL Anti-Pattern Advisor (the first Innovation feature), which followed
+the session that built the Download feature (multi-format report export) — the last of
+the 5 mandatory course-graded sections — which itself followed the session that built the
+Learn tab and created `PROMPT_LOG.md`, which itself followed the session that built the
+Help tab, which itself followed the session that created this file/`CLAUDE.md` and built
+Day/Night Mode + the Developed By modal.
 
-**Correction to this file's own past status-tracking, found in the Anti-Pattern Advisor
-session**: §3/§6/§7 had been repeating "Day/Night Mode + Developed By modal is
-uncommitted" and "Help tab/Learn tab work is uncommitted" across three straight sessions
-without re-checking `git log`. In fact `git log` shows Day/Night + Developed By was
-committed back in `a80392c` (the very session that created this file), and Help tab +
-Learn tab were committed together in `49bcd98` — likely by the user, outside a Claude
-Code session. That correction still holds this session (re-verified via `git log`/`git
-status` before starting, per the lesson learned): **the Download feature, the
-Anti-Pattern Advisor, and now this session's Side-by-Side Run Comparison are all still
-uncommitted** (plus the one small Developed-By content loose end — see §3). Lesson
-stands for future sessions: `git log`/`git status` are ground truth here, not this
-file's own memory of what it said last time.
+**Re-verified via `git log`/`git status` at the start of this session, per the standing
+lesson from three straight prior sessions' staleness**: everything the previous session's
+own HANDOFF.md still listed as "uncommitted" — the Developed-By real-content edit, the
+Download feature, the SQL Anti-Pattern Advisor, and Side-by-Side Run Comparison — is now
+committed in a single commit, `56a629a` ("Add Download export, SQL Anti-Pattern Advisor,
+and Side-by-Side Comparison"), made outside a Claude Code session (most likely by the
+user directly, the same pattern as the earlier `49bcd98` commit). The working tree was
+fully clean at the start of this session. §2-§7 below are rewritten to match that reality
+rather than repeating the previous session's now-stale uncommitted-work notes — the
+project's committed state and this file's own believed state are, for the first time in
+several sessions, actually in sync at the start of a phase.
 
 ---
 
@@ -305,20 +307,81 @@ not restated from memory:
     scope per this phase's own closing instruction (see §4/§5); it was never started, so
     nothing needed removing from the code, only from the planning lists.
 
+### Tier 1 additions (beyond the original mandatory/innovation scope)
+
+A reassessed push (Breakpoints, Step controls, Call Stack, `CALL` support) added given
+extra time available, on top of the 5 mandatory sections and 4 innovation features above.
+
+- **Breakpoints + Run-to-Breakpoint** (`frontend/src/pages/DebuggerPage.jsx`) — **Done**,
+  the first Tier 1 addition.
+  - **Purely a frontend consumption-layer feature, exactly as scoped.** No backend files
+    touched at all (confirmed by `git status --short` showing only `DebuggerPage.jsx` and
+    `App.css` changed this phase). Breakpoints are a `Set<lineNumber>` in component state;
+    "Run to Breakpoint" is nothing more than fast-forwarding `currentStepIndex` forward
+    through the *already-computed* step trace to the next step whose `line` is in that
+    set — the interpreter, `/debug`, and step-trace generation are all untouched, per the
+    phase's explicit instruction (and it genuinely was possible without backend changes,
+    so nothing was reported back as blocked).
+  - **UI**: Monaco's built-in glyph margin (`glyphMargin: true` in editor options, no
+    custom line-number UI built) shows a coral dot (`.breakpoint-glyph`, a CSS `::before`
+    circle centered in the cell Monaco allocates) on any breakpointed line. Clicking
+    either the glyph margin or the line-number column itself (both real Monaco
+    `MouseTargetType`s, told apart in `editor.onMouseDown`) toggles that line's
+    breakpoint. A "⏵ Run to Breakpoint" control sits between Next and Reset in the
+    existing step-navigator row, plus a small hint line under the editor showing how many
+    breakpoints are currently set.
+  - **No-breakpoints behavior — chosen explicitly, one of two options the phase spec
+    offered**: "Run to Breakpoint" stays enabled and simply runs to the end of the trace
+    when no breakpoints are set, rather than being disabled with an explanatory tooltip.
+    Chosen because the same search-forward loop naturally falls through to the last step
+    when nothing matches — no separate code path needed, and it reads as "run" doing what
+    a user would expect regardless of whether they've set anything yet.
+  - **Visual distinction between "paused at a breakpoint" and an ordinary step landing on
+    the same line**: the current-line decoration gets a second class,
+    `debug-current-line-breakpoint` (coral tint, overriding the normal amber-ish
+    `--current-line-bg`), plus a `⏸ Paused at breakpoint` badge next to the step counter
+    — both only when `breakpoints.has(currentStep.line)`, so navigating there normally
+    (Previous/Next/scrubber/step log) without ever pressing Run to Breakpoint looks
+    exactly as it always has.
+  - **Breakpoints deliberately survive `resetRunState`** (new sample loads, a fresh Debug
+    run) rather than being cleared — they're an editor-level concept independent of any
+    one run, matching how a real debugger keeps breakpoints across re-runs. Known,
+    accepted simplification: breakpoints track a raw line **number**, not a Monaco
+    decoration ID tied to that specific code, so heavily editing lines above a breakpoint
+    (adding/removing lines) can leave the marker sitting on now-different code — the
+    phase's own spec asked for "a set of line numbers," not edit-tracking, so this wasn't
+    built out further.
+  - **Verified live** via a raw-CDP driver dispatching *real* mouse clicks
+    (`Input.dispatchMouseEvent`) at the actual on-screen coordinates of the target line's
+    gutter cell — not a fake JS call into component internals — so this exercised the
+    real `onMouseDown` handler: (a) `CalculateTotal`, breakpoint on line 8, "Run to
+    Breakpoint" correctly stopped at Step 7 of 8 with the coral tint/badge showing and the
+    step log confirming line 8; (b) toggled that breakpoint back off, Reset, "Run to
+    Breakpoint" again correctly ran all the way to Step 8 of 8 (the no-breakpoints/
+    run-to-completion case); (c) confirmed Previous/Next/Reset still behave exactly as
+    before (Step 1 → 2 → 1); (d) `GradeClassifier`, breakpoint on line 9 (inside the
+    ELSE of a nested IF), correctly stopped there too. All four checked again in light
+    theme. Zero console errors throughout. Backend suite re-run before this phase started
+    (223 passed, confirming the required baseline) and again after finishing (still 223
+    passed, confirming the "untouched" claim rather than just asserting it) — the
+    explicit gate this phase's own prompt required. `npm run lint`/`npm run build` both
+    clean (same 2 pre-existing warnings, unrelated to this phase). Test-run history rows
+    created during verification (ids 128-130) were deleted afterward via
+    `DELETE /history/{id}`, same established habit as every prior phase.
+
 ---
 
 ## 3. In progress right now
 
-Nothing is genuinely half-built right now — every feature below is code-complete (§2).
-The one real loose end is small and purely administrative:
+Nothing is genuinely half-built right now — every feature in §2 is code-complete.
 
-- **Developed By modal's real content is filled in but not yet committed.** The modal
-  itself and its original placeholder content were committed long ago (`a80392c`); at
-  some point since the last time this file was updated, `DevelopedByModal.jsx` was
-  edited (outside a Claude Code session, most likely by the user directly) to replace
-  `[NAME]`/`[REGISTER NUMBER]` with real values. That one-file edit is the only
-  uncommitted change left over from that original phase — see §6/§7. The student photo
-  is still the placeholder inline SVG silhouette, not a real photo file.
+- **This session's own Breakpoints work is uncommitted** — `frontend/src/pages/
+  DebuggerPage.jsx` and `frontend/src/App.css` only (confirmed via `git status --short`),
+  on top of an otherwise clean working tree (everything from every prior session is now
+  committed — see §1's correction note and §6). Same "commit soon" recommendation as
+  every prior phase — see §7.
+- The student photo in the Developed By modal is still the placeholder inline SVG
+  silhouette, not a real photo file (the text content itself is real and committed).
 - Day/Night Mode itself was only ever exercised in one headless-Chrome instance during
   its original verification session — not spot-checked in a second browser engine. Not
   blocking, just unverified; noted here since nothing since has re-tested it.
@@ -330,40 +393,55 @@ The one real loose end is small and purely administrative:
 **All 5 mandatory course-graded sections are now code-complete** (§2) — none remain
 in this list. What's left is real content for the Learn tab (§6) and everything below:
 
-- **One of the remaining three innovation features** — confirmed absent by grep, no
-  partial code anywhere: Variable Timeline/sparklines. (SQL Anti-Pattern Advisor and
-  Side-by-Side Run Comparison are both done — see §2.)
+- **One of the four innovation features** — confirmed absent by grep, no partial code
+  anywhere: Variable Timeline/sparklines. (SQL Anti-Pattern Advisor and Side-by-Side Run
+  Comparison are both done — see §2.)
 - **Live Parameter Tuning — dropped, out of scope.** Explicitly removed from the plan by
-  this session's own closing instruction rather than left as "not started" — it was
+  a prior session's own closing instruction rather than left as "not started" — it was
   never begun, no code exists for it, and none should be added later under this name
   without a fresh scoping prompt from the user.
+- **Three of the four remaining Tier 1 items** — Step controls (beyond what already
+  exists — Prev/Next/Reset/scrubber are already done, so this presumably means something
+  more, e.g. Step Into/Over/Out distinctions; undefined until scoped), Call Stack, and
+  `CALL` support (calling one procedure/function from another — not currently supported
+  by the grammar at all per `parser.py`). All three need a fresh scoping prompt before
+  starting, same as Quiz page enhancements below. (Breakpoints, the fourth Tier 1 item,
+  is done — see §2.)
 
 ---
 
 ## 5. Agreed build order
 
-All 5 mandatory sections, in the agreed order — **every one is code-complete, and three
-of the four are committed**:
+All 5 mandatory sections, in the agreed order — **every one is code-complete and
+committed**:
 
 1. ~~Day/Night mode + Developed By~~ — code-complete, **committed** (`a80392c`); real
-   Developed-By content filled in since, that one edit not yet committed (§3).
+   Developed-By content also committed since (`56a629a`).
 2. ~~Help tab~~ — code-complete, **committed** (`49bcd98`).
 3. ~~Learn tab~~ — code-complete, **committed** (`49bcd98`), **placeholder content**
    (draft concept explanation, placeholder video ID, placeholder references — §2) still
    needs real material before submission.
-4. ~~Download feature upgrade~~ — code-complete, thoroughly verified (§2), not yet
-   committed (§6).
+4. ~~Download feature upgrade~~ — code-complete, thoroughly verified, **committed**
+   (`56a629a`).
 
 Then, per the original plan: Quiz page enhancements (if any beyond the current
 General-Theory/This-Procedure version — undefined, needs the user to scope), then the
 innovation features:
 
-1. ~~SQL Anti-Pattern Advisor~~ — code-complete, thoroughly verified (§2), not yet
-   committed (§6).
-2. ~~Side-by-Side Run Comparison~~ — code-complete, thoroughly verified (§2), not yet
-   committed (§6).
+1. ~~SQL Anti-Pattern Advisor~~ — code-complete, thoroughly verified, **committed**
+   (`56a629a`).
+2. ~~Side-by-Side Run Comparison~~ — code-complete, thoroughly verified, **committed**
+   (`56a629a`).
 3. Variable Timeline/sparklines — not started.
 4. ~~Live Parameter Tuning~~ — **dropped, out of scope** (§4), not attempted.
+
+Then the reassessed Tier 1 push (§2's new subsection), given extra time available:
+
+1. ~~Breakpoints + Run-to-Breakpoint~~ — code-complete, thoroughly verified (§2), not yet
+   committed (§3/§6).
+2. Step controls (beyond Prev/Next/Reset/scrubber) — not started, needs scoping (§4).
+3. Call Stack — not started, needs scoping (§4).
+4. `CALL` support — not started, needs scoping (§4); no grammar support exists yet.
 
 See §7 for what has to happen *before* moving further down this list, though.
 
@@ -392,36 +470,17 @@ Scanned directly (`grep` for `TODO`/`FIXME`/`XXX`/`HACK`/placeholder markers acr
   reconstructed summaries (rebuilt from `git show` diffs and this file's own history,
   clearly marked as reconstructed since no literal prompt was recorded for them at the
   time). Keep appending to it — don't let it go stale.
-- **Corrected in the Anti-Pattern Advisor session (see §1's correction note), and
-  re-verified via `git status`/`git log` again at the start of this session: Day/Night+
-  Developed-By and Help+Learn tabs are already committed** (`a80392c`, `49bcd98`) — this
-  file had wrongly kept saying otherwise across three sessions before that correction.
-  **What's actually uncommitted right now** (confirmed by running `git status --short`
-  directly, not carried over from memory):
-  - The Developed-By real-content edit (§3) — one file, `DevelopedByModal.jsx`, small.
-  - The **Download feature**, entirely — `backend/app/report.py` (new),
-    `backend/app/tests/test_report.py` + `test_report_endpoint.py` (new),
-    `backend/app/main.py`/`backend/requirements.txt` (modified),
-    `frontend/src/svgToPng.js` (new), `frontend/src/pages/DebuggerPage.jsx`/`App.css`
-    (modified).
-  - The **SQL Anti-Pattern Advisor**, entirely — `backend/app/advisor.py` (new),
-    `backend/app/tests/test_advisor.py` (new), `backend/app/main.py` (modified further),
-    `backend/app/tests/test_debug_endpoint.py` (modified), `frontend/src/samples.js` (new
-    `AntiPatternShowcase` sample), `frontend/src/pages/DebuggerPage.jsx`/`App.css`
-    (modified further).
-  - The **Side-by-Side Run Comparison**, entirely (this session) —
-    `frontend/src/pages/ComparePage.jsx` (new), `frontend/src/compareTraces.js` (new),
-    `frontend/src/App.jsx`/`Layout.jsx` (modified: new route + nav tab). No backend files
-    touched by this phase at all.
-  - This session's own accumulated edits to `CLAUDE.md`/`HANDOFF.md`/`PROMPT_LOG.md`
-    themselves (each already reflects the Download-feature and Anti-Pattern-Advisor
-    phases too, since those edits were never committed alongside `49bcd98`).
-
-  This is real, growing risk — **three full feature phases now uncommitted** (one of
-  them the last mandatory section) — see §7 for the recommendation to commit soon.
-- **Developed By modal's real content has been filled in** (§3) — good news the previous
-  three sessions' repeated "still placeholder" note didn't know about; the one thing left
-  is a real photo file, plus committing the text change.
+- **Commit-status history, for context**: this file wrongly kept claiming Day/Night+
+  Developed-By and Help+Learn were uncommitted across three sessions before the
+  Anti-Pattern Advisor session corrected it via `git log`. The session after that
+  (Side-by-Side Run Comparison) then left the Download feature, the Anti-Pattern Advisor,
+  the Developed-By content edit, and its own Compare work all genuinely uncommitted — and
+  **all of that was committed since**, in one commit (`56a629a`) made outside a Claude
+  Code session. Re-verified via `git status --short`/`git log` at the start of *this*
+  session: the working tree was fully clean before this phase started. **What's
+  uncommitted right now** is only this session's own Breakpoints work — see §3. Lesson
+  keeps standing: `git log`/`git status` are ground truth, checked fresh every session,
+  never carried over from what the last session's notes said.
 - **Learn tab ships with placeholder content by design** (§2) — draft concept-explanation
   prose (unreviewed against the actual course rubric), a literal `YOUR_VIDEO_ID_HERE`
   video embed, and placeholder references in every category. All three are visibly
@@ -444,16 +503,14 @@ Scanned directly (`grep` for `TODO`/`FIXME`/`XXX`/`HACK`/placeholder markers acr
   itself, not just `.site-header-right`).
 - **`backend/data/debug_history.db` needed manual cleanup again this session** (every
   session so far has needed this) — live-verification testing against the real dev
-  backend always writes real history rows; this session's testing (two Compare-mode
-  scenarios, run via direct browser interaction over CDP, each triggering two `/debug`
-  calls, across dark/light theme and a 400px check) added ids 119-127 — 119 turned out to
-  be one leftover row from the *previous* session's own final sign-off pass that had
-  escaped that session's own cleanup (its HANDOFF.md claimed ids 102-118 were cleaned,
-  but 119 was created after that cleanup ran). All of 119-127 were deleted this session
-  via `DELETE /history/{id}`. Same reminder as every prior session: hitting the *real*
-  running backend during manual verification always needs this cleanup step, and it's
-  worth double-checking for stragglers past whatever range a previous session's own notes
-  claim, not just trusting that count.
+  backend always writes real history rows. This session's breakpoint testing (CDP-driven
+  real mouse clicks against `CalculateTotal` and `GradeClassifier`, dark + light theme)
+  added ids 128-130, deleted afterward via `DELETE /history/{id}`; checked first for
+  stragglers past the previous session's own claimed cleanup range (none found this time
+  — ids 119-127 were genuinely all gone). Same reminder as every prior session: hitting
+  the *real* running backend during manual verification always needs this cleanup step,
+  and it's worth double-checking for stragglers rather than just trusting a previous
+  session's claimed count.
 - **Anti-Pattern Advisor doesn't cover a history-replayed run** (§2) — `issues` is only
   ever set from a live `/debug` response; replaying a saved History entry restores
   `ast`/`steps` but leaves `issues` at `null`, so the Advisor panel shows its
@@ -489,19 +546,17 @@ Scanned directly (`grep` for `TODO`/`FIXME`/`XXX`/`HACK`/placeholder markers acr
 
 ## 7. Immediate next step
 
-1. **Commit what's actually uncommitted right now** (§6) — the Developed-By
-   real-content edit, the Download feature, the SQL Anti-Pattern Advisor, and now the
-   Side-by-Side Run Comparison. Three full feature phases (one of them the last
-   mandatory section) exist only in this working tree — this is the single biggest risk
-   in the project right now and should happen before anything else.
-2. Get the real student photo for the Developed By modal (the text content is already
-   filled in, just uncommitted — §3).
+1. **Commit this session's Breakpoints work** (`frontend/src/pages/DebuggerPage.jsx`,
+   `frontend/src/App.css` — see §3/§6). Small and low-risk relative to prior sessions'
+   backlogs, but the same recommendation stands: commit before starting the next phase
+   rather than letting uncommitted work accumulate again.
+2. Get the real student photo for the Developed By modal (the text content itself is
+   already real and already committed — §3).
 3. Get a real educational video (swap `YOUR_VIDEO_ID_HERE` in `LearnPage.jsx`) and real,
    verified references (replacing every badge-marked placeholder entry) for the Learn
    tab (§2/§6) — and have the concept-explanation draft reviewed against the actual
    course rubric.
-4. Once the above are done, **all 5 mandatory course-graded sections are genuinely
-   finished** (§5) — move to Quiz page enhancements (needs the user to scope first) or
-   the one remaining innovation feature (Variable Timeline/sparklines) next, per §5.
-   Live Parameter Tuning is dropped (§4) and should not be picked up under that name
-   without a fresh scoping prompt.
+4. Continue the Tier 1 push (§5) — Step controls, Call Stack, and `CALL` support are all
+   still unscoped (§4) and need a fresh phase prompt each, same as Quiz page enhancements
+   and Variable Timeline/sparklines. Live Parameter Tuning stays dropped (§4) and
+   shouldn't be picked up under that name without a fresh scoping prompt.

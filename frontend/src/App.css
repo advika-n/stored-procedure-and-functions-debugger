@@ -1148,6 +1148,58 @@ h2 {
   background: var(--current-line-bg);
 }
 
+/* -- Breakpoints + Run-to-Breakpoint -------------------------------------
+   .breakpoint-glyph is a Monaco glyphMarginClassName (see
+   DebuggerPage.jsx's breakpoint-decorations effect) -- Monaco gives the
+   glyph cell a fixed size via inline styles, so a centered ::before dot
+   is the reliable way to draw into it rather than trying to resize the
+   cell itself. Coral (this app's "something needs attention"/error
+   accent) reused rather than inventing a fourth color, matching the
+   coral current-line tint below for the same "stopped here on purpose"
+   idea. */
+.breakpoint-glyph {
+  position: relative;
+  cursor: pointer;
+}
+
+.breakpoint-glyph::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent-coral);
+}
+
+/* Overrides .debug-current-line's amber-ish tint specifically when
+   execution is paused ON a breakpointed line, so it reads differently
+   at a glance from ordinary step-by-step navigation landing on the same
+   line by coincidence. */
+.debug-current-line-breakpoint {
+  background: var(--accent-coral-bg);
+}
+
+.breakpoint-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.breakpoint-paused-badge {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent-coral);
+  background: var(--accent-coral-bg);
+  border: 1px solid var(--accent-coral);
+  border-radius: var(--radius);
+  padding: 0.1rem 0.5rem;
+  white-space: nowrap;
+}
+
 .step-navigator {
   display: flex;
   align-items: center;

@@ -551,3 +551,116 @@ session's own sign-off pass that had escaped that session's cleanup) were all de
 **Live Parameter Tuning dropped**, per this prompt's explicit instruction — `HANDOFF.md`
 §4/§5 updated to mark it "Dropped — out of scope" rather than "not started"; it was never
 begun, so no code needed removing.
+
+---
+
+## 10. Breakpoints + Run-to-Breakpoint (Tier 1 addition)
+
+**Date:** 2026-09-14 · **Not yet committed** (see `HANDOFF.md` §3/§6)
+
+**Prompt (verbatim):**
+
+> PHASE: Breakpoints + Run-to-Breakpoint
+>
+> Context: Read CLAUDE.md and HANDOFF.md first for full project context before starting.
+> This begins the reassessed "Tier 1" push (Breakpoints, Step controls, Call Stack, CALL
+> support) to strengthen the project beyond the original mandatory/innovation scope, given
+> extra time available. Confirm the full backend test suite passes (223+) before starting,
+> and again after — do not proceed to any future phase if the count drops.
+>
+> Goal: let the user click a line number in the Monaco editor to toggle a breakpoint, then
+> run execution up to (and stopping at) that line, rather than only stepping one line at a
+> time or running to completion.
+>
+> 1. IMPORTANT — before implementing: inspect the existing step-execution engine (the
+>    interpreter's step-trace generation) to understand how "step" state is currently
+>    produced and exposed to the frontend. Breakpoints should be implemented as a frontend-
+>    driven feature that uses the EXISTING step trace (stop advancing the already-generated
+>    trace at the breakpointed line) rather than modifying the interpreter's execution
+>    semantics — this keeps risk low and avoids touching core interpreter logic.
+>
+> 2. Frontend:
+>    - Add clickable breakpoint gutter markers in the Monaco editor (Monaco supports glyph
+>      margin decorations — use that rather than building custom line-number UI).
+>    - Toggling a breakpoint on a line stores it in component state (a set of line numbers).
+>    - Add a "Run to Breakpoint" control alongside existing Run/Debug/Step controls — when
+>      pressed, auto-advance through the existing step trace until reaching a step whose
+>      line matches a breakpoint (or the trace ends, whichever first), then stop and display
+>      that step as normal.
+>    - If no breakpoints are set, "Run to Breakpoint" should behave the same as running to
+>      completion (or be disabled with a tooltip explaining why — pick whichever fits better
+>      and say which you chose).
+>    - Clear visual indication of active breakpoints (red dot in gutter) and which step is
+>      currently paused at a breakpoint vs. a normal step.
+>
+> 3. Do NOT modify the backend /debug endpoint, interpreter, or step-trace generation —
+>    breakpoints are purely a frontend consumption-layer feature on top of the existing
+>    trace. If you find this is genuinely impossible without backend changes, stop and
+>    report why rather than proceeding with backend modifications.
+>
+> 4. Style theme-aware (existing ThemeContext/CSS variables), consistent with existing
+>    controls (Step Forward/Back, Reset, etc.).
+>
+> 5. Verify: set a breakpoint mid-procedure on 2 of the 10 built-in samples, confirm
+>    "Run to Breakpoint" stops exactly there; confirm toggling breakpoints off and re-running
+>    works; confirm existing Step Forward/Back/Reset controls still work unchanged; confirm
+>    backend test suite still shows 223+ passing (untouched, since backend wasn't touched).
+>
+> Don't touch interpreter/debugger core logic, the Anti-Pattern Advisor, Side-by-Side
+> Comparison, Download, Help/Learn tabs, or flowchart generation — this phase is scoped to
+> Breakpoints only.
+>
+> After finishing: update HANDOFF.md to add Breakpoints as "Done" under the new Tier 1
+> additions section, and log this phase in PROMPT_LOG.md.
+
+**What shipped:** Confirmed the required baseline first — `pytest -q` at 223 passed
+before touching anything, and 223 passed again at the end, so nothing regressed and no
+future phase needs to be held back. No backend files touched at all this phase (it
+genuinely was possible without them, so nothing needed to be reported as blocked): a
+breakpoint is a `Set<lineNumber>` in `DebuggerPage.jsx` state, and "Run to Breakpoint" is
+a forward search over the *already-computed* `steps` array for the next step whose `line`
+is in that set, landing on the last step (i.e. running to completion) when none match —
+the chosen behavior for the no-breakpoints case, kept enabled rather than disabled since
+the same code path naturally does the right thing either way.
+
+**UI**: Monaco's built-in glyph margin (`glyphMargin: true`, no custom gutter UI) shows a
+coral dot on breakpointed lines; clicking either the glyph margin or the line-number
+column itself (`editor.onMouseDown`, `MouseTargetType.GUTTER_GLYPH_MARGIN` /
+`GUTTER_LINE_NUMBERS`) toggles the breakpoint on that line. A "⏵ Run to Breakpoint"
+button sits between Next and Reset in the existing step-navigator row, plus a hint line
+under the editor showing the current breakpoint count. When execution is actually paused
+on a breakpointed line, the current-line decoration gets a coral tint
+(`debug-current-line-breakpoint`, overriding the normal amber-ish tint) and a
+"⏸ Paused at breakpoint" badge appears next to the step counter — both conditioned purely
+on `breakpoints.has(currentStep.line)`, so ordinary navigation that happens to land on the
+same line looks unchanged. Breakpoints deliberately survive `resetRunState` (new sample
+loads, fresh Debug runs) since they're an editor-level concept, not tied to one run —
+matching real debugger behavior; the accepted simplification is that they track a raw
+line **number**, not a Monaco decoration ID, so heavy edits above a breakpoint can leave
+it on now-different code (exactly what the phase's own "a set of line numbers" spec asked
+for, not full edit-tracking).
+
+**Verification**: `npm run lint`/`npm run build` clean (same 2 pre-existing warnings).
+Live-verified via a raw-CDP driver that dispatches **real mouse clicks**
+(`Input.dispatchMouseEvent` at the actual on-screen coordinates of the target line's
+gutter cell, found via `getBoundingClientRect()`) rather than calling into component
+internals — so this exercised the genuine `onMouseDown` handler: (a) `CalculateTotal`,
+breakpoint on line 8, "Run to Breakpoint" correctly stopped at Step 7 of 8 with the coral
+tint/badge and the step log confirming line 8; (b) toggled that breakpoint back off,
+Reset, "Run to Breakpoint" again correctly ran to Step 8 of 8 (no-breakpoints/
+run-to-completion case); (c) confirmed Previous/Next/Reset behave exactly as before
+(Step 1 → 2 → 1); (d) `GradeClassifier`, breakpoint on line 9 inside a nested IF's ELSE,
+correctly stopped there too. All checked again in light theme. Zero console errors
+throughout. Test-run history rows created during verification (ids 128-130) were deleted
+afterward via `DELETE /history/{id}`.
+
+**Scope discipline**: `git status --short` after finishing showed only
+`frontend/src/pages/DebuggerPage.jsx` and `frontend/src/App.css` changed — no interpreter,
+`/debug` endpoint, Anti-Pattern Advisor, Side-by-Side Comparison, Download, Help/Learn, or
+flowchart-generation files touched, exactly as scoped.
+
+**Also found this session**: `git log`/`git status` showed the entire backlog the
+previous session's HANDOFF.md still listed as uncommitted (Developed-By content, Download,
+Anti-Pattern Advisor, Side-by-Side Comparison) had since been committed in one commit,
+`56a629a`, outside a Claude Code session. `HANDOFF.md` §1/§3/§6/§7 updated to match —
+first session in a while where the working tree was genuinely clean at the start.
