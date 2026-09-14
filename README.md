@@ -88,7 +88,18 @@ Supported:
   is a clear `InterpreterError`, never a silent `null`.
 - **Variables**: `DECLARE name TYPE [DEFAULT expr];`, `SET name = expr;`
 - **Control flow**: `IF ... THEN ... [ELSE ...] END IF;`,
-  `WHILE ... DO ... END WHILE;`
+  `WHILE ... DO ... END WHILE;`, `CASE ... WHEN ... THEN ... [ELSE ...]
+  END CASE;` (both the simple `CASE expr WHEN val THEN ...` and searched
+  `CASE WHEN cond THEN ...` forms), and `[label:] LOOP ... END LOOP
+  [label];` with `LEAVE [label];` to exit it — `LOOP` has no condition
+  of its own (unlike `WHILE`), so `LEAVE` is the only way out; an
+  optional label lets a `LEAVE` deep inside nested loops name *which*
+  enclosing one to break, not just the innermost.
+- **Procedure calls**: `CALL name(arg1, arg2, ...);` (a procedure calling
+  another procedure, including itself) and, inside an expression,
+  `name(arg1, ...)` to call a `CREATE FUNCTION` and use its `RETURN`ed
+  value — see `backend/app/parser.py`'s module docstring for the full
+  design (scope isolation, recursion, the call-depth guard).
 - **Expressions**: `+ - * /`, comparisons `> < = !=`, string/number
   literals, parentheses — no `>=`/`<=`
 - **Cursors** (MySQL-style): `DECLARE cur CURSOR FOR SELECT ...;`,
@@ -114,11 +125,12 @@ Supported:
   once a handler is actually registered for it — unhandled, it still
   aborts the run exactly as it always did.
 
-Not supported at all: `CALL`, `CASE`, `LOOP`/`LEAVE`, cursor parameters,
-transactions, table statements (`UPDATE`/`INSERT`/...), and anything not
-listed above. The in-app **Theory** tab documents each supported piece
-with a runnable example; the sample library's **ComputeTax** procedure
-demonstrates a declared `OUT` param, and **ProductPriceTotal** /
+Not supported at all: `ELSEIF` chaining (nest another `IF` inside the
+`ELSE` instead), `>=`/`<=`, cursor parameters, transactions, table
+statements (`UPDATE`/`INSERT`/...), and anything not listed above. The
+in-app **Theory** tab documents each supported piece with a runnable
+example; the sample library's **ComputeTax** procedure demonstrates a
+declared `OUT` param, and **ProductPriceTotal** /
 **SafeAverageWithHandlers** are runnable demonstrations of cursors and
 exception handling respectively. All eight samples use the full
 `CREATE PROCEDURE(...) BEGIN...END` wrapper — a deliberate choice for

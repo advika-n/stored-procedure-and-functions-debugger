@@ -311,6 +311,20 @@ def generate_template_explanation(step: dict, previous_variables: dict | None) -
             return f"Checked whether {description} (iteration {loop.get('iteration')}); it did, so the loop body ran again."
         return f"Checked whether {description}; it didn't, so the loop exited."
 
+    if node_type == "LoopStatement":
+        # LOOP has no boolean condition of its own (unlike WHILE), so
+        # `_describe_condition` -- built for a `LEFT OP RIGHT` comparison
+        # -- doesn't apply here; `loop.condition` is just the literal
+        # "LOOP"/"LOOP <label>" placeholder text (see
+        # interpreter.py's own "LOOP / LEAVE" section).
+        loop = step.get("loop") or {}
+        return f"Started iteration {loop.get('iteration')} of the LOOP -- it repeats until a LEAVE is executed."
+
+    if node_type == "LeaveStatement":
+        label = (step.get("statementText") or "").removeprefix("LEAVE").strip().rstrip(";").strip()
+        target = f"the loop labeled '{label}'" if label else "the current loop"
+        return f"Executed LEAVE, exiting {target} and resuming with whatever statement follows it."
+
     if node_type == "CaseStatement":
         # branch.path is "when-<N>" / "else" / "none" here, not
         # IfStatement's "then"/"else"/"none" -- _describe_condition isn't

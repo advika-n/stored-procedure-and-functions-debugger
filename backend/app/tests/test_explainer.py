@@ -89,6 +89,42 @@ def test_while_loop_explanation_mentions_iteration():
     assert "loop body ran again" in text
 
 
+def test_loop_statement_explanation_mentions_the_iteration_number():
+    step = {
+        "line": 1,
+        "nodeType": "LoopStatement",
+        "statementText": "LOOP",
+        "variables": {},
+        "loop": {"condition": "LOOP", "result": True, "iteration": 3},
+    }
+    text = generate_template_explanation(step, None)
+    assert "3" in text
+    assert "LEAVE" in text
+
+
+def test_unlabeled_leave_explanation_says_current_loop():
+    step = {
+        "line": 1,
+        "nodeType": "LeaveStatement",
+        "statementText": "LEAVE;",
+        "variables": {},
+    }
+    text = generate_template_explanation(step, None)
+    assert "LEAVE" in text
+    assert "the current loop" in text
+
+
+def test_labeled_leave_explanation_names_the_label():
+    step = {
+        "line": 1,
+        "nodeType": "LeaveStatement",
+        "statementText": "LEAVE outer;",
+        "variables": {},
+    }
+    text = generate_template_explanation(step, None)
+    assert "outer" in text
+
+
 def test_explanations_are_not_generic_boilerplate():
     # Two different SET steps should produce two different sentences --
     # if the generator were falling back to generic text this would fail.

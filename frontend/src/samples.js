@@ -455,4 +455,50 @@ BEGIN
 END
 `,
   },
+  // Added specifically for the LOOP/LEAVE support phase -- exercises a
+  // labeled LOOP nested inside another labeled LOOP (backend/app/
+  // parser.py's "LOOP / LEAVE" section), demonstrating BOTH LEAVE forms
+  // in one procedure: an unlabeled `LEAVE;` (breaks only the innermost
+  // loop, used when the inner search comes up empty) and a labeled
+  // `LEAVE outer;` fired from INSIDE the inner loop (breaks straight out
+  // of both loops at once, skipping the rest of the outer loop's own
+  // body too -- not just stopping at the inner loop's boundary). Brute-
+  // force searches for the first pair (i, j), each 1..5, whose sum is
+  // `target`. Hand-traced (and cross-checked against a real interpreter
+  // run -- see testCaseExpectations.js): with i=1, no j in 1..5 sums to
+  // 7, so the unlabeled `LEAVE;` fires and i advances to 2; with i=2,
+  // j=5 hits 2+5=7, so `LEAVE outer;` fires immediately, leaving i at 2
+  // (its trailing `SET i = i + 1;` never runs) and j at 5.
+  {
+    name: 'FindPairSum',
+    kind: 'PROCEDURE',
+    description: 'A labeled LOOP nested inside another labeled LOOP, brute-force searching for a pair that sums to a target -- demonstrates both an unlabeled LEAVE (exits only the inner loop) and a labeled LEAVE outer (jumps straight out of both loops from inside the inner one).',
+    code: `CREATE PROCEDURE FindPairSum()
+BEGIN
+    DECLARE target NUMBER DEFAULT 7;
+    DECLARE i NUMBER DEFAULT 1;
+    DECLARE j NUMBER DEFAULT 0;
+    DECLARE foundI NUMBER DEFAULT 0;
+    DECLARE foundJ NUMBER DEFAULT 0;
+    outer: LOOP
+        IF i > 5 THEN
+            LEAVE outer;
+        END IF;
+        SET j = 1;
+        inner: LOOP
+            IF j > 5 THEN
+                LEAVE;
+            END IF;
+            IF i + j = target THEN
+                SET foundI = i;
+                SET foundJ = j;
+                LEAVE outer;
+            END IF;
+            SET j = j + 1;
+        END LOOP inner;
+        SET i = i + 1;
+    END LOOP outer;
+END
+`,
+  },
 ]

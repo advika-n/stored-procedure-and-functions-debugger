@@ -21,7 +21,7 @@ Supported grammar (informal, keywords in CAPS are literal tokens):
     statement   := declare_stmt | declare_cursor_stmt | declare_handler_stmt
                     | set_stmt | if_stmt | while_stmt | case_stmt | return_stmt
                     | open_cursor_stmt | fetch_cursor_stmt | close_cursor_stmt
-                    | call_stmt
+                    | call_stmt | loop_stmt | leave_stmt
 
     declare_stmt        := DECLARE IDENT IDENT (DEFAULT expr)? ';'
     declare_cursor_stmt := DECLARE IDENT CURSOR FOR <raw tokens up to ';'> ';'
@@ -40,6 +40,8 @@ Supported grammar (informal, keywords in CAPS are literal tokens):
     fetch_cursor_stmt := FETCH IDENT INTO IDENT (',' IDENT)* ';'
     close_cursor_stmt := CLOSE IDENT ';'
     call_stmt         := CALL IDENT '(' (expr (',' expr)*)? ')' ';'
+    loop_stmt         := (IDENT ':')? LOOP statement* END LOOP IDENT? ';'
+    leave_stmt        := LEAVE IDENT? ';'
 
     expr         := comparison
     comparison   := term (('>' | '<' | '=' | '!=') term)*
@@ -243,6 +245,63 @@ See app.interpreter's own "CASE statement" module docstring section for
 how `operand`/`when_clauses`/`else_body` actually get evaluated
 (including what happens when nothing matches and there's no ELSE).
 
+-- LOOP / LEAVE -------------------------------------------------------------
+
+`LOOP ... END LOOP;` is an unconditional block -- unlike WHILE, it has no
+condition of its own at all, so the only way out is an explicit `LEAVE;`
+executed somewhere inside its body (or, as a safety net, the same
+MAX_LOOP_ITERATIONS guard WHILE already has -- see app.interpreter). A
+LOOP may optionally be labeled, MySQL-style: `mylabel: LOOP ... END LOOP
+mylabel;` -- the label is a plain IDENTIFIER immediately followed by a
+literal ':' token before LOOP (this is the only construct in this
+grammar that uses a bare colon, which is why ':' only became a real
+token in this phase -- see app.tokenizer). The label may be repeated
+after the closing `END LOOP`, or omitted there even if the opening one
+had it; if both are present, they must match (a clear ParserError
+otherwise, not a silent typo). Both the opening and closing labels are
+fully optional -- a bare, unlabeled `LOOP ... END LOOP;` (matching the
+form Theory.jsx's own ControlFlowTopic already describes -- "a bare LOOP
+... until an explicit LEAVE") is just as valid as a labeled one; labels
+only start to matter once loops are nested and a `LEAVE` needs to name
+*which* enclosing one to break (see below).
+
+`_parse_statement` tells a labeled LOOP apart from every other statement
+with a one-token lookahead: every other statement in this grammar starts
+with a KEYWORD, so an IDENTIFIER immediately followed by ':' is
+unambiguously a loop label (there's no other legal way for a statement
+to start with a bare IDENTIFIER), never confused with an ordinary
+expression or assignment target.
+
+Each WHEN clause's own body-parsing convention carries over here too:
+the loop body is parsed via `_parse_block({"END"})` -- the exact same
+block-parsing helper IF/WHILE/CASE already use -- so a LOOP can contain,
+and be contained by, any other statement type (IF/WHILE/CASE/another
+LOOP/CALL/...) exactly like they can nest inside each other already; no
+new nesting mechanism was needed.
+
+`LEAVE;` (unlabeled) or `LEAVE mylabel;` (labeled) exits a loop
+immediately -- app.interpreter is what actually resolves *which*
+enclosing LOOP an unlabeled LEAVE targets (always the innermost one) or
+validates that a labeled LEAVE names a loop that's genuinely currently
+enclosing it (a clear InterpreterError if not -- this is a runtime check,
+not a parse-time one, matching how this grammar validates everything
+else that depends on nesting/scope, e.g. an OUT/INOUT CALL argument
+needing to be a plain Identifier). `LEAVE` is parseable anywhere any
+other statement is, exactly like every other statement type -- including
+inside an IF/WHILE/CASE that is itself inside the LOOP it's leaving,
+which is the normal, expected shape (`LOOP ... IF cond THEN LEAVE;
+END IF; ... END LOOP;`).
+
+Produces:
+
+    {"type": "LoopStatement", "label": str | None, "body": [statement, ...], "line": int}
+    {"type": "LeaveStatement", "label": str | None, "line": int}
+
+See app.interpreter's own "LOOP / LEAVE" module docstring section for
+how a LEAVE actually unwinds to the correct enclosing LOOP (including
+across nested loops), how loop-label scope is isolated across a CALL/
+function-call boundary, and the step-trace shape this reuses from WHILE.
+
 -- Cursors -----------------------------------------------------------------
 
 A cursor declaration's embedded SELECT is *not* parsed into its own AST:
@@ -336,6 +395,19 @@ class Parser:
             self.pos += 1
             self._last_line = token["line"]
         return token
+
+    def _peek_ahead_is(self, type_: str, value: str | None = None) -> bool:
+        """Like `_check`, but looks one token past the current position
+        without consuming anything -- used only to tell a loop label
+        (`IDENT ':'`) apart from every other statement, which all start
+        with a plain KEYWORD (see the module docstring's "LOOP / LEAVE"
+        section)."""
+        token = self.tokens[self.pos + 1] if self.pos + 1 < len(self.tokens) else None
+        if token is None or token["type"] != type_:
+            return False
+        if value is not None and token["value"] != value:
+            return False
+        return True
 
     def _error(self, message: str, token: dict | None = None) -> ParserError:
         """Build a ParserError, falling back to the last consumed token's
@@ -477,9 +549,24 @@ class Parser:
             return self._parse_return()
         if self._check("KEYWORD", "CALL"):
             return self._parse_call()
+        if self._check("KEYWORD", "LOOP"):
+            return self._parse_loop(label=None)
+        if self._check("KEYWORD", "LEAVE"):
+            return self._parse_leave()
+        if self._check("IDENTIFIER") and self._peek_ahead_is("PUNCTUATION", ":"):
+            # `label: LOOP ...` -- see the module docstring's "LOOP /
+            # LEAVE" section for why an IDENTIFIER immediately followed
+            # by ':' is unambiguously a loop label and nothing else (no
+            # other statement in this grammar can start with a bare
+            # IDENTIFIER).
+            label_token = self._advance()
+            self._expect("PUNCTUATION", ":")
+            return self._parse_loop(label=label_token["value"], start=label_token)
 
         raise self._error(
-            "Expected DECLARE, SET, IF, WHILE, CASE, RETURN, OPEN, FETCH, CLOSE, or CALL", token
+            "Expected DECLARE, SET, IF, WHILE, CASE, RETURN, OPEN, FETCH, CLOSE, CALL, LOOP, "
+            "or LEAVE",
+            token,
         )
 
     def _parse_return(self) -> dict:
@@ -719,6 +806,57 @@ class Parser:
             "else_body": else_body,
             "line": start["line"],
         }
+
+    def _parse_loop(self, label: str | None, start: dict | None = None) -> dict:
+        """`(IDENT ':')? LOOP statement* END LOOP IDENT? ';'` -- see the
+        module docstring's "LOOP / LEAVE" section. `label`/`start` are
+        already-consumed by `_parse_statement` when a label was present
+        (the label token doubles as the statement's own `line`, matching
+        how every other labeled construct in this grammar anchors its
+        line to its own first token); otherwise this method consumes the
+        LOOP keyword itself as both."""
+        loop_token = self._keyword("LOOP")
+        if start is None:
+            start = loop_token
+        body = self._parse_block({"END"})
+        self._keyword("END")
+        self._keyword("LOOP")
+
+        # An optional closing label -- MySQL-style, purely for
+        # readability on a long loop body. If both are given they must
+        # agree; a closing label with no opening one is a clear mistake
+        # (there's nothing for it to confirm), not silently accepted.
+        if self._check("IDENTIFIER"):
+            end_label_token = self._advance()
+            if label is None:
+                raise self._error(
+                    f"END LOOP names label {end_label_token['value']!r} but this LOOP has no "
+                    "opening label",
+                    end_label_token,
+                )
+            if end_label_token["value"] != label:
+                raise self._error(
+                    f"END LOOP label {end_label_token['value']!r} does not match this LOOP's "
+                    f"opening label {label!r}",
+                    end_label_token,
+                )
+
+        self._expect("PUNCTUATION", ";")
+
+        return {
+            "type": "LoopStatement",
+            "label": label,
+            "body": body,
+            "line": start["line"],
+        }
+
+    def _parse_leave(self) -> dict:
+        start = self._keyword("LEAVE")
+        label = None
+        if self._check("IDENTIFIER"):
+            label = self._advance()["value"]
+        self._expect("PUNCTUATION", ";")
+        return {"type": "LeaveStatement", "label": label, "line": start["line"]}
 
     # -- expressions (precedence climbing) -----------------------------------
 

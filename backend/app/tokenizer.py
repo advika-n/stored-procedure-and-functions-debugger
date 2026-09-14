@@ -16,7 +16,8 @@ Supported keywords (case-insensitive):
     DECLARE, SET, IF, THEN, ELSE, END, WHILE, DO, BEGIN, IN, OUT, DEFAULT,
     CURSOR, FOR, OPEN, FETCH, INTO, CLOSE, SELECT, FROM, WHERE,
     FOUND, NOTFOUND, CONTINUE, HANDLER, NOT_FOUND, DIVISION_BY_ZERO,
-    CREATE, FUNCTION, RETURNS, RETURN, PROCEDURE, INOUT, CALL, CASE, WHEN
+    CREATE, FUNCTION, RETURNS, RETURN, PROCEDURE, INOUT, CALL, CASE, WHEN,
+    LOOP, LEAVE
 
 Supported operators:
     +  -  *  /  >  <  =  !=
@@ -25,7 +26,10 @@ Supported operators:
     not a general modulo operator.
 
 Supported punctuation:
-    (  )  ,  ;
+    (  )  ,  ;  :
+    ':' is only meaningful as a LOOP label's own terminator
+    (`label: LOOP ... END LOOP;` -- see app.parser) -- there is no other
+    construct in this grammar that uses a bare colon.
 
 Whitespace is skipped and does not produce a token. Any character that
 doesn't match a known token shape raises a TokenizerError pointing at
@@ -94,6 +98,10 @@ KEYWORDS = {
     # CASE and WHEN are genuinely new keywords.
     "CASE",
     "WHEN",
+    # -- LOOP/LEAVE (see app.parser / app.interpreter) -- an unconditional
+    # `label: LOOP ... END LOOP [label];` block, exited only via LEAVE.
+    "LOOP",
+    "LEAVE",
 }
 
 # Order matters: longer/more-specific patterns must come before shorter
@@ -106,7 +114,7 @@ _TOKEN_SPEC = [
     ("NUMBER", r"\d+\.\d+|\d+"),
     ("IDENT", r"[A-Za-z_][A-Za-z0-9_]*"),
     ("OPERATOR", r"[+\-*/><=%]"),
-    ("PUNCTUATION", r"[(),;]"),
+    ("PUNCTUATION", r"[(),;:]"),
     ("MISMATCH", r"."),
 ]
 

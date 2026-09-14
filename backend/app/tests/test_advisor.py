@@ -1021,6 +1021,277 @@ END
     assert "total" in hits[0]["title"]
 
 
+# -- LOOP/LEAVE cross-cutting coverage --------------------------------------
+# Added in the LOOP/LEAVE support phase -- same discipline the CASE
+# statement phase established: check every walker directly rather than
+# assume the shared `_iter_statements`/`_iter_statement_lists` fix alone
+# is enough (see advisor.py's own `_check_nested_loops`/
+# `_find_unguarded_fetch` -- both hand-rolled, neither built on the
+# shared walkers).
+
+
+def test_nested_loop_inside_while_is_flagged():
+    ast = _ast(
+        """CREATE PROCEDURE Nested()
+BEGIN
+    DECLARE outer NUMBER DEFAULT 0;
+    DECLARE inner NUMBER DEFAULT 0;
+    WHILE outer < 3 DO
+        LOOP
+            SET inner = inner + 1;
+            LEAVE;
+        END LOOP;
+        SET outer = outer + 1;
+    END WHILE;
+END
+"""
+    )
+    assert "nested-loops" in _categories(advisor.analyze(ast))
+
+
+def test_nested_while_inside_loop_is_flagged():
+    ast = _ast(
+        """CREATE PROCEDURE Nested()
+BEGIN
+    DECLARE outer NUMBER DEFAULT 0;
+    DECLARE inner NUMBER DEFAULT 0;
+    outer: LOOP
+        WHILE inner < 3 DO
+            SET inner = inner + 1;
+        END WHILE;
+        SET outer = outer + 1;
+        IF outer > 3 THEN
+            LEAVE outer;
+        END IF;
+    END LOOP outer;
+END
+"""
+    )
+    assert "nested-loops" in _categories(advisor.analyze(ast))
+
+
+def test_nested_loop_inside_loop_is_flagged():
+    ast = _ast(
+        """CREATE PROCEDURE Nested()
+BEGIN
+    outer: LOOP
+        inner: LOOP
+            LEAVE inner;
+        END LOOP inner;
+        LEAVE outer;
+    END LOOP outer;
+END
+"""
+    )
+    issues = advisor.analyze(ast)
+    assert "nested-loops" in _categories(issues)
+    hit = next(i for i in issues if i["category"] == "nested-loops")
+    assert hit["line"] == 4  # the INNER loop's line, not the outer's
+
+
+def test_single_loop_is_not_flagged_as_nested():
+    ast = _ast(
+        """CREATE PROCEDURE Single()
+BEGIN
+    LOOP
+        LEAVE;
+    END LOOP;
+END
+"""
+    )
+    assert "nested-loops" not in _categories(advisor.analyze(ast))
+
+
+def test_fetch_inside_loop_with_no_guard_is_flagged():
+    # LOOP has no condition of its own, so unlike a %FOUND-guarded WHILE
+    # there is nothing for `_find_unguarded_fetch` to treat as a guard
+    # here -- see advisor.py's own module docstring item 4b/2 for why
+    # this is a deliberate, documented scope boundary, not a bug.
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE item_name STRING DEFAULT '';
+    DECLARE cur CURSOR FOR SELECT name FROM products;
+    OPEN cur;
+    LOOP
+        FETCH cur INTO item_name;
+        LEAVE;
+    END LOOP;
+    CLOSE cur;
+END
+"""
+    )
+    issues = advisor.analyze(ast)
+    hits = [i for i in issues if i["category"] == "missing-error-handling"]
+    assert len(hits) == 1
+    assert "cur" in hits[0]["title"]
+
+
+def test_fetch_inside_loop_guarded_by_retrospective_notfound_leave_is_still_flagged():
+    # Documents the exact scope boundary advisor.py's own docstring
+    # calls out: the idiomatic LOOP-based cursor exit (FETCH, then check
+    # %NOTFOUND and LEAVE) is retrospective, not predictive, and this
+    # check does not recognize it as a guard -- a real, accepted false
+    # positive on an otherwise-correct pattern, not a crash or a wrong
+    # answer.
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE item_name STRING DEFAULT '';
+    DECLARE cur CURSOR FOR SELECT name FROM products;
+    OPEN cur;
+    LOOP
+        FETCH cur INTO item_name;
+        IF cur%NOTFOUND THEN
+            LEAVE;
+        END IF;
+    END LOOP;
+    CLOSE cur;
+END
+"""
+    )
+    issues = advisor.analyze(ast)
+    hits = [i for i in issues if i["category"] == "missing-error-handling"]
+    assert len(hits) == 1
+
+
+def test_fetch_inside_loop_backed_by_not_found_handler_is_not_flagged():
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE done NUMBER DEFAULT 0;
+    DECLARE item_name STRING DEFAULT '';
+    DECLARE cur CURSOR FOR SELECT name FROM products;
+    DECLARE CONTINUE HANDLER FOR NOT_FOUND SET done = 1;
+    OPEN cur;
+    LOOP
+        FETCH cur INTO item_name;
+        IF done = 1 THEN
+            LEAVE;
+        END IF;
+    END LOOP;
+    CLOSE cur;
+END
+"""
+    )
+    issues = advisor.analyze(ast)
+    assert not any(i["category"] == "missing-error-handling" and "cur" in i["title"] for i in issues)
+
+
+def test_code_after_leave_is_flagged():
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE i NUMBER DEFAULT 0;
+    LOOP
+        SET i = i + 1;
+        LEAVE;
+        SET i = 999;
+    END LOOP;
+END
+"""
+    )
+    issues = advisor.analyze(ast)
+    hit = next(i for i in issues if i["category"] == "unreachable-code")
+    assert hit["line"] == 7
+    assert "LEAVE" in hit["title"]
+
+
+def test_leave_with_nothing_after_it_is_not_flagged():
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    LOOP
+        LEAVE;
+    END LOOP;
+END
+"""
+    )
+    assert "unreachable-code" not in _categories(advisor.analyze(ast))
+
+
+def test_leave_inside_if_does_not_flag_code_after_the_if_itself():
+    # Mirrors RETURN's own equivalent test (SS7a): the statements after
+    # the enclosing IF, in the OUTER block, are a separate statement list
+    # from the one the LEAVE actually lives in -- they're still
+    # perfectly reachable (the IF's own condition might be false), so
+    # they must NOT be flagged, only whatever textually follows the
+    # LEAVE within its own THEN body would be.
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE i NUMBER DEFAULT 0;
+    LOOP
+        SET i = i + 1;
+        IF i > 3 THEN
+            LEAVE;
+        END IF;
+        SET i = i + 1;
+    END LOOP;
+END
+"""
+    )
+    assert "unreachable-code" not in _categories(advisor.analyze(ast))
+
+
+def test_variable_read_only_inside_a_loop_body_counts_as_a_read():
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE limit NUMBER DEFAULT 3;
+    DECLARE i NUMBER DEFAULT 0;
+    LOOP
+        SET i = i + 1;
+        IF i > limit THEN
+            LEAVE;
+        END IF;
+    END LOOP;
+END
+"""
+    )
+    assert "unused-variable" not in _categories(advisor.analyze(ast))
+
+
+def test_read_of_a_variable_inside_a_loop_body_prevents_a_false_dead_store_flag():
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE x NUMBER DEFAULT 1;
+    DECLARE y NUMBER DEFAULT 0;
+    SET x = 1;
+    LOOP
+        SET y = x;
+        LEAVE;
+    END LOOP;
+    SET x = 2;
+END
+"""
+    )
+    assert "never-read-variable" not in _categories(advisor.analyze(ast))
+
+
+def test_dead_store_across_a_loop_that_never_touches_the_variable_is_still_flagged():
+    ast = _ast(
+        """CREATE PROCEDURE Foo()
+BEGIN
+    DECLARE x NUMBER DEFAULT 1;
+    DECLARE z NUMBER DEFAULT 0;
+    SET x = 1;
+    LOOP
+        SET z = 1;
+        LEAVE;
+    END LOOP;
+    SET x = 2;
+    SET z = x;
+END
+"""
+    )
+    issues = advisor.analyze(ast)
+    hit = next(i for i in issues if i["category"] == "never-read-variable")
+    assert "'x'" in hit["title"]
+    assert hit["line"] == 5  # the first (dead) `SET x = 1;`, not the second
+
+
 # -- works across all three AST shapes (bare / ProcedureNode / FunctionNode) --
 
 

@@ -26,9 +26,14 @@ WhileStatement gets the same per-statement step treatment, plus one
 extra step per loop-condition check carrying an analogous `loop`
 object ({condition, result, iteration}) -- not part of the original
 spec (which only calls out IfNode), but a natural extension so a
-WHILE loop is traceable the same way an IF is. To keep runaway
-procedures from hanging the interpreter, loops are capped at
-MAX_LOOP_ITERATIONS.
+WHILE loop is traceable the same way an IF is. LoopStatement (LOOP ...
+END LOOP, see "LOOP / LEAVE" below) reuses this exact same `loop` field
+for its own per-iteration step, with `result` always True (a LOOP never
+"fails" a condition check the way WHILE can) and `condition` a literal
+`"LOOP"` / `"LOOP <label>"` string in place of a real boolean expression
+(LOOP has none). To keep runaway procedures from hanging the
+interpreter, loops are capped at MAX_LOOP_ITERATIONS -- LOOP reuses this
+exact same cap rather than a separate one.
 
 -- CASE statement -------------------------------------------------------
 
@@ -88,6 +93,71 @@ statement falls through to ELSE/none -- even a WHEN clause several
 positions later that would have matched is never reached, since a
 handled DIVISION_BY_ZERO already means "this decision could not be
 fully determined," not "skip just this one WHEN and keep going."
+
+-- LOOP / LEAVE ----------------------------------------------------------
+
+A LoopStatement (see app.parser's "LOOP / LEAVE" section) is executed by
+`_exec_loop`, which is deliberately simpler than `_exec_while` in one
+respect and reuses its exact machinery in another:
+
+  - **Simpler**: LOOP has no condition of its own to evaluate each pass
+    (unlike WHILE), so there is no per-iteration `_DivisionByZeroSignal`
+    handling to do at the loop-header level at all -- only whatever
+    statements are actually inside the body can raise one, and each of
+    those is handled by its own statement executor exactly as it would
+    be anywhere else in the procedure.
+  - **Reused, not reinvented, per this phase's own instruction**: the
+    runaway-loop safeguard is the *exact same* `MAX_LOOP_ITERATIONS`
+    constant and cap-check `_exec_while` already uses -- a LOOP with no
+    LEAVE (or one whose LEAVE never actually triggers) hits the same
+    guard WHILE does, raising a clear InterpreterError rather than
+    hanging.
+
+Each pass through the body gets its own DebugStep, reusing WHILE's own
+`loop: {condition, result, iteration}` field verbatim (no new DebugStep
+field) so the existing step-trace UI needs no changes to show LOOP
+iterations -- `condition` is the literal string `"LOOP"` (or `"LOOP
+<label>"` for a labeled loop, since there's no single boolean expression
+to render the way WHILE has exactly one condition) and `result` is
+always `True` (a LOOP, by construction, never "fails" a condition check
+the way a WHILE can -- the only ways out are an executed LEAVE, whose
+own step is recorded separately below, or the MAX_LOOP_ITERATIONS guard
+raising instead of ever recording a "false" iteration).
+
+A LeaveStatement (`_exec_leave`) validates its target BEFORE recording
+anything, matching every other statement's "structural problems raise
+before the step" convention (e.g. `_exec_call`'s unknown-target check):
+an unlabeled `LEAVE;` requires at least one currently-enclosing LOOP
+(`self._loop_stack` non-empty); a labeled `LEAVE mylabel;` requires that
+exact label to currently be somewhere on `self._loop_stack`. Once
+validated, the LEAVE's own DebugStep is recorded (so the exit itself is
+visible in the trace, symmetric with how a RETURN's own step is recorded
+right before it unwinds), and an internal `_LeaveSignal(label)` is
+raised. `_exec_loop` wraps its own body execution in a
+`try/except _LeaveSignal`: an unlabeled signal, or one whose label
+matches this exact loop, is caught here and simply stops the loop
+(`break`); any other labeled signal is re-raised unchanged, so it keeps
+unwinding outward through however many enclosing LOOPs it takes to reach
+the one it actually names -- this is what makes `LEAVE outer;` from two
+levels of LOOP nesting deep correctly skip the innermost loop entirely
+rather than just stopping there. A validated LEAVE is therefore
+*guaranteed* to be caught by some enclosing `_exec_loop` frame before it
+could ever propagate past `Interpreter.run()` uncaught -- the validation
+in `_exec_leave` and the push/pop discipline in `_exec_loop` keep
+`self._loop_stack` an accurate mirror of "which labels are genuinely
+still on the Python call stack" at every point.
+
+**`self._loop_stack` is isolated per CALL/function-call frame**, exactly
+like `cursors`/`handlers` already are (see "Procedure calls (CALL)"
+below) -- saved and replaced with a fresh empty list around a callee's
+own execution, restored afterward. This matters for real, not just
+defensively: LOOP/LEAVE nesting is a purely lexical, single-procedure
+concept (a LEAVE can only be *written* inside its own enclosing LOOP's
+source), so without this isolation a callee could otherwise "LEAVE" a
+label that happens to still be sitting on the caller's own
+`_loop_stack` from an enclosing loop the callee's source has no lexical
+relationship to at all -- clearly wrong, and now impossible by
+construction.
 
 -- Cursors ------------------------------------------------------------
 
@@ -450,6 +520,21 @@ class _ReturnSignal(Exception):
     docstring's "Functions" section."""
 
 
+class _LeaveSignal(Exception):
+    """Internal control-flow signal, never surfaced to callers: raised
+    by `_exec_leave` once its DebugStep has been recorded and its target
+    validated, to unwind out of however many nested IF/WHILE/CASE/LOOP
+    blocks it takes to reach the LOOP it names. Caught only by
+    `_exec_loop`, which either stops that loop (an unlabeled signal, or
+    one whose label matches this exact loop) or re-raises it unchanged
+    to keep unwinding outward. See the module docstring's "LOOP / LEAVE"
+    section."""
+
+    def __init__(self, label: str | None):
+        super().__init__(f"LEAVE {label}" if label else "LEAVE")
+        self.label = label
+
+
 @dataclass
 class DebugStep:
     step_number: int
@@ -535,6 +620,10 @@ def render_statement_header(node: dict) -> str:
         return f"WHILE {render_expr(node['condition'])} DO"
     if kind == "CaseStatement":
         return f"CASE {render_expr(node['operand'])}" if node["operand"] is not None else "CASE"
+    if kind == "LoopStatement":
+        return f"{node['label']}: LOOP" if node["label"] else "LOOP"
+    if kind == "LeaveStatement":
+        return f"LEAVE {node['label']};" if node["label"] else "LEAVE;"
     if kind == "CursorDeclNode":
         return f"DECLARE {node['name']} CURSOR FOR {node['query']};"
     if kind == "OpenCursorNode":
@@ -638,6 +727,16 @@ class Interpreter:
         self._call_depth = 0
         self._call_stack: list[str] = []
 
+        # LOOP/LEAVE nesting (see module docstring's "LOOP / LEAVE"
+        # section) -- innermost-last list of currently-active LOOP
+        # labels (None for an unlabeled LOOP), pushed/popped by
+        # `_exec_loop`. Isolated per CALL/function-call frame exactly
+        # like `cursors`/`handlers` (saved/replaced around a callee's
+        # own execution -- see `_exec_call`/`_evaluate_function_call`),
+        # since loop nesting is a purely lexical, single-procedure
+        # concept. Stays empty for any run that never uses LOOP.
+        self._loop_stack: list[str | None] = []
+
         # The most recently RETURNed `{value, type}` (see module
         # docstring's "Function calls in expressions" section) -- set by
         # `_exec_return` immediately before it raises `_ReturnSignal`,
@@ -714,6 +813,10 @@ class Interpreter:
             self._exec_return(node)
         elif kind == "CallStatement":
             self._exec_call(node)
+        elif kind == "LoopStatement":
+            self._exec_loop(node)
+        elif kind == "LeaveStatement":
+            self._exec_leave(node)
         else:
             raise InterpreterError(
                 f"Don't know how to execute node type {kind!r}", node.get("line")
@@ -854,6 +957,63 @@ class Interpreter:
                 break
             self._execute_block(node["body"])
 
+    def _exec_loop(self, node: dict) -> None:
+        """Execute a LoopStatement -- see the module docstring's "LOOP /
+        LEAVE" section for the full design. Unlike `_exec_while`, there
+        is no condition to evaluate each pass (so no per-iteration
+        DIVISION_BY_ZERO handling at this level); the runaway-loop
+        safeguard is the same `MAX_LOOP_ITERATIONS` cap `_exec_while`
+        already uses, reused rather than reinvented."""
+        label = node["label"]
+        self._loop_stack.append(label)
+        try:
+            iteration = 0
+            while True:
+                iteration += 1
+                if iteration > MAX_LOOP_ITERATIONS:
+                    loop_desc = f"LOOP {label}" if label else "LOOP"
+                    raise InterpreterError(
+                        f"{loop_desc} exceeded {MAX_LOOP_ITERATIONS} iterations (possible "
+                        "infinite loop -- use LEAVE to exit)",
+                        node["line"],
+                    )
+
+                loop_info = {
+                    "condition": f"LOOP {label}" if label else "LOOP",
+                    "result": True,
+                    "iteration": iteration,
+                }
+                self._record_step(node, render_statement_header(node), loop=loop_info)
+
+                try:
+                    self._execute_block(node["body"])
+                except _LeaveSignal as signal:
+                    if signal.label is None or signal.label == label:
+                        break
+                    raise  # targets a different (outer) loop -- keep unwinding
+        finally:
+            self._loop_stack.pop()
+
+    def _exec_leave(self, node: dict) -> None:
+        """Execute a LeaveStatement -- see the module docstring's "LOOP /
+        LEAVE" section. Target validation happens BEFORE anything is
+        recorded, matching every other statement's "structural problems
+        raise before the step" pattern (e.g. `_exec_call`'s unknown-
+        target check); once validated, the step is recorded (so the exit
+        itself is visible in the trace) and `_LeaveSignal` unwinds to the
+        matching `_exec_loop` frame."""
+        label = node["label"]
+        if label is None:
+            if not self._loop_stack:
+                raise InterpreterError("LEAVE used outside of any LOOP", node["line"])
+        elif label not in self._loop_stack:
+            raise InterpreterError(
+                f"LEAVE {label}: no enclosing LOOP is labeled '{label}'", node["line"]
+            )
+
+        self._record_step(node, render_statement_header(node))
+        raise _LeaveSignal(label)
+
     def _exec_return(self, node: dict) -> None:
         error_info = None
         try:
@@ -973,12 +1133,14 @@ class Interpreter:
         saved_outputs = self._output_param_names
         saved_cursors = self.cursors
         saved_handlers = self.handlers
+        saved_loop_stack = self._loop_stack
 
         self.scope = callee_scope
         self._previous_values = dict(callee_scope)
         self._output_param_names = output_names
         self.cursors = {}
         self.handlers = {}
+        self._loop_stack = []
         self._call_depth += 1
         self._call_stack.append(name)
         try:
@@ -995,6 +1157,7 @@ class Interpreter:
             self._output_param_names = saved_outputs
             self.cursors = saved_cursors
             self.handlers = saved_handlers
+            self._loop_stack = saved_loop_stack
 
         # Propagate OUT/INOUT final values back into the caller's own
         # variables -- already validated above to be plain Identifiers.
@@ -1061,12 +1224,14 @@ class Interpreter:
         saved_outputs = self._output_param_names
         saved_cursors = self.cursors
         saved_handlers = self.handlers
+        saved_loop_stack = self._loop_stack
 
         self.scope = callee_scope
         self._previous_values = dict(callee_scope)
         self._output_param_names = set()
         self.cursors = {}
         self.handlers = {}
+        self._loop_stack = []
         self._call_depth += 1
         self._call_stack.append(name)
         try:
@@ -1080,6 +1245,7 @@ class Interpreter:
             self._output_param_names = saved_outputs
             self.cursors = saved_cursors
             self.handlers = saved_handlers
+            self._loop_stack = saved_loop_stack
 
     # -- exception handlers -----------------------------------------------
 
@@ -1449,7 +1615,9 @@ def run(
         InterpreterError: on undefined variables, an unhandled
             division by zero (see module docstring's "Exception
             handlers" section -- a *handled* one does not raise), a
-            WHILE loop that exceeds MAX_LOOP_ITERATIONS, a cursor error
+            WHILE or LOOP that exceeds MAX_LOOP_ITERATIONS, a LEAVE
+            (labeled or unlabeled) with no currently-enclosing LOOP to
+            match it (see "LOOP / LEAVE" above), a cursor error
             (undeclared/already-open/not-open cursor, a query that
             fails against the database, or a FETCH whose target count
             doesn't match the query's column count), a duplicate

@@ -119,20 +119,31 @@ export function ControlFlowTopic() {
         false to start with, the body never runs at all.
       </p>
       <p>
-        Worth knowing, though not part of this tool's grammar: some
-        dialects also offer <code>REPEAT ... UNTIL</code> (a{' '}
-        <strong>post-test</strong> loop -- the body always runs at least
-        once, since the condition is checked after) and a bare{' '}
-        <code>LOOP</code> (runs forever until an explicit{' '}
-        <code>LEAVE</code>/<code>EXIT</code>).
+        <code>LOOP ... END LOOP</code> is different from <code>WHILE</code>{' '}
+        in one key way: it has <em>no condition of its own at all</em> --
+        the only way out is an explicit <code>LEAVE;</code> executed
+        somewhere inside its body (this tool also caps runaway loops at
+        10,000 iterations as a safety net, same as <code>WHILE</code>).
+        A <code>LOOP</code> can optionally be labeled (
+        <code>mylabel: LOOP ... END LOOP mylabel;</code>) so a{' '}
+        <code>LEAVE mylabel;</code> deep inside a nested loop can name{' '}
+        <em>which</em> enclosing loop to break out of, not just the
+        innermost one -- an unlabeled <code>LEAVE;</code> always breaks
+        the innermost loop. Worth knowing, though not part of this
+        tool's grammar: some dialects also offer{' '}
+        <code>REPEAT ... UNTIL</code> (a <strong>post-test</strong> loop
+        -- the body always runs at least once, since the condition is
+        checked after).
       </p>
       <p>
         In this debugger, each condition check -- whether it's an{' '}
         <code>IF</code> or a <code>WHILE</code> -- is its own step in the
-        trace, with the evaluated result attached. Only the branch (or
-        loop body) actually taken adds further steps after it; the
-        untaken side contributes nothing, which is what you're seeing
-        when the flowchart leaves one path uncolored.
+        trace, with the evaluated result attached. A <code>LOOP</code>{' '}
+        gets one step per iteration too, reusing the same trace shape
+        (just with no real condition to show). Only the branch (or loop
+        body) actually taken adds further steps after it; the untaken
+        side contributes nothing, which is what you're seeing when the
+        flowchart leaves one path uncolored.
       </p>
       <p className="theory-code-label">IF/ELSE and a WHILE loop:</p>
       <pre className="theory-code">{`IF total > 100 THEN
@@ -144,6 +155,13 @@ END IF;
 WHILE counter < 5 DO
     SET counter = counter + 1;
 END WHILE;`}</pre>
+      <p className="theory-code-label">A labeled LOOP with LEAVE:</p>
+      <pre className="theory-code">{`counter: LOOP
+    SET total = total + 1;
+    IF total > 5 THEN
+        LEAVE counter;
+    END IF;
+END LOOP counter;`}</pre>
     </>
   )
 }

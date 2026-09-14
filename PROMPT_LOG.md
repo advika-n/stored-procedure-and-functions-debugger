@@ -1697,3 +1697,197 @@ immediately before each kill that the PID was genuinely the process just launche
 **Cleanup**: history rows created during this session's live verification deleted via
 direct SQL delete afterward, confirmed the surviving max id (94) still matches the
 established baseline; the temporary Chrome profile directory was removed.
+
+## 19. LOOP/LEAVE support
+
+**Date:** 2026-09-14 · **Not yet committed** (see `HANDOFF.md`)
+
+**Prompt (verbatim):**
+
+> read claude.md and handoff.md for context
+>
+> This is the SQL Stored Procedure & Function Debugger project. The tree should be clean. Start this phase fresh.
+>
+> Implement **LOOP/LEAVE support** — grammar and interpreter.
+>
+> Scope:
+> - **Parser**: support a labeled or unlabeled `LOOP ... END LOOP` block (confirm which this grammar's spec/docs call for — check existing docs/tests before assuming labels are required) plus `LEAVE` to break out of it. Reuse `_parse_block` for the loop body, same as IF/WHILE/CASE.
+> - **Interpreter**: execute the loop body repeatedly until a `LEAVE` is hit; if labels are supported, `LEAVE <label>` should break the correctly-labeled enclosing loop when loops are nested, not just the innermost one. Guard against infinite loops the same way `WHILE` already does, if it already has a safeguard — check and reuse it rather than inventing a new one.
+> - **Step-trace**: make LOOP iterations and the LEAVE exit visible in the existing DebugStep view, consistent with how WHILE iteration is currently shown — reuse that mechanism.
+> - **Nesting**: LOOP nested inside IF/WHILE/CASE/another LOOP should work if the existing block mechanism supports it generally — verify.
+> - **Cross-cutting checks — do this for every one of these, don't assume generic handling**:
+>   - `cfg.js` flowchart renderer — does it need an explicit LOOP/LEAVE case?
+>   - `advisor.py`'s AST walkers (unreachable-code, unused-variable, never-read-variable, constant-condition) — do any need a LOOP/LEAVE case? In particular, code after an unconditional LEAVE inside a loop body is a real unreachable-code case worth checking.
+>   - `explainer.py`'s template fallback — does it have a case for LOOP/LEAVE steps?
+>   - Predict Mode — does LOOP/LEAVE fit its existing branch-guessing UI, or does it need the same kind of documented scope-exclusion CASE got?
+>
+> Add at least one new sample procedure exercising LOOP+LEAVE (ideally with nesting, if labels are supported) with hand-derived expected output cross-checked against a real interpreter run, documented inline in `testCaseExpectations.js`.
+>
+> Full verification: backend pytest suite, lint/build, an in-process script running all samples through the real pipeline at once (per last phase's approach) to confirm zero regressions, and a live check both themes with zero console errors — Call Stack, Variable Timeline, Advisor, Test-Case Runner all confirmed against the new sample. Check port usage before binding anything, leave any pre-existing process alone, and kill only what you launched by exact PID.
+
+**Design decisions made before implementing**: labels were checked against this grammar's
+own existing docs first, not assumed — neither `README.md` nor `Theory.jsx`'s
+`ControlFlowTopic` (which already described "a bare LOOP... until an explicit
+LEAVE/EXIT" as a concept worth knowing) required them, so labels were built as an
+*optional* MySQL-style feature (`label: LOOP ... END LOOP label;`), added specifically
+because the phase's own nested-LEAVE-by-label requirement needs them. `LoopStatement`/
+`LeaveStatement` are two new AST node types, not a variant of `WhileStatement` — LOOP has
+no condition of its own at all, unlike WHILE, so forcing it through the same node shape
+would have meant a meaningless `condition` field. `':'` became a real punctuation token
+for the first time (previously unneeded) since it's the label terminator;
+`_parse_statement` tells a labeled LOOP apart from every other statement with a
+one-token `IDENT ':'` lookahead (unambiguous — no other statement in this grammar starts
+with a bare IDENTIFIER).
+
+**Interpreter**: `_exec_loop` reuses `WhileStatement`'s own `MAX_LOOP_ITERATIONS` guard
+verbatim, per the phase's own explicit "reuse... rather than inventing a new one"
+instruction, and reuses its `loop: {condition, result, iteration}` DebugStep field too —
+`condition` is the literal `"LOOP"`/`"LOOP <label>"` string (LOOP has no real boolean to
+show), `result` is always `True` (a LOOP never "fails" a check; its only exits are an
+executed LEAVE or the iteration cap raising instead of ever recording a false one).
+`_exec_leave` validates its target BEFORE recording anything (matching every other
+statement's "structural problems raise before the step" convention): an unlabeled
+`LEAVE;` needs a non-empty `Interpreter._loop_stack`; a labeled one needs that exact
+label somewhere on it. Once validated, its own step is recorded and an internal
+`_LeaveSignal(label)` unwinds — `_exec_loop` either catches it (unlabeled, or its own
+label matches) and stops, or re-raises it unchanged to keep unwinding outward. This is
+the concrete mechanism that makes `LEAVE <label>` from two loop levels deep correctly
+jump straight past the innermost loop entirely, not just stop at its boundary — verified
+live and in a dedicated test (the new `FindPairSum` sample's own labeled `LEAVE outer;`
+fired from inside `inner:`'s own body).
+
+`self._loop_stack` is isolated per CALL/function-call frame exactly like
+`cursors`/`handlers` already are — saved and replaced with a fresh empty list around a
+callee's own execution, restored afterward. LOOP/LEAVE nesting is a purely lexical,
+single-procedure concept, so without this a callee could otherwise "LEAVE" a label still
+sitting on the caller's own stack purely because the caller happens to be paused inside a
+CALL right now — confirmed as a real, previously-possible bug by a dedicated test that
+fails without the isolation, not just reasoned about abstractly (and a second test
+confirms the reverse: a callee reusing the exact same label name as its caller resolves
+completely independently, no collision either direction).
+
+**Cross-cutting checks verified directly, in the same places the CASE-statement phase
+found gaps, not assumed fixed by analogy**:
+- `frontend/src/cfg.js`'s `emitBlock` threads a new `loopStack` accumulator (an array of
+  `{label, exits}` contexts, innermost last) through every recursive call it already
+  makes — a LEAVE resolves against it exactly like `Interpreter._loop_stack` does
+  (unlabeled → innermost; labeled → search outward for a match) and contributes its own
+  exit edge (`kind: 'leave'`, labeled "leave" for readability, deliberately never
+  taken/not-taken-colored since a LEAVE node has only one outgoing edge to disambiguate
+  from) into whatever follows its *target* LOOP specifically, not necessarily the
+  nearest one. Verified against the real rendered SVG, not just the graph object:
+  `FindPairSum`'s unlabeled `LEAVE;` edge correctly landed on the statement right after
+  the inner LOOP (inside the outer loop's own body), while both labeled `LEAVE outer;`
+  edges (one at the top of the outer loop, one from inside the inner loop) correctly
+  landed on the diagram's End node — the intended "escape both loop levels at once"
+  shape, not just "didn't crash."
+- `backend/app/advisor.py` needed the three shared walkers fixed again PLUS both
+  hand-rolled ones (`_check_nested_loops`'s own `walk`, `_find_unguarded_fetch`) — same
+  two as the CASE phase's own list, confirming this is a real, recurring pattern in this
+  codebase's design, not a one-off. `_check_nested_loops` was generalized from
+  WHILE-only to "any loop nested inside any loop" the moment a second loop construct
+  existed. **One new detection, explicitly requested by the phase**: code positionally
+  after an unconditional LEAVE, in the same statement list, is now flagged by
+  `unreachable-code` — refactored alongside RETURN's own existing sub-case (both share
+  the "unconditionally exits this block" property) rather than duplicated as a parallel
+  check. **One deliberate non-extension, documented rather than silently left out**:
+  `cursor-could-be-set-based` stays WHILE-only — a LOOP-based cursor loop's real
+  idiomatic guard is retrospective (`FETCH ...; IF cur%NOTFOUND THEN LEAVE; END IF;`),
+  not the predictive `%FOUND` this check already understands; recognizing that idiom is
+  real, separate work, and was proven as a genuine, accepted false positive by a
+  dedicated test, not just asserted.
+- `backend/app/explainer.py`'s deterministic template fallback had no
+  LoopStatement/LeaveStatement cases — added both. The Gemini-backed
+  `_build_prompt`/`_build_ask_prompt` paths needed **no fix**, confirmed by reading them
+  directly: both already forward `step.get('loop')` generically for any nodeType.
+- `frontend/src/pages/DebuggerPage.jsx`'s Predict Mode branch-guessing quiz checks
+  `nodeType === 'IfStatement'` specifically — a LOOP/LEAVE step correctly, gracefully
+  offers no branch-prediction prompt, documented with a comment extending CASE's own
+  existing one.
+- `backend/app/report.py` and `frontend/src/compareTraces.js` were both checked and
+  confirmed already fully generic over `loop`'s shape — no fix needed.
+
+**`README.md` and `Theory.jsx`'s `ControlFlowTopic` were both updated** — both
+previously, accurately, said LOOP/LEAVE (and, stale from even earlier phases, CALL/CASE)
+weren't supported; fixed while directly touching the exact stale claim this phase's own
+diff made false. Theory also got a new runnable labeled-LOOP-with-LEAVE code example.
+
+**New sample**: `FindPairSum` (`frontend/src/samples.js`) — a labeled LOOP nested inside
+another labeled LOOP, brute-force searching for the first pair `(i, j)`, each 1..5,
+summing to a target. Demonstrates both LEAVE forms: an unlabeled `LEAVE;` (breaks only
+the innermost loop, fired when the inner search comes up empty) and a labeled `LEAVE
+outer;` fired from inside the inner loop (breaks straight out of both loops at once).
+Hand-traced (`i=1`: no `j` in 1..5 sums to 7, unlabeled LEAVE fires, `i` advances to 2;
+`i=2`: `j=5` hits `2+5=7`, `LEAVE outer;` fires immediately) and cross-checked against a
+real interpreter run — `target=7, i=2, j=5, foundI=2, foundJ=5`, 58 steps.
+`testCaseExpectations.js` got a matching entry. Four genuine, investigated-and-left-in
+Advisor findings (`unused-variable` ×2 on `foundI`/`foundJ`, `magic-number` on the
+repeated search bound `5`, `nested-loops`) match this project's "investigate and
+disclose" precedent.
+
+**Testing**: 31 new `backend/app/tests/test_loop_statement.py` tests (tokenizer; parser
+— labeled/unlabeled forms, mismatched/stray end-labels as `ParserError`, nesting LOOP
+inside IF/WHILE/CASE and vice versa, LOOP inside LOOP; interpreter — basic unlabeled
+LEAVE, the `loop`/`branch`-field shapes, unlabeled-only-breaks-innermost, the flagship
+labeled-LEAVE-crosses-two-loop-levels case, same label reused across independent
+sibling loops, LEAVE-outside-any-loop and LEAVE-with-no-matching-label as
+`InterpreterError`s, the `MAX_LOOP_ITERATIONS` guard reused via `monkeypatch`, RETURN
+inside a LOOP stopping the whole function rather than just the loop, both loop-stack-
+isolation-across-CALL directions) plus 16 new `test_advisor.py`/3 new
+`test_explainer.py` regression tests. Full backend suite: **390 passing** (343 before
+this phase + 31 + 16 + 3 new; two **pre-existing** test fixtures had to be renamed —
+`test_call_statement.py`/`test_function_call_expression.py` each used a
+procedure/function literally named `Loop`, which now collides case-insensitively with
+the new `LOOP` keyword; renamed to `Recur`, an expected breaking change from reserving a
+new keyword, not a regression).
+
+**Verified beyond pytest, at every layer**: (1) an in-process Python sweep script ran
+all 17 real samples (via a Node script that imports `samples.js` directly) through the
+actual tokenizer→parser→interpreter→advisor pipeline at once — zero pipeline
+exceptions, every sample with a `testCaseExpectations.js` entry matched exactly; (2) a
+second Node sweep fed every sample's real AST+trace through the actual `cfg.js` —
+`buildFlowchartGraph`/`computeDiagramState`/`renderMermaidDefinition` — stepping through
+EVERY step of EVERY sample in BOTH themes: zero crashes, `FindPairSum` correctly
+produced 2 LOOP nodes and 3 leave edges; (3) live in an actual headless Chrome (raw-CDP
+driver, no puppeteer-core/playwright available in this environment — hit and fixed a
+real snag: the throwaway static-file-server's naive `startsWith('/debug')` API-route
+check also swallowed the frontend's own `/debugger` route, 404ing the whole SPA before
+it could mount — fixed to an exact-or-slash-prefixed match) against a throwaway
+backend+static-proxy: loaded `FindPairSum`, clicked Debug (Step 1 of 58, Advisor showing
+the predicted `foundI`-never-read finding), clicked Continue (jumped straight to Step 58
+of 58), final variables matched the hand-derivation exactly, Call Stack correctly showed
+a single top-level `FindPairSum current` frame, Variable Timeline rendered all 5
+variables with no crash, and the REAL rendered Mermaid SVG showed `outer: LOOP`/`inner:
+LOOP`/`LEAVE;`/`LEAVE outer;` node text and `loop`/`leave` edge labels correctly, current
+node correctly landing on the final `LEAVE outer;` step. Toggled to light theme: Advisor
+panel re-rendered correctly, zero new console errors. Navigated to `/tests`: **16/16
+passed** (1 skipped, `StaticAnalysisShowcase`, a pre-existing gap), `FindPairSum` shown
+as `PASS · 58 steps`. **Zero console errors across the entire session.** `npm run
+lint`/`npm run build` both clean (same 2 pre-existing warnings).
+
+**Process hygiene**: port availability confirmed via `Get-NetTCPConnection` before
+starting anything — port 8000 (the long-lingering PID every prior session's notes
+mentioned) was confirmed genuinely gone this time, not assumed from a stale note; 8001/
+5176/9336 confirmed free first. Every process launched (throwaway backend, static-proxy
+server, headless Chrome) was tracked by its own specific PID and killed individually at
+cleanup, confirmed via `Get-Process`/`Get-CimInstance` (~26 other `chrome.exe`
+processes — the user's own real browser session — confirmed still running afterward,
+untouched).
+
+**Cleanup**: `backend/data/debug_history.db` had grown to 351 rows by the time live
+verification finished (the table auto-rotates at 50 most-recent rows, so most of this
+session's own churn had already self-evicted); deleted every row with `id > 94` via
+direct SQL, confirmed the surviving max id (94) and row count (12) match the
+established baseline.
+
+**Mid-session addendum**: the user interjected to split `CLAUDE.md` (which had grown to
+~3973 words, mostly per-feature narrative accumulated phase over phase) into a lean
+orientation doc plus two new reference files — `docs/features.md` (per-feature design
+rationale, one section per feature) and `docs/schema.md` (the `DebugStep` field
+breakdown + performance-timing history table) — and to rewrite `HANDOFF.md` as a true
+snapshot (status lines + uncommitted work + next steps + live gotchas only, no
+session-by-session history or verification narrative, since `git log`/this file already
+carry that). `CLAUDE.md` went from 3973 words to ~1220 (file maps/endpoints kept for
+navigability, everything narrative moved out); `HANDOFF.md` went to ~440 words. Both new
+docs files, and this restructuring itself, are part of this session's own uncommitted
+work.

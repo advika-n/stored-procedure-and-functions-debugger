@@ -188,4 +188,18 @@ export const TEST_CASE_EXPECTATIONS = {
       sizeLabel: 20,
     },
   },
+
+  // Added for the LOOP/LEAVE support phase -- see samples.js's own
+  // comment for the full trace narrative. i=1's inner pass checks j=1..5
+  // (1+1=2, 1+2=3, 1+3=4, 1+4=5, 1+5=6 -- none equal target=7), so the
+  // inner LOOP's own unlabeled `LEAVE;` fires once j reaches 6 (j>5),
+  // and the outer loop advances i to 2. i=2's inner pass: 2+1=3, 2+2=4,
+  // 2+3=5, 2+4=6, 2+5=7 -- MATCH at j=5, so foundI=2/foundJ=5 are set
+  // and `LEAVE outer;` fires immediately (the outer loop's own trailing
+  // `SET i = i + 1;` never runs). Cross-checked against a real
+  // interpreter run.
+  FindPairSum: {
+    kind: 'variables',
+    variables: { target: 7, i: 2, j: 5, foundI: 2, foundJ: 5 },
+  },
 }

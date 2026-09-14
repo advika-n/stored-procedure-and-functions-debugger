@@ -443,12 +443,15 @@ END;
 def test_infinite_recursion_hits_the_call_depth_guard_cleanly():
     """Must fail fast with a clear InterpreterError -- not hang the
     server or blow the Python recursion limit."""
+    # Named Recur, not Loop -- LOOP became a reserved keyword in the
+    # LOOP/LEAVE support phase (see app.tokenizer), so it can no longer
+    # be used as a procedure/function name.
     code = """\
-CREATE PROCEDURE Loop(IN n NUMBER)
+CREATE PROCEDURE Recur(IN n NUMBER)
 BEGIN
     DECLARE next NUMBER DEFAULT 0;
     SET next = n + 1;
-    CALL Loop(next);
+    CALL Recur(next);
 END;
 """
     with pytest.raises(InterpreterError, match="exceeded the maximum call depth"):

@@ -20,9 +20,23 @@ computed the input for.
   1. select-star             -- SELECT * in a cursor's embedded query
   2. cursor-could-be-set-based -- a cursor loop whose body only
      accumulates a running total/count, better expressed as one
-     aggregate query (SUM/COUNT/...)
-  3. nested-loops             -- a WHILE loop nested inside another
-     WHILE loop (O(n^2) row-by-row risk)
+     aggregate query (SUM/COUNT/...). Deliberately still WHILE-only,
+     not extended to a LOOP-based cursor loop (see "LOOP / LEAVE" --
+     added in a later phase than this check): a LOOP-based cursor loop
+     idiomatically exits via `FETCH ...; IF cur%NOTFOUND THEN LEAVE;
+     END IF;` rather than a %FOUND-guarded WHILE condition, which is a
+     genuinely different shape this check's own accumulator-detection
+     logic doesn't currently recognize -- a real, separate piece of
+     work, not a natural one-line extension of what already exists for
+     WHILE (unlike `nested-loops`/`missing-error-handling` below, which
+     needed LOOP support just to keep seeing INTO a LOOP's body at all,
+     this check still sees everything inside a LOOP correctly; it just
+     doesn't recognize LOOP itself as a candidate loop shape yet).
+  3. nested-loops             -- a WHILE or LOOP nested inside another
+     WHILE or LOOP (O(n^2) row-by-row risk) -- LOOP support (see "LOOP /
+     LEAVE" below) generalized this from WHILE-only the moment a second
+     loop construct existed, since the risk this check warns about has
+     nothing to do with which loop keyword was used.
   4. missing-error-handling   -- two sub-cases, deliberately NOT treated
      as equally severe (see interpreter.py's module docstring's
      "Exception handlers" section for why they're asymmetric there too):
@@ -38,7 +52,15 @@ computed the input for.
           not a real crash risk. A FETCH guarded by a %FOUND loop
           condition (see ProductPriceTotal in samples.js) is NOT flagged
           at all -- that predictive-%FOUND idiom is exactly the correct,
-          safe alternative to a handler, not a missing one.
+          safe alternative to a handler, not a missing one. A FETCH
+          inside a LOOP (see "LOOP / LEAVE" below) is still correctly
+          seen by this check (LOOP has no condition to guard with
+          %FOUND, so `guarded_cursors` just passes through unchanged --
+          see `_find_unguarded_fetch`'s own LoopStatement case), but a
+          LOOP's own idiomatic retrospective guard (`FETCH ...; IF
+          cur%NOTFOUND THEN LEAVE; END IF;`) is NOT recognized as a
+          guard here -- a deliberate, documented scope boundary, not a
+          bug (see item 2's own note above for the fuller reasoning).
   5. magic-number             -- the same non-trivial numeric literal
      (i.e. not 0 or 1) hard-coded more than once
   6. cursor-not-closed        -- an OPENed cursor with no matching CLOSE
@@ -49,20 +71,21 @@ computed the input for.
   7. unreachable-code        -- two distinct, purely AST-provable
      sub-cases, both severity "warning" (dead code is a correctness
      smell, not just a style nit):
-       a. any statement positionally after a RETURN, within the SAME
-          statement list (see `_iter_statement_lists`) -- RETURN
-          unconditionally unwinds execution the instant it runs (see
-          interpreter.py's "Functions" section: "no statement after a
-          RETURN ever runs, even other statements later in the same
-          block"), regardless of whether it's inside a procedure or a
-          function, and regardless of whether the RETURN's own
-          enclosing IF/WHILE is even entered at runtime -- the
-          statements are dead *by position*, independent of any one
-          run's actual control flow. LEAVE/EXIT are NOT implemented:
-          this grammar has no such statement at all (see the grammar in
-          app.parser's module docstring) -- RETURN is the only
-          unconditional-exit construct that exists for this check to
-          find.
+       a. any statement positionally after an unconditional exit --
+          RETURN or LEAVE (see app.parser's "LOOP / LEAVE" section,
+          added in a later phase than this check's original RETURN-only
+          form) -- within the SAME statement list (see
+          `_iter_statement_lists`). Both unconditionally unwind
+          execution the instant they run (see interpreter.py's
+          "Functions" section for RETURN, and its own "LOOP / LEAVE"
+          section for LEAVE: "no statement after a RETURN ever runs,
+          even other statements later in the same block", and the
+          equivalent for LEAVE stopping the enclosing loop), regardless
+          of whether it's inside a procedure or a function (RETURN) or
+          which loop it's leaving (LEAVE), and regardless of whether the
+          statement's own enclosing IF/WHILE/CASE is even entered at
+          runtime -- the statements are dead *by position*, independent
+          of any one run's actual control flow.
        b. an IF whose condition is a compile-time constant (every leaf
           a NumberLiteral, e.g. `IF 1 > 2 THEN ...`) -- one of its two
           arms can then never run no matter what happens elsewhere.
@@ -168,8 +191,8 @@ def _issue(*, category: str, severity: str, title: str, line: int | None, messag
 
 def _iter_statements(statements: list[dict]) -> Iterator[dict]:
     """Yield every statement in `statements`, recursively descending into
-    IF/WHILE/CASE bodies and a handler's single action statement -- every
-    place this grammar allows a nested statement to appear."""
+    IF/WHILE/CASE/LOOP bodies and a handler's single action statement --
+    every place this grammar allows a nested statement to appear."""
     for stmt in statements:
         yield stmt
         kind = stmt["type"]
@@ -178,6 +201,12 @@ def _iter_statements(statements: list[dict]) -> Iterator[dict]:
             if stmt["else_body"] is not None:
                 yield from _iter_statements(stmt["else_body"])
         elif kind == "WhileStatement":
+            yield from _iter_statements(stmt["body"])
+        elif kind == "LoopStatement":
+            # LOOP/LEAVE (see app.parser's "LOOP / LEAVE" section --
+            # added in a later phase than the six original checks below)
+            # -- a LoopStatement's own body is just another nested
+            # statement list, exactly like WhileStatement's.
             yield from _iter_statements(stmt["body"])
         elif kind == "CaseStatement":
             # CASE (see app.parser's "CASE statement" section -- added in
@@ -263,6 +292,8 @@ def _iter_statement_lists(statements: list[dict]) -> Iterator[list[dict]]:
             if stmt["else_body"] is not None:
                 yield from _iter_statement_lists(stmt["else_body"])
         elif kind == "WhileStatement":
+            yield from _iter_statement_lists(stmt["body"])
+        elif kind == "LoopStatement":
             yield from _iter_statement_lists(stmt["body"])
         elif kind == "CaseStatement":
             for clause in stmt["when_clauses"]:
@@ -410,7 +441,17 @@ def _check_nested_loops(statements: list[dict], issues: list[dict]) -> None:
     def walk(stmts: list[dict], enclosing_loop_line: int | None) -> None:
         for stmt in stmts:
             kind = stmt["type"]
-            if kind == "WhileStatement":
+            if kind in ("WhileStatement", "LoopStatement"):
+                # LOOP/LEAVE (see app.parser's "LOOP / LEAVE" section --
+                # added in a later phase than this check's original
+                # WHILE-only form) is just another loop construct for
+                # this check's own purpose -- a LOOP nested inside a
+                # WHILE, a WHILE nested inside a LOOP, or a LOOP nested
+                # inside another LOOP are all the same O(n²) row-by-row
+                # risk shape a WHILE-inside-WHILE already is, so `kind`
+                # itself doesn't matter here, only "is this a loop and is
+                # it nested inside another one".
+                loop_word = "WHILE" if kind == "WhileStatement" else "LOOP"
                 if enclosing_loop_line is not None:
                     issues.append(
                         _issue(
@@ -419,7 +460,7 @@ def _check_nested_loops(statements: list[dict], issues: list[dict]) -> None:
                             title="Nested loops",
                             line=stmt["line"],
                             message=(
-                                "This WHILE loop is nested inside another WHILE loop (started at "
+                                f"This {loop_word} loop is nested inside another loop (started at "
                                 f"line {enclosing_loop_line}), so its entire body runs again for "
                                 "every iteration of the outer loop -- a classic O(n²) "
                                 "row-by-row processing shape."
@@ -480,6 +521,24 @@ def _find_unguarded_fetch(statements: list[dict], guarded_cursors: frozenset[str
                 if expr["type"] == "CursorFoundExpr":
                     inner_guarded.add(expr["cursor"])
             found = _find_unguarded_fetch(stmt["body"], frozenset(inner_guarded))
+            if found is not None:
+                return found
+        elif kind == "LoopStatement":
+            # LOOP/LEAVE (see app.parser's "LOOP / LEAVE" section --
+            # added in a later phase than this check) has no condition of
+            # its own at all, so unlike WhileStatement above there is no
+            # %FOUND to extract from a header -- `guarded_cursors` passes
+            # through completely unchanged into the body. (A LOOP-based
+            # cursor loop's real guard idiom is `FETCH ...; IF
+            # cur%NOTFOUND THEN LEAVE; END IF;` inside the body --
+            # retrospective, not predictive -- which this check does not
+            # recognize as a guard at all, same as it already doesn't
+            # recognize a NOT_FOUND handler action other than an actual
+            # DECLARE CONTINUE HANDLER FOR NOT_FOUND; a LOOP-based cursor
+            # sample using that idiom will genuinely, correctly-by-this-
+            # check's-own-rules surface a missing-error-handling
+            # suggestion for its FETCH, same as any other unguarded one.)
+            found = _find_unguarded_fetch(stmt["body"], guarded_cursors)
             if found is not None:
                 return found
         elif kind == "CaseStatement":
@@ -627,10 +686,26 @@ def _check_cursor_not_closed(statements: list[dict], issues: list[dict]) -> None
 
 
 def _check_unreachable_code(statements: list[dict], issues: list[dict]) -> None:
-    # a) anything positionally after a RETURN in the same statement list.
+    # a) anything positionally after an unconditional exit -- a RETURN or
+    #    a LEAVE (see app.parser's "LOOP / LEAVE" section, added in a
+    #    later phase than RETURN's own original version of this check) --
+    #    in the same statement list. Both unconditionally stop this
+    #    statement list the instant they run (RETURN stops the whole
+    #    procedure/function; LEAVE stops the enclosing loop and resumes
+    #    right after it -- see interpreter.py's own "LOOP / LEAVE"
+    #    section), so anything positioned after either one, in the SAME
+    #    block, is dead *by position*, independent of any one run's
+    #    actual control flow -- exactly the same reasoning RETURN's own
+    #    case already established, just with a second construct that has
+    #    the same unconditional-exit property.
     for block in _iter_statement_lists(statements):
         for index, stmt in enumerate(block):
-            if stmt["type"] != "ReturnNode":
+            kind = stmt["type"]
+            if kind == "ReturnNode":
+                exit_word, halts = "RETURN", "exits execution"
+            elif kind == "LeaveStatement":
+                exit_word, halts = "LEAVE", "exits the enclosing loop"
+            else:
                 continue
             remainder = block[index + 1 :]
             if remainder:
@@ -641,22 +716,23 @@ def _check_unreachable_code(statements: list[dict], issues: list[dict]) -> None:
                     _issue(
                         category="unreachable-code",
                         severity="warning",
-                        title="Unreachable code after RETURN",
+                        title=f"Unreachable code after {exit_word}",
                         line=first_line,
                         message=(
-                            f"RETURN on line {stmt['line']} unconditionally exits execution here, so "
+                            f"{exit_word} on line {stmt['line']} unconditionally {halts} here, so "
                             f"the statement(s) on line {line_range} can never run, no matter what "
                             "happens elsewhere in this procedure/function."
                         ),
                         suggestion=(
-                            "Remove the dead code, or move it before the RETURN if it was meant to "
-                            "run first."
+                            f"Remove the dead code, or move it before the {exit_word} if it was "
+                            "meant to run first."
                         ),
                     )
                 )
             # Everything else in this block is already unreachable because
-            # of this same RETURN -- a second RETURN further down (if any)
-            # would itself be unreachable, not a new, independent case.
+            # of this same RETURN/LEAVE -- a second one further down (if
+            # any) would itself be unreachable, not a new, independent
+            # case.
             break
 
     # b) an IF whose condition is a compile-time constant, so one arm can

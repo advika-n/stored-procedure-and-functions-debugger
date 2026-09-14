@@ -504,6 +504,15 @@ function DebuggerPage() {
     // natural extension of this one, so a CASE step simply offers no
     // branch-prediction prompt (its own 'changed variable' prediction,
     // if any, on the step AFTER it still works normally either way).
+    //
+    // Also deliberately NOT extended to LoopStatement/LeaveStatement
+    // (see backend/app/parser.py's "LOOP / LEAVE" section, added in a
+    // later phase than this comment's own CASE decision above): a LOOP
+    // step's `loop.result` is always True (there's no real condition to
+    // guess -- see interpreter.py), and a LEAVE has nothing boolean to
+    // predict at all, so neither fits this Then/Else widget's own shape
+    // any better than CASE does -- checked and excluded on purpose, not
+    // silently missed, same as CASE.
     return null
   }, [quizMode, hasSteps, isLastStep, steps, currentStepIndex])
 

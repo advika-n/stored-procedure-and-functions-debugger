@@ -75,6 +75,13 @@ function renderStatementHeader(node) {
       return `DECLARE CONTINUE HANDLER FOR ${node.condition} ${renderStatementHeader(node.action)}`
     case 'ReturnNode':
       return `RETURN ${renderExpr(node.value)};`
+    case 'LoopStatement':
+      // Mirrors backend/app/interpreter.py's render_statement_header:
+      // just the header line, no body (the body is walked separately by
+      // emitBlock below, same as WhileStatement/IfStatement/CaseStatement).
+      return node.label ? `${node.label}: LOOP` : 'LOOP'
+    case 'LeaveStatement':
+      return node.label ? `LEAVE ${node.label};` : 'LEAVE;'
     default:
       return node.type
   }
@@ -98,10 +105,17 @@ const END_ID = 'endNode' // `end` is a reserved Mermaid keyword, so avoid it
 // Walks a list of statements, threading dangling "tails" (edges waiting
 // for a destination) through it. Each tail is { nodeId, kind } where
 // `kind` becomes the edge's kind once it's finally connected --
-// 'seq' | 'then' | 'else' | 'loop' | 'loop-exit' | 'when-<N>' (CASE's
-// own N-way branches -- see isConditionalEdgeKind/edgeLabelFor below
-// for where the open-ended 'when-<N>' set is actually handled).
-function emitBlock(statements, entryTails, nodes, edges) {
+// 'seq' | 'then' | 'else' | 'loop' | 'loop-exit' | 'loop-back' | 'leave'
+// | 'when-<N>' (CASE's own N-way branches -- see
+// isConditionalEdgeKind/edgeLabelFor below for where the open-ended
+// 'when-<N>' set is actually handled).
+//
+// `loopStack` (innermost last) is only for LEAVE resolution -- see the
+// LoopStatement/LeaveStatement cases below. It's threaded unchanged
+// through every recursive emitBlock call except LoopStatement's own
+// (which pushes a fresh context for its body), exactly like WHILE/IF/
+// CASE were already threading `nodes`/`edges` unchanged before this.
+function emitBlock(statements, entryTails, nodes, edges, loopStack = []) {
   let tails = entryTails
 
   for (const stmt of statements) {
@@ -123,9 +137,9 @@ function emitBlock(statements, entryTails, nodes, edges) {
     }
 
     if (stmt.type === 'IfStatement') {
-      const thenTails = emitBlock(stmt.then_body, [{ nodeId, kind: 'then' }], nodes, edges)
+      const thenTails = emitBlock(stmt.then_body, [{ nodeId, kind: 'then' }], nodes, edges, loopStack)
       const elseTails = stmt.else_body
-        ? emitBlock(stmt.else_body, [{ nodeId, kind: 'else' }], nodes, edges)
+        ? emitBlock(stmt.else_body, [{ nodeId, kind: 'else' }], nodes, edges, loopStack)
         : [{ nodeId, kind: 'else' }]
       tails = [...thenTails, ...elseTails]
     } else if (stmt.type === 'CaseStatement') {
@@ -139,18 +153,51 @@ function emitBlock(statements, entryTails, nodes, edges) {
       // fallthrough edge is never highlighted as "taken", mirroring
       // IF's own already-established behavior).
       const whenTails = stmt.when_clauses.flatMap((clause, index) =>
-        emitBlock(clause.body, [{ nodeId, kind: `when-${index}` }], nodes, edges),
+        emitBlock(clause.body, [{ nodeId, kind: `when-${index}` }], nodes, edges, loopStack),
       )
       const elseTails = stmt.else_body
-        ? emitBlock(stmt.else_body, [{ nodeId, kind: 'else' }], nodes, edges)
+        ? emitBlock(stmt.else_body, [{ nodeId, kind: 'else' }], nodes, edges, loopStack)
         : [{ nodeId, kind: 'else' }]
       tails = [...whenTails, ...elseTails]
     } else if (stmt.type === 'WhileStatement') {
-      const bodyTails = emitBlock(stmt.body, [{ nodeId, kind: 'loop' }], nodes, edges)
+      const bodyTails = emitBlock(stmt.body, [{ nodeId, kind: 'loop' }], nodes, edges, loopStack)
       for (const tail of bodyTails) {
         edges.push({ from: tail.nodeId, to: nodeId, kind: 'loop-back' })
       }
       tails = [{ nodeId, kind: 'loop-exit' }]
+    } else if (stmt.type === 'LoopStatement') {
+      // Unlike WHILE, LOOP has no condition of its own -- there is no
+      // 'loop-exit' edge leaving this node directly. The ONLY way out is
+      // a LEAVE somewhere in the body (possibly several IF/WHILE/CASE/
+      // LOOP levels deep) naming this loop -- each one contributes its
+      // OWN edge into whatever follows this LoopStatement, collected via
+      // `loopContext.exits` below (pushed to by the LeaveStatement case,
+      // reached through the `loopStack` this LOOP's own body is walked
+      // with). If nothing ever LEAVEs this exact loop, `exits` stays
+      // empty and this statement contributes no tail at all -- correctly
+      // meaning "nothing after this LOOP is reachable", symmetric with
+      // ReturnNode's own "tails = []" below.
+      const loopContext = { label: stmt.label, exits: [] }
+      const bodyTails = emitBlock(stmt.body, [{ nodeId, kind: 'loop' }], nodes, edges, [...loopStack, loopContext])
+      for (const tail of bodyTails) {
+        edges.push({ from: tail.nodeId, to: nodeId, kind: 'loop-back' })
+      }
+      tails = loopContext.exits
+    } else if (stmt.type === 'LeaveStatement') {
+      // Resolve against `loopStack` (innermost first) exactly like
+      // app.interpreter's own `_loop_stack` resolution: an unlabeled
+      // LEAVE targets the innermost enclosing loop; a labeled one
+      // searches outward for a matching label. A LEAVE with no
+      // resolvable target (shouldn't happen for a backend-validated AST,
+      // since app.interpreter would have already raised) contributes no
+      // exit edge anywhere rather than crashing the diagram.
+      const target = stmt.label
+        ? [...loopStack].reverse().find((ctx) => ctx.label === stmt.label)
+        : loopStack[loopStack.length - 1]
+      if (target) target.exits.push({ nodeId, kind: 'leave' })
+      // Nothing after a LEAVE in the same block is reachable -- same
+      // "execution unconditionally exits here" reasoning as ReturnNode.
+      tails = []
     } else if (stmt.type === 'ReturnNode') {
       // Execution halts here -- no continuation edge to whatever
       // statement would textually follow (even inside an IF/WHILE/CASE
@@ -247,11 +294,20 @@ function nodeMermaidText(node) {
  * mermaidColors.js's two palettes the classDef/linkStyle colors below
  * come from -- see that file for why they can't just be var(...). */
 
-// 'then'/'loop'/'loop-exit' are exactly IF/WHILE's fixed edge kinds;
-// CASE's own kinds are open-ended ('when-0', 'when-1', ... -- one per
-// WHEN clause, however many a given CASE happens to have), so they
-// can't live in a fixed lookup table the way the others do.
-const _STATIC_EDGE_LABELS = { then: 'then', else: 'else', loop: 'loop', 'loop-exit': 'exit' }
+// 'then'/'loop'/'loop-exit'/'leave' are exactly IF/WHILE/LOOP's fixed
+// edge kinds; CASE's own kinds are open-ended ('when-0', 'when-1', ...
+// -- one per WHEN clause, however many a given CASE happens to have),
+// so they can't live in a fixed lookup table the way the others do.
+// 'leave' is deliberately NOT a "which of several options was taken"
+// pair the way then/else or loop/loop-exit are (a LEAVE node has only
+// ONE outgoing edge, nothing to disambiguate from) -- it's labeled
+// purely for diagram readability (a LEAVE's edge can jump quite far,
+// out of however many nested loops it escapes), and correctly never
+// picks up taken/not-taken linkStyle coloring below, since a
+// LeaveStatement's own DebugStep carries no `branch`/`loop` field for
+// `computeDiagramState` to key off (see isConditionalEdgeKind's own
+// generic "no data for this line -> no styling" fallthrough).
+const _STATIC_EDGE_LABELS = { then: 'then', else: 'else', loop: 'loop', 'loop-exit': 'exit', leave: 'leave' }
 const _WHEN_EDGE_KIND_RE = /^when-(\d+)$/
 
 function edgeLabelFor(kind) {

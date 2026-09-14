@@ -463,16 +463,19 @@ END;
 
 
 def test_infinite_self_recursive_function_call_hits_the_depth_guard():
+    # Named Recur, not Loop -- LOOP became a reserved keyword in the
+    # LOOP/LEAVE support phase (see app.tokenizer), so it can no longer
+    # be used as a procedure/function name.
     code = """\
-CREATE FUNCTION Loop(n NUMBER) RETURNS NUMBER
+CREATE FUNCTION Recur(n NUMBER) RETURNS NUMBER
 BEGIN
-    RETURN Loop(n + 1);
+    RETURN Recur(n + 1);
 END;
 
 CREATE PROCEDURE Main()
 BEGIN
     DECLARE y NUMBER DEFAULT 0;
-    SET y = Loop(1);
+    SET y = Recur(1);
 END;
 """
     with pytest.raises(InterpreterError, match="exceeded the maximum call depth"):
