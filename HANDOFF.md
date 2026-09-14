@@ -8,29 +8,23 @@ stable project facts (architecture, schema, design tokens) see `CLAUDE.md` inste
 
 ## 1. Last updated
 
-**2026-09-14**, end of the session that built **Breakpoints + Run-to-Breakpoint** — the
-first addition under a newly reassessed **"Tier 1" push** (Breakpoints, Step controls,
-Call Stack, `CALL` support — strengthening the project beyond the original mandatory/
-innovation scope, given extra time available). Follows the session that built
-Side-by-Side Run Comparison (the second Innovation feature), which followed the session
-that built the SQL Anti-Pattern Advisor (the first Innovation feature), which followed
-the session that built the Download feature (multi-format report export) — the last of
-the 5 mandatory course-graded sections — which itself followed the session that built the
-Learn tab and created `PROMPT_LOG.md`, which itself followed the session that built the
-Help tab, which itself followed the session that created this file/`CLAUDE.md` and built
-Day/Night Mode + the Developed By modal.
+**2026-09-14**, end of the session that added **"Continue" and "Restart"** to the step
+navigator — a cleanup/completion pass on Tier 1's navigation controls, directly following
+the session that built **Breakpoints + Run-to-Breakpoint** (the first Tier 1 addition;
+Tier 1 also includes Step controls, Call Stack, and `CALL` support — strengthening the
+project beyond the original mandatory/innovation scope, given extra time available). That
+session followed the one that built Side-by-Side Run Comparison (the second Innovation
+feature), which followed the one that built the SQL Anti-Pattern Advisor (the first
+Innovation feature), which followed the Download feature (multi-format report export,
+the last mandatory section), which followed the Learn tab session (which created
+`PROMPT_LOG.md`), which followed the Help tab session, which followed the session that
+created this file/`CLAUDE.md` and built Day/Night Mode + the Developed By modal.
 
-**Re-verified via `git log`/`git status` at the start of this session, per the standing
-lesson from three straight prior sessions' staleness**: everything the previous session's
-own HANDOFF.md still listed as "uncommitted" — the Developed-By real-content edit, the
-Download feature, the SQL Anti-Pattern Advisor, and Side-by-Side Run Comparison — is now
-committed in a single commit, `56a629a` ("Add Download export, SQL Anti-Pattern Advisor,
-and Side-by-Side Comparison"), made outside a Claude Code session (most likely by the
-user directly, the same pattern as the earlier `49bcd98` commit). The working tree was
-fully clean at the start of this session. §2-§7 below are rewritten to match that reality
-rather than repeating the previous session's now-stale uncommitted-work notes — the
-project's committed state and this file's own believed state are, for the first time in
-several sessions, actually in sync at the start of a phase.
+**Re-verified via `git log`/`git status` at the start of this session**: the Breakpoints
+work was already committed (`9b4b6e1`), on top of everything else already committed in
+`56a629a`. Working tree was fully clean at the start. Backend baseline confirmed at 223
+passing before starting (this phase's own required gate) and 223 again at the end — no
+backend files were touched.
 
 ---
 
@@ -313,7 +307,10 @@ A reassessed push (Breakpoints, Step controls, Call Stack, `CALL` support) added
 extra time available, on top of the 5 mandatory sections and 4 innovation features above.
 
 - **Breakpoints + Run-to-Breakpoint** (`frontend/src/pages/DebuggerPage.jsx`) — **Done**,
-  the first Tier 1 addition.
+  the first Tier 1 addition. **Note**: the button originally labeled "Run to Breakpoint"
+  here was renamed to **"Continue"** in the very next session (see the entry directly
+  below) — every mention of it below is left as originally written for an accurate
+  build history, but the live UI today shows "Continue," not "Run to Breakpoint."
   - **Purely a frontend consumption-layer feature, exactly as scoped.** No backend files
     touched at all (confirmed by `git status --short` showing only `DebuggerPage.jsx` and
     `App.css` changed this phase). Breakpoints are a `Set<lineNumber>` in component state;
@@ -368,6 +365,79 @@ extra time available, on top of the 5 mandatory sections and 4 innovation featur
     clean (same 2 pre-existing warnings, unrelated to this phase). Test-run history rows
     created during verification (ids 128-130) were deleted afterward via
     `DELETE /history/{id}`, same established habit as every prior phase.
+- **"Continue" + "Restart"** (`frontend/src/pages/DebuggerPage.jsx`) — **Done**, a
+  cleanup/completion pass on Tier 1's navigation controls, requested to round out
+  Previous/Next/Reset/Run-to-Breakpoint into a coherent, non-redundant set. **Note on
+  wording**: this phase's closing instruction said to record "Step Over/Continue/
+  Restart" as done, but the phase body (its numbered steps 1-5) only ever specified
+  Continue and Restart — no distinct "Step Over" behavior was described anywhere in it.
+  No new Step Over control was built: Previous/Next already serve that role (advance
+  exactly one step), and a real Step-Into-vs-Step-Over distinction isn't meaningful yet
+  since this grammar has no `CALL`/procedure-invocation support to step into (see the
+  still-not-started `CALL` support item below) — inventing a control for a distinction
+  that can't yet exist would have been guessing at an unspecified feature rather than
+  following what was actually asked. Treating "Step controls" (the Tier 1 category) as
+  satisfied by Previous/Next/Continue/Restart together, not by a fabricated fifth button.
+  - **Key discovery this phase — both requested "new" controls already existed under a
+    less accurate name, so this was a rename-in-place, not two new buttons:**
+    1. **"Continue"**: the prompt asked for a control that "advances forward to the next
+       breakpoint... from wherever you currently are," and said to check whether
+       "Run to Breakpoint" already did this or always restarted from step 0. Inspection
+       of `runToBreakpoint`'s loop (`for (let i = currentStepIndex + 1; ...)`) confirmed
+       it already searched forward from the current position, not from 0 — it was always
+       "Continue" in standard debugger terms (VS Code/gdb: resume from wherever you
+       paused), just mislabeled as a fresh "run." **No logic change was needed** — only a
+       rename: `runToBreakpoint` → `continueExecution`, button label "⏵ Run to
+       Breakpoint" → "⏵ Continue", tooltip reworded to "Resume execution from here..."
+       instead of "Run forward through this trace...".
+    2. **"Restart"**: the prompt asked for a control that "resets execution back to step
+       0 of the CURRENT trace... without needing to re-click Debug or re-fetch," and said
+       to check what the existing "Reset" button actually did. Inspection of
+       `resetSteps` showed it only ever called `setCurrentStepIndex(0)` (plus clearing
+       Predict Mode score state) — it never touched `steps`/`ast`/`code` at all, so it
+       was already exactly "Restart" in behavior; the name "Reset" just read as if it
+       might clear the editor/trace entirely, which it never did. **No logic change was
+       needed** — only a rename: `resetSteps` → `restartTrace`, button label "Reset" →
+       "↺ Restart", tooltip added ("Jump back to step 1 of this same trace -- no re-run,
+       nothing re-fetched").
+  - **Final control order**: `◀ Previous | Next ▶ | ⏵ Continue | ↺ Restart` — four
+    controls, not six. The phase's own illustrative order
+    ("Previous | Next | Continue | Run to Breakpoint | Restart | Reset") was explicitly
+    only an example pending the merge-redundancy check in steps 1-2; once that check
+    found both "new" controls already existed under old names, keeping a separate
+    "Run to Breakpoint" alongside an identical "Continue" (or a separate "Reset" alongside
+    an identical "Restart") would have been two visibly duplicate buttons doing the exact
+    same thing — merged instead, per the phase's own "merge/rename rather than just
+    appending more buttons" instruction.
+  - **No new CSS was needed** — same button element, same `.step-navigator` styling,
+    only the label/handler names changed, so `App.css` is untouched by this phase
+    (confirmed via `git status --short`: only `DebuggerPage.jsx` changed).
+  - **Known, explicitly out-of-scope side effect of the rename**: `HelpPage.jsx`'s
+    control-reference list still says `<strong>Reset</strong> -- jumps back to step 1 of
+    the current trace without re-running Debug` — that description is still factually
+    accurate for what the button *does*, but the button is no longer *labeled* "Reset,"
+    and the Help tab still says nothing about breakpoints/Continue at all (a gap carried
+    over from the Breakpoints phase, which also excluded Help). Left untouched since this
+    phase's own instructions excluded Help/Learn tabs — flagged here rather than silently
+    left inconsistent; see §6.
+  - **Verified live** via the same raw-CDP driver approach: loaded `SumUntilLimit` (a
+    5-iteration WHILE loop), set one breakpoint on the loop body's `SET total = ...`
+    line, clicked Debug, then Continue twice in a row — first stopped at Step 5 of 19
+    (the loop's first pass through that line), a **second** Continue click from there
+    advanced to Step 8 of 19 (the loop's *next* pass, not a repeat of Step 5 and not a
+    restart) — this is the concrete proof that Continue resumes from wherever you are,
+    not from the top. Clicked Restart from Step 8: landed on Step 1 of 19, and a
+    monitored `Network.requestWillBeSent` log confirmed **zero** additional `/debug`
+    requests fired (only the original Debug click's single POST exists for the whole
+    session) — Restart genuinely never re-fetches. Previous/Next confirmed still working
+    unchanged (Step 1 → 2 → 1). Toggled the breakpoint off, Restarted, clicked Continue
+    again: correctly ran to Step 19 of 19 (end of trace), confirming the merged
+    no-breakpoints behavior survived the rename. All of the above re-checked in light
+    theme. Zero console errors throughout. Backend suite: 223 passing before this phase
+    started (the required baseline) and 223 again after (backend genuinely untouched —
+    `git status --short` shows only `DebuggerPage.jsx` changed). `npm run lint`/
+    `npm run build` both clean (same 2 pre-existing warnings). Test-run history rows
+    created during verification (ids 131-135) deleted afterward via `DELETE /history/{id}`.
 
 ---
 
@@ -375,11 +445,10 @@ extra time available, on top of the 5 mandatory sections and 4 innovation featur
 
 Nothing is genuinely half-built right now — every feature in §2 is code-complete.
 
-- **This session's own Breakpoints work is uncommitted** — `frontend/src/pages/
-  DebuggerPage.jsx` and `frontend/src/App.css` only (confirmed via `git status --short`),
-  on top of an otherwise clean working tree (everything from every prior session is now
-  committed — see §1's correction note and §6). Same "commit soon" recommendation as
-  every prior phase — see §7.
+- **This session's own Continue/Restart rename is uncommitted** — `frontend/src/pages/
+  DebuggerPage.jsx` only (confirmed via `git status --short`); the Breakpoints phase
+  before it is already committed (`9b4b6e1`). Same "commit soon" recommendation as every
+  prior phase — see §7.
 - The student photo in the Developed By modal is still the placeholder inline SVG
   silhouette, not a real photo file (the text content itself is real and committed).
 - Day/Night Mode itself was only ever exercised in one headless-Chrome instance during
@@ -400,13 +469,14 @@ in this list. What's left is real content for the Learn tab (§6) and everything
   a prior session's own closing instruction rather than left as "not started" — it was
   never begun, no code exists for it, and none should be added later under this name
   without a fresh scoping prompt from the user.
-- **Three of the four remaining Tier 1 items** — Step controls (beyond what already
-  exists — Prev/Next/Reset/scrubber are already done, so this presumably means something
-  more, e.g. Step Into/Over/Out distinctions; undefined until scoped), Call Stack, and
-  `CALL` support (calling one procedure/function from another — not currently supported
-  by the grammar at all per `parser.py`). All three need a fresh scoping prompt before
-  starting, same as Quiz page enhancements below. (Breakpoints, the fourth Tier 1 item,
-  is done — see §2.)
+- **Two of the four Tier 1 items** — Call Stack, and `CALL` support (calling one
+  procedure/function from another — not currently supported by the grammar at all per
+  `parser.py`, so Call Stack likely depends on `CALL` support existing first). Both need
+  a fresh scoping prompt before starting, same as Quiz page enhancements below.
+  (Breakpoints and Step controls, the other two Tier 1 items, are both done — see §2. A
+  genuine Step-Into-vs-Step-Over distinction isn't meaningful until `CALL` support exists
+  to step into, so "Step controls" is being treated as satisfied by Previous/Next/
+  Continue/Restart together rather than left half-open waiting on that dependency.)
 
 ---
 
@@ -437,9 +507,12 @@ innovation features:
 
 Then the reassessed Tier 1 push (§2's new subsection), given extra time available:
 
-1. ~~Breakpoints + Run-to-Breakpoint~~ — code-complete, thoroughly verified (§2), not yet
-   committed (§3/§6).
-2. Step controls (beyond Prev/Next/Reset/scrubber) — not started, needs scoping (§4).
+1. ~~Breakpoints + Run-to-Breakpoint~~ — code-complete, thoroughly verified, **committed**
+   (`9b4b6e1`). Its "Run to Breakpoint" button was renamed to "Continue" in the very next
+   session (below) — same underlying logic, no behavior change.
+2. ~~Step controls~~ — **Done**, via this session's "Continue"/"Restart" cleanup pass
+   (§2), thoroughly verified, not yet committed (§3/§6). (Call Stack and `CALL` support,
+   the other two Step-controls-adjacent Tier 1 items, remain not started — see below.)
 3. Call Stack — not started, needs scoping (§4).
 4. `CALL` support — not started, needs scoping (§4); no grammar support exists yet.
 
@@ -470,16 +543,27 @@ Scanned directly (`grep` for `TODO`/`FIXME`/`XXX`/`HACK`/placeholder markers acr
   reconstructed summaries (rebuilt from `git show` diffs and this file's own history,
   clearly marked as reconstructed since no literal prompt was recorded for them at the
   time). Keep appending to it — don't let it go stale.
+- **Help tab now describes a button by a label that no longer exists.** `HelpPage.jsx`'s
+  control-reference list still says `<strong>Reset</strong> -- jumps back to step 1 of
+  the current trace without re-running Debug` — that's still exactly what the button
+  *does*, but this session renamed it to "Restart," so the Help tab now names a control
+  that isn't on screen anymore. It also still says nothing about breakpoints or
+  "Continue" at all (that gap dates back to the Breakpoints phase, which also excluded
+  Help). **Deliberately left untouched** — both the Breakpoints phase and this one
+  explicitly excluded Help/Learn tabs from scope — but flagged here rather than left
+  silently inconsistent. A small, Help-tab-scoped follow-up phase should update that one
+  list item and add a line about breakpoints/Continue.
 - **Commit-status history, for context**: this file wrongly kept claiming Day/Night+
   Developed-By and Help+Learn were uncommitted across three sessions before the
   Anti-Pattern Advisor session corrected it via `git log`. The session after that
   (Side-by-Side Run Comparison) then left the Download feature, the Anti-Pattern Advisor,
   the Developed-By content edit, and its own Compare work all genuinely uncommitted — and
   **all of that was committed since**, in one commit (`56a629a`) made outside a Claude
-  Code session. Re-verified via `git status --short`/`git log` at the start of *this*
-  session: the working tree was fully clean before this phase started. **What's
-  uncommitted right now** is only this session's own Breakpoints work — see §3. Lesson
-  keeps standing: `git log`/`git status` are ground truth, checked fresh every session,
+  Code session; the following Breakpoints session was itself committed too (`9b4b6e1`).
+  Re-verified via `git status --short`/`git log` at the start of *this* session: the
+  working tree was fully clean before this phase started. **What's uncommitted right
+  now** is only this session's own Continue/Restart rename — see §3. Lesson keeps
+  standing: `git log`/`git status` are ground truth, checked fresh every session,
   never carried over from what the last session's notes said.
 - **Learn tab ships with placeholder content by design** (§2) — draft concept-explanation
   prose (unreviewed against the actual course rubric), a literal `YOUR_VIDEO_ID_HERE`
@@ -503,14 +587,12 @@ Scanned directly (`grep` for `TODO`/`FIXME`/`XXX`/`HACK`/placeholder markers acr
   itself, not just `.site-header-right`).
 - **`backend/data/debug_history.db` needed manual cleanup again this session** (every
   session so far has needed this) — live-verification testing against the real dev
-  backend always writes real history rows. This session's breakpoint testing (CDP-driven
-  real mouse clicks against `CalculateTotal` and `GradeClassifier`, dark + light theme)
-  added ids 128-130, deleted afterward via `DELETE /history/{id}`; checked first for
-  stragglers past the previous session's own claimed cleanup range (none found this time
-  — ids 119-127 were genuinely all gone). Same reminder as every prior session: hitting
-  the *real* running backend during manual verification always needs this cleanup step,
-  and it's worth double-checking for stragglers rather than just trusting a previous
-  session's claimed count.
+  backend always writes real history rows. This session's Continue/Restart testing
+  (CDP-driven real mouse clicks against `SumUntilLimit` and `CalculateTotal`, dark +
+  light theme) added ids 131-135, deleted afterward via `DELETE /history/{id}`; checked
+  first for stragglers past the previous session's own claimed cleanup range (none found
+  — ids 128-130 were genuinely all gone). Same reminder as every prior session: hitting
+  the *real* running backend during manual verification always needs this cleanup step.
 - **Anti-Pattern Advisor doesn't cover a history-replayed run** (§2) — `issues` is only
   ever set from a live `/debug` response; replaying a saved History entry restores
   `ast`/`steps` but leaves `issues` at `null`, so the Advisor panel shows its
@@ -546,17 +628,20 @@ Scanned directly (`grep` for `TODO`/`FIXME`/`XXX`/`HACK`/placeholder markers acr
 
 ## 7. Immediate next step
 
-1. **Commit this session's Breakpoints work** (`frontend/src/pages/DebuggerPage.jsx`,
-   `frontend/src/App.css` — see §3/§6). Small and low-risk relative to prior sessions'
-   backlogs, but the same recommendation stands: commit before starting the next phase
-   rather than letting uncommitted work accumulate again.
-2. Get the real student photo for the Developed By modal (the text content itself is
+1. **Commit this session's Continue/Restart rename** (`frontend/src/pages/
+   DebuggerPage.jsx` only — see §3/§6). Small and low-risk; same recommendation as ever:
+   commit before starting the next phase rather than letting uncommitted work accumulate.
+2. **Small Help-tab follow-up, whenever a Help/Learn-scoped phase is convenient** (§6):
+   update the control-reference list item that still says "Reset" to say "Restart," and
+   add a line describing breakpoints/Continue — neither was in scope for the phase that
+   caused the gap.
+3. Get the real student photo for the Developed By modal (the text content itself is
    already real and already committed — §3).
-3. Get a real educational video (swap `YOUR_VIDEO_ID_HERE` in `LearnPage.jsx`) and real,
+4. Get a real educational video (swap `YOUR_VIDEO_ID_HERE` in `LearnPage.jsx`) and real,
    verified references (replacing every badge-marked placeholder entry) for the Learn
    tab (§2/§6) — and have the concept-explanation draft reviewed against the actual
    course rubric.
-4. Continue the Tier 1 push (§5) — Step controls, Call Stack, and `CALL` support are all
-   still unscoped (§4) and need a fresh phase prompt each, same as Quiz page enhancements
-   and Variable Timeline/sparklines. Live Parameter Tuning stays dropped (§4) and
+5. Continue the Tier 1 push (§5) — Call Stack and `CALL` support are both still unscoped
+   (§4) and need a fresh phase prompt each, same as Quiz page enhancements and Variable
+   Timeline/sparklines. Live Parameter Tuning stays dropped (§4) and
    shouldn't be picked up under that name without a fresh scoping prompt.

@@ -150,7 +150,7 @@ function DebuggerPage() {
   // -- Predict Mode (labeled "Quiz Mode" internally in these variable/class
   // names -- renamed in the UI only, to stay distinct from the separate
   // /quiz page): predict a step's effect before it's revealed. Off by
-  // default (see resetRunState/resetSteps for where the score resets).
+  // default (see resetRunState/restartTrace for where the score resets).
   const [quizMode, setQuizMode] = useState(false)
   const [quizScore, setQuizScore] = useState({ correct: 0, total: 0 })
   const [quizGuess, setQuizGuess] = useState('') // the value-prediction text input
@@ -392,18 +392,25 @@ function DebuggerPage() {
     setCurrentStepIndex((i) => (hasSteps && i < steps.length - 1 ? i + 1 : i))
   }, [hasSteps, steps])
 
-  // "Run to Breakpoint" -- fast-forwards through the EXISTING step trace
-  // (no re-execution) to the next step whose line is a breakpoint,
-  // searching strictly after the current position so pressing it again
-  // while already paused on one breakpoint advances to the next, rather
-  // than staying put. Deliberate design choice for the no-breakpoints
-  // case (the phase spec asked for one of two explicit options): runs to
-  // the END of the trace instead of being disabled -- the loop below
-  // simply never matches, so `targetIndex` falls through to the last
-  // step, i.e. identical behavior to "run to completion." This also
-  // means it works exactly the same way whether or not the run happens
-  // to define any breakpoints, rather than needing a separate mode.
-  const runToBreakpoint = useCallback(() => {
+  // "Continue" -- fast-forwards through the EXISTING step trace (no
+  // re-execution) to the next step whose line is a breakpoint, searching
+  // strictly after the current position so pressing it again while
+  // already paused on one breakpoint advances to the next rather than
+  // staying put. This control used to be labeled "Run to Breakpoint" --
+  // renamed here (this phase's own nav-controls cleanup) once it became
+  // clear it already searched forward from `currentStepIndex` rather
+  // than restarting from step 0, i.e. it was always "Continue" in
+  // standard debugger terms (VS Code/gdb: resume from wherever you
+  // paused), not a from-scratch run. Adding a second, separately-labeled
+  // "Continue" button next to it would have been an exact behavioral
+  // duplicate, so this was a rename in place rather than a new control.
+  // Deliberate design choice for the no-breakpoints case (kept from the
+  // original phase): runs to the END of the trace instead of being
+  // disabled -- the loop below simply never matches, so `targetIndex`
+  // falls through to the last step, i.e. identical to "run to
+  // completion." Works the same way whether or not any breakpoints are
+  // defined, rather than needing a separate mode.
+  const continueExecution = useCallback(() => {
     if (!hasSteps) return
     let targetIndex = steps.length - 1
     for (let i = currentStepIndex + 1; i < steps.length; i += 1) {
@@ -419,7 +426,17 @@ function DebuggerPage() {
     setCurrentStepIndex((i) => (i > 0 ? i - 1 : i))
   }, [])
 
-  const resetSteps = useCallback(() => {
+  // "Restart" -- jumps back to step 0 of the CURRENT trace. This control
+  // used to be labeled "Reset", which read as if it might clear the
+  // editor/trace entirely; it never did that (resetRunState, a separate
+  // function, is what actually clears `steps`/`ast`/`code` on a new
+  // sample/Debug run) -- this only ever rewound `currentStepIndex`,
+  // which is exactly what "Restart" means here: re-run the same
+  // already-submitted SQL from the start with NO re-fetch from the
+  // backend, since `steps` is untouched. Renamed in place (this phase's
+  // nav-controls cleanup) rather than adding a second, separately-labeled
+  // "Restart" button that would have done the identical thing.
+  const restartTrace = useCallback(() => {
     setCurrentStepIndex(0)
     // Replaying the same trace from the top is a fresh quiz attempt too.
     setQuizScore({ correct: 0, total: 0 })
@@ -946,18 +963,18 @@ function DebuggerPage() {
               Next ▶
             </button>
             <button
-              onClick={runToBreakpoint}
+              onClick={continueExecution}
               disabled={!hasSteps || isLastStep}
               title={
                 breakpoints.size > 0
-                  ? 'Run forward through this trace until the next breakpointed line'
-                  : 'No breakpoints set -- runs to the end of the trace'
+                  ? 'Resume execution from here to the next breakpoint'
+                  : 'No breakpoints set -- resumes execution from here to the end of the trace'
               }
             >
-              ⏵ Run to Breakpoint
+              ⏵ Continue
             </button>
-            <button onClick={resetSteps} disabled={!hasSteps}>
-              Reset
+            <button onClick={restartTrace} disabled={!hasSteps} title="Jump back to step 1 of this same trace -- no re-run, nothing re-fetched">
+              ↺ Restart
             </button>
             <input
               type="range"

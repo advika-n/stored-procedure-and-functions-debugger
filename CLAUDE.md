@@ -29,18 +29,22 @@ Documentation (5), Innovation (5).
   template-based fallback whenever the API is unavailable/unconfigured. Client wiring
   lives once in `backend/app/explainer.py` (`_get_gemini_client()`, `_GEMINI_MODEL`) and
   is reused (not duplicated) by `backend/app/quiz.py`.
-- **Breakpoints + Run-to-Breakpoint** (`frontend/src/pages/DebuggerPage.jsx`) — a
+- **Breakpoints + Continue/Restart** (`frontend/src/pages/DebuggerPage.jsx`) — a
   frontend-only consumption-layer feature on top of the existing step trace, not an
   interpreter/backend capability. A breakpoint is just a source line number
-  (`Set<number>` in component state); "Run to Breakpoint" fast-forwards
-  `currentStepIndex` to the next step in the *already-computed* trace whose `line` is in
-  that set (falling through to the last step, i.e. run-to-completion, when none match —
-  the deliberate no-breakpoints behavior). Uses Monaco's own glyph margin
-  (`glyphMargin: true`) rather than custom gutter UI; clicking the glyph margin or the
-  line-number column (`editor.onMouseDown`, told apart via Monaco's `MouseTargetType`)
-  toggles a breakpoint. Breakpoints persist across new Debug runs/sample loads
-  (editor-level state, not tied to one run) and are tracked by raw line number, not a
-  Monaco decoration ID — heavy edits above a breakpoint can leave it on now-different
+  (`Set<number>` in component state); **"Continue"** (`continueExecution`, originally
+  built and briefly labeled "Run to Breakpoint" before a same-phase-family cleanup pass
+  renamed it) fast-forwards `currentStepIndex` from wherever it currently is to the next
+  step in the *already-computed* trace whose `line` is in that set (falling through to
+  the last step, i.e. run-to-completion, when none match — the deliberate no-breakpoints
+  behavior). **"Restart"** (`restartTrace`, originally labeled "Reset") jumps
+  `currentStepIndex` back to 0 of the same trace with no re-fetch. Uses Monaco's own
+  glyph margin (`glyphMargin: true`) rather than custom gutter UI; clicking the glyph
+  margin or the line-number column (`editor.onMouseDown`, told apart via Monaco's
+  `MouseTargetType`) toggles a breakpoint. Breakpoints persist across new Debug
+  runs/sample loads (editor-level state, not tied to one run) and are tracked by raw line
+  number, not a Monaco decoration ID — heavy edits above a breakpoint can leave it on
+  now-different
   code, an accepted simplification.
 - **SQL Anti-Pattern Advisor** (`backend/app/advisor.py`) — a static linter-style pass
   over the AST alone (never the execution trace), reusing the exact AST
@@ -125,7 +129,7 @@ Documentation (5), Innovation (5).
 | `compareTraces.js` | Pure `computeDivergence(leftSteps, rightSteps)` — the Side-by-Side Run Comparison feature's step-by-step trace diff, no execution of its own |
 | `lastProcedure.js` | sessionStorage bridge: lets `/quiz`'s "This Procedure" option see the Debugger's current code without a global store |
 | `samples.js` | Built-in sample procedures/functions shown in the Debugger's library panel |
-| `pages/DebuggerPage.jsx` | The main debugger UI — editor, breakpoints/Run-to-Breakpoint, step navigator, variables, flowchart, SQL Anti-Pattern Advisor panel, Predict Mode, Ask AI, TTS, Download Report |
+| `pages/DebuggerPage.jsx` | The main debugger UI — editor, breakpoints/Continue/Restart, step navigator, variables, flowchart, SQL Anti-Pattern Advisor panel, Predict Mode, Ask AI, TTS, Download Report |
 | `pages/ComparePage.jsx` | `/compare` page — two independent Monaco editor panes, each running its own `POST /debug`, stepped together and diffed via `compareTraces.js` |
 | `pages/QuizPage.jsx` | Standalone `/quiz` page (distinct from Predict Mode — see below) |
 | `pages/HistoryPage.jsx`, `History.jsx` | `/history` page |

@@ -664,3 +664,109 @@ previous session's HANDOFF.md still listed as uncommitted (Developed-By content,
 Anti-Pattern Advisor, Side-by-Side Comparison) had since been committed in one commit,
 `56a629a`, outside a Claude Code session. `HANDOFF.md` §1/§3/§6/§7 updated to match —
 first session in a while where the working tree was genuinely clean at the start.
+
+---
+
+## 11. Continue + Restart (Tier 1 nav-controls cleanup)
+
+**Date:** 2026-09-14 · **Not yet committed** (see `HANDOFF.md` §3/§6)
+
+**Prompt (verbatim):**
+
+> Goal: round out the navigation controls now that Breakpoints exist. Currently there's
+> Previous/Next/Reset and Run to Breakpoint. Add:
+>
+> 1. "Continue" — from the current step, advance forward to either the next breakpoint
+>    (reuse the exact same logic as Run to Breakpoint) or the end of the trace if none
+>    remain ahead of the current position. This is effectively "Run to Breakpoint, but from
+>    wherever you currently are" rather than always restarting from step 0 — check whether
+>    the existing Run to Breakpoint already does this or always starts from the beginning,
+>    and fix it to search forward from currentStepIndex if it doesn't already.
+>
+> 2. "Restart" — reset execution back to step 0 of the CURRENT trace (i.e., re-run the same
+>    already-submitted SQL from the start) without needing to re-click Debug or re-fetch
+>    from the backend. This is distinct from the existing "Reset" if Reset currently clears
+>    the editor/trace entirely — check what Reset currently does and either repurpose it or
+>    add Restart alongside it with clearly distinct labels/behavior so they're not
+>    redundant or confusing.
+>
+> 3. Clarify and finalize the full control set's labels/order so it reads sensibly to a
+>    first-time user: e.g. Previous | Next | Continue | Run to Breakpoint | Restart | Reset.
+>    Merge/rename anything redundant discovered in steps 1-2 rather than just appending more
+>    buttons.
+>
+> 4. Theme-aware styling consistent with existing controls.
+>
+> 5. Verify: from a paused breakpoint mid-trace, Continue advances to the next breakpoint
+>    (or end) correctly; Restart returns to step 0 of the same procedure without re-fetching;
+>    all existing controls (Previous/Next/breakpoint toggling) still work; backend test
+>    suite unchanged at 223+.
+>
+> Don't touch interpreter/debugger core logic, backend endpoints, the Anti-Pattern Advisor,
+> Side-by-Side Comparison, Download, Help/Learn tabs, or flowchart generation — this phase
+> is scoped to navigation controls only.
+>
+> After finishing: update HANDOFF.md to add Step Over/Continue/Restart as "Done" under Tier
+> 1, and log this phase in PROMPT_LOG.md.
+
+**What shipped:** Confirmed the required baseline first — `pytest -q` at 223 passed
+before starting and 223 after, no backend files touched at all this phase.
+
+**Central finding — both requested controls already existed under a less accurate name,
+so this was a rename-in-place, not two new buttons:**
+
+1. **"Continue"**: inspected `runToBreakpoint`'s search loop
+   (`for (let i = currentStepIndex + 1; ...)`) and confirmed it already searched forward
+   from the *current* position, never restarting from step 0 — it was always "Continue"
+   in standard debugger terms, just mislabeled as a fresh "run." No logic change was
+   needed: renamed `runToBreakpoint` → `continueExecution`, button label "⏵ Run to
+   Breakpoint" → "⏵ Continue", tooltip reworded to describe resuming rather than running
+   through from scratch.
+2. **"Restart"**: inspected `resetSteps` and confirmed it only ever called
+   `setCurrentStepIndex(0)` (plus clearing Predict Mode score state) — it never touched
+   `steps`/`ast`/`code`, so it was already exactly "Restart" in behavior; "Reset" just
+   read as if it might clear the editor/trace entirely, which it never did. No logic
+   change was needed: renamed `resetSteps` → `restartTrace`, button label "Reset" →
+   "↺ Restart", with a tooltip clarifying "no re-run, nothing re-fetched."
+
+**Final control order**: `◀ Previous | Next ▶ | ⏵ Continue | ↺ Restart` — four controls,
+not the six in the prompt's own illustrative example. That list was explicitly only an
+example pending the merge-redundancy check in steps 1-2; once both "new" controls turned
+out to be existing controls under old names, keeping a separately-labeled duplicate next
+to each would have been two pairs of buttons doing the exact same thing — merged instead,
+per the prompt's own "merge/rename rather than just appending more buttons" instruction.
+No new CSS was needed (same button element, same `.step-navigator` styling, only labels/
+handler names changed) — `git status --short` after finishing showed only
+`frontend/src/pages/DebuggerPage.jsx` changed, nothing else.
+
+**On "Step Over" in the closing instruction**: the closing line asked to record "Step
+Over/Continue/Restart" as done, but the phase body (its five numbered steps) never
+described a "Step Over" behavior anywhere — only Continue and Restart. No new Step Over
+control was built: Previous/Next already serve that role (advance exactly one step), and
+a genuine Step-Into-vs-Step-Over distinction isn't meaningful yet since this grammar has
+no `CALL`/procedure-invocation support to step into at all (confirmed via `grep` against
+`parser.py`) — inventing a control for a distinction that can't yet exist would have been
+guessing at an unspecified feature rather than building what was actually asked for. This
+is called out explicitly in `HANDOFF.md` rather than silently either skipped or invented.
+
+**Verification**: `npm run lint`/`npm run build` clean (same 2 pre-existing warnings).
+Live-verified via a raw-CDP driver dispatching real mouse clicks: loaded `SumUntilLimit`
+(a 5-iteration WHILE loop), set one breakpoint on the loop body's `SET total = ...` line,
+clicked Debug, then Continue twice — the first stopped at Step 5 of 19 (the loop's first
+pass through that line), a **second** Continue click from there advanced to Step 8 of 19
+(the loop's *next* pass, not a repeat and not a restart) — concrete proof Continue
+resumes from wherever you are. Restart from Step 8 landed on Step 1 of 19, and a
+monitored `Network.requestWillBeSent` log confirmed **zero** additional `/debug` requests
+fired during the whole test beyond the single original Debug click — Restart genuinely
+never re-fetches. Previous/Next confirmed unchanged (Step 1 → 2 → 1). Toggled the
+breakpoint off, Restarted, clicked Continue again: correctly ran to Step 19 of 19 (end of
+trace), confirming the merged no-breakpoints behavior survived the rename. All re-checked
+in light theme. Zero console errors throughout. Test-run history rows created during
+verification (ids 131-135) deleted afterward via `DELETE /history/{id}`.
+
+**Also found and flagged (not fixed, per this phase's own Help/Learn exclusion)**:
+`HelpPage.jsx`'s control-reference list still names the old "Reset" label (its
+description of the behavior is still accurate — only the name changed) and still says
+nothing about breakpoints/Continue at all. Documented in `HANDOFF.md` §6/§7 as a small
+follow-up for a future Help-tab-scoped phase, rather than silently left inconsistent or
+fixed outside this phase's stated scope.
