@@ -80,6 +80,22 @@ Documentation (5), Innovation (5).
   clarity/control, matching this project's Documentation grading criterion) → AST (plain
   dicts, JSON-serializable) → `backend/app/interpreter.py` (tree-walking) → a
   `DebugStep` trace (see §4).
+- **`CALL` support (procedure calling procedure)** — the first Tier 1 phase to touch the
+  interpreter core. A submission can now chain multiple `CREATE PROCEDURE`/`CREATE
+  FUNCTION` definitions back to back; `parser.parse()` wraps 2+ of them in a new
+  `{"type": "ProgramNode", "definitions": [...]}` node (exactly one definition still
+  parses to a bare `ProcedureNode`/`FunctionNode`, unchanged) — **the LAST definition in
+  source order is the entry point** that actually runs; every definition (entry
+  included, enabling self-recursion) is registered by name for `CallStatement` (`CALL
+  name(args);`) to resolve at runtime. A `CALL` target must be a `ProcedureNode`
+  specifically (calling a `FunctionNode`'s name is a clear error — this grammar has no
+  expression-position function calls at all). `interpreter._exec_call` gives the callee a
+  **fully isolated** scope/cursors/handlers/changed-value-baseline (saved and restored
+  around the nested call, via `Interpreter.run()` called recursively so the whole call
+  chain lands in one continuous `self.steps` list) — only explicit IN/OUT/INOUT
+  parameters cross the boundary; an OUT/INOUT argument must be a plain Identifier (can't
+  write back into an expression). `MAX_CALL_DEPTH` (50) guards recursion with a clear
+  `InterpreterError`, never a hang. See §4 for the `call` DebugStep field this adds.
 - **Execution is simulated, not hooked into a real DB engine.** The interpreter
   evaluates procedural-SQL constructs (DECLARE/SET/IF/WHILE/cursors/handlers) itself; the
   one place real SQL actually runs is cursor `SELECT` queries, executed against a small,
@@ -210,10 +226,16 @@ JS for this reason; keep it in sync with `theme.css` by hand when either changes
     loop?:     { condition, result, iteration },    // WhileStatement steps only
     cursor?:   { name, rowIndex, currentRow, hasMore },
     error?:    { condition, message, handler },
-    returnValue?: { value, type }                   // FunctionNode final RETURN only
+    returnValue?: { value, type },                  // FunctionNode final RETURN only
+    call?:     { procedureName, depth, stack }       // only for steps INSIDE a CALLed procedure -- see §2's CALL entry
   }
   ```
   (`variables` entry shape is built by `_snapshot_variables()`, ~line 798 of the same file.)
+  `call` was added in the CALL-support phase: present only when `depth >= 1` (a step
+  genuinely executing inside a `CALL`ed procedure), omitted entirely for every top-level
+  step — so every trace that predates CALL support, and every trace that never uses it,
+  is byte-for-byte unchanged. `stack` is the full chain of enclosing procedure names,
+  outermost first (`stack[-1] == procedureName`, `len(stack) == depth`).
 
 - **Gemini explainer accuracy depends on complete context.** `explainer.py`'s
   `_build_prompt()` (~line 82) explicitly forwards a step's `error` and `cursor` fields
@@ -227,12 +249,15 @@ JS for this reason; keep it in sync with `theme.css` by hand when either changes
 - **Non-functional requirement: `/debug` must stay under 2s.** Measured directly against
   a live local server (the original 10 built-in `samples.js` procedures, via a Python
   timing script against `POST http://127.0.0.1:8000/debug`): **22.5–76.2ms per call,
-  ~30ms average** — comfortably under budget. Not re-verified since (`samples.js` now has
-  an 11th sample, `AntiPatternShowcase` — see `HANDOFF.md` — but it's a small, fast
-  procedure with no reason to behave differently); re-time it (same approach: loop the
-  sample list, hit `/debug`, measure wall time) if the interpreter, cursor handling, or
-  history-write path changes meaningfully, and note the new numbers here as the
-  deliverable.
+  ~30ms average** — comfortably under budget. Not re-verified against the live server
+  since (`samples.js` now has an 11th sample, `AntiPatternShowcase` — see `HANDOFF.md` —
+  but it's a small, fast procedure with no reason to behave differently). The CALL-support
+  phase *did* touch the interpreter and re-measured directly (tokenize→parse→run,
+  in-process, bypassing the network/live-server layer entirely): a plain no-CALL
+  procedure and a two-procedure CALL-based one both averaged **well under 1ms** per run —
+  no measurable overhead from the CALL-support changes. Re-time via the live-server
+  approach (loop the sample list, hit `/debug`, measure wall time) if the interpreter,
+  cursor handling, or history-write path changes again, and note the new numbers here.
 
 ---
 

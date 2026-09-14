@@ -136,3 +136,35 @@ CLOSE prod_cursor;
         {"name": "Gizmo", "price": 15},
     ]
     assert steps[-1]["variables"]["total"]["value"] == 50
+
+
+def test_debug_endpoint_runs_a_multi_procedure_call_based_program():
+    """End-to-end check that /debug (main.py itself untouched -- see
+    CLAUDE.md/HANDOFF.md's CALL-support phase) correctly handles the new
+    ProgramNode AST shape and a CallStatement trace without any endpoint
+    changes: the interpreter/parser changes alone are enough."""
+    code = """\
+CREATE PROCEDURE ComputeSubtotal(IN price NUMBER, IN quantity NUMBER, OUT subtotal NUMBER)
+BEGIN
+    SET subtotal = price * quantity;
+END;
+
+CREATE PROCEDURE OrderTotal(IN price NUMBER, IN quantity NUMBER, OUT grandTotal NUMBER)
+BEGIN
+    DECLARE subtotal NUMBER DEFAULT 0;
+    CALL ComputeSubtotal(price, quantity, subtotal);
+    SET grandTotal = subtotal;
+END;
+"""
+    response = client.post("/debug", json={"code": code, "params": {"price": 10, "quantity": 4}})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ast"]["type"] == "ProgramNode"
+    assert [d["name"] for d in body["ast"]["definitions"]] == ["ComputeSubtotal", "OrderTotal"]
+
+    steps = body["steps"]
+    assert steps[-1]["variables"]["grandTotal"]["value"] == 40
+
+    nested = [s for s in steps if "call" in s]
+    assert nested and all(s["call"]["procedureName"] == "ComputeSubtotal" for s in nested)

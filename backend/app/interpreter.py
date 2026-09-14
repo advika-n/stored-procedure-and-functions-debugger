@@ -173,6 +173,81 @@ difference between an "output" variable and any other; a plain
 Procedure or FunctionNode's variables are simply never marked this way
 (`isOutput` is always `false` for them, since neither has OUT/INOUT
 params by construction).
+
+-- Procedure calls (CALL) -----------------------------------------------
+
+A CallStatement (see app.parser) invokes another procedure -- looked up
+by name in `Interpreter._procedures`, a registry built once by the
+module-level `run()` from every CREATE PROCEDURE/CREATE FUNCTION
+definition in the source (see app.parser's "CALL and multi-procedure
+sources" section for how a submission gets more than one definition in
+the first place, and why the entry procedure is registered under its
+own name too, enabling self-recursion). `CALL` can only target a
+ProcedureNode -- calling a FunctionNode's name, or a name nothing
+defines, is a clear InterpreterError, not a crash.
+
+**Scope isolation is total.** The callee does not see the caller's
+variables, cursors, or handlers at all, and vice versa -- the ONLY
+things that cross the boundary are the explicit argument values bound
+to the callee's declared parameters (by mode, exactly like a top-level
+call's `initial_params`/OUT-seeding already works -- see "Procedures
+with declared params" above) and, after the callee returns, its
+OUT/INOUT parameters' final values written back into the caller's own
+variables. `_exec_call` implements this by saving the caller's current
+`scope`/`_previous_values`/`_output_param_names`/`cursors`/`handlers`,
+replacing them with fresh ones for the callee, recursively invoking
+`Interpreter.run()` on the callee's body (reusing its entry-step and
+`_ReturnSignal` handling unchanged -- a procedure invoked via CALL can
+contain a bare RETURN to stop early, exactly like any other procedure
+body already could), and restoring the caller's saved state once the
+callee returns -- `self.steps`/`self._step_number` are NEVER swapped,
+so the whole call chain accumulates into one continuous, flat trace.
+
+An OUT or INOUT argument must be a plain Identifier (a variable already
+in the caller's scope) -- there is no way to "write back" into an
+arbitrary expression like `x + 1`, so passing one for an OUT/INOUT
+parameter is a clear InterpreterError raised before anything executes.
+An IN argument can be any expression, evaluated once in the CALLER's
+scope before the callee's frame is installed.
+
+**Recursion is allowed** (a procedure calling itself, directly or
+through a chain of other procedures) -- `Interpreter._call_depth`
+counts how many CALLs are currently nested, and `MAX_CALL_DEPTH` caps
+it, raising a clear InterpreterError (not a runaway Python recursion
+crash / hung server) if a call would exceed it.
+
+**Division-by-zero while evaluating a CALL's own arguments** follows
+the same "the statement's own DebugStep gets recorded, then the caller
+decides what happens next" pattern every other statement already uses:
+if a registered DIVISION_BY_ZERO handler makes it non-fatal, the CALL
+statement's own step still gets recorded (with the `error` field, and
+the handler's action runs right after, exactly as elsewhere) but the
+call itself simply never happens -- the callee's body never executes --
+mirroring `_exec_set`'s "the assignment simply didn't happen." If
+unhandled, it raises and aborts the whole run, same as anywhere else.
+
+**Step-trace visibility into the call** (so a future call-stack UI can
+be built on top of this data without any interpreter changes): every
+DebugStep recorded while `_call_depth > 0` -- i.e. every step belonging
+to a CALLed procedure's own execution, including its synthetic entry
+step -- carries an extra `call` field:
+
+    call: { "procedureName": str, "depth": int, "stack": [str, ...] }
+
+`stack` is the full chain of enclosing procedure names from outermost
+to innermost (its own last element is always `procedureName`, and
+`len(stack) == depth`) -- included so a future frontend doesn't need to
+replay the whole trace and track depth deltas itself just to know which
+procedures are "currently on the stack" at any given step. A step that
+executes at the TOP level (never inside any CALL, `_call_depth == 0`,
+which is every trace that existed before this feature) has NO `call`
+key at all -- omitted, exactly like `branch`/`loop`/`cursor`/`error`
+already are when not applicable, so every pre-existing trace's wire
+shape is completely unchanged. The CALL statement's OWN step (e.g.
+"CALL Foo(a, b);") is recorded in the CALLER's frame, at the caller's
+own depth, BEFORE the callee's frame is installed -- so if the caller
+itself is top-level, the CALL statement's step has no `call` field
+either; only steps genuinely running *inside* Foo get depth >= 1.
 """
 
 from __future__ import annotations
@@ -181,6 +256,16 @@ import sqlite3
 from dataclasses import dataclass, field
 
 MAX_LOOP_ITERATIONS = 10_000
+
+# How many CALLs may be nested at once (see module docstring's
+# "Procedure calls (CALL)" section) -- generous enough for any
+# legitimate course-project-scale recursion, but low enough to fail
+# with a clear InterpreterError, not a hung server or a Python
+# RecursionError, well before Python's own default recursion limit
+# (each nested CALL costs a handful of real Python stack frames, since
+# `_exec_call` recurses through `run`/`_execute_block`/
+# `_execute_statement`).
+MAX_CALL_DEPTH = 50
 
 
 class InterpreterError(RuntimeError):
@@ -235,6 +320,7 @@ class DebugStep:
     cursor: dict | None = None
     error: dict | None = None
     return_value: dict | None = None
+    call: dict | None = None
 
     def to_dict(self) -> dict:
         """Serialize using the camelCase keys the frontend expects."""
@@ -255,6 +341,8 @@ class DebugStep:
             step["error"] = self.error
         if self.return_value is not None:
             step["returnValue"] = self.return_value
+        if self.call is not None:
+            step["call"] = self.call
         return step
 
 
@@ -314,6 +402,9 @@ def render_statement_header(node: dict) -> str:
         return f"DECLARE CONTINUE HANDLER FOR {node['condition']} {render_statement_header(node['action'])}"
     if kind == "ReturnNode":
         return f"RETURN {render_expr(node['value'])};"
+    if kind == "CallStatement":
+        args = ", ".join(render_expr(arg) for arg in node["args"])
+        return f"CALL {node['name']}({args});"
     raise InterpreterError(f"Cannot render unknown statement node {kind!r}")
 
 
@@ -354,6 +445,7 @@ class Interpreter:
         initial_params: dict,
         db_connection: sqlite3.Connection | None = None,
         output_param_names: set[str] | None = None,
+        procedures: dict[str, dict] | None = None,
     ):
         self.scope: dict = dict(initial_params)
         self.steps: list[DebugStep] = []
@@ -386,6 +478,18 @@ class Interpreter:
         # opened it.
         self._db = db_connection if db_connection is not None else sqlite3.connect(":memory:")
         self._owns_db = db_connection is None
+
+        # CALL support (see module docstring's "Procedure calls" section).
+        # `_procedures` is the name -> ProcedureNode/FunctionNode registry
+        # a CALL statement resolves against, built once by the
+        # module-level `run()` before any statement executes. `_call_depth`
+        # / `_call_stack` track how deep the current CALL chain is and
+        # which procedure names are on it (outermost first) -- both stay
+        # at their starting values (0 / []) for any run that never uses
+        # CALL, so they never affect step recording for the common case.
+        self._procedures: dict[str, dict] = procedures or {}
+        self._call_depth = 0
+        self._call_stack: list[str] = []
 
     # -- public API -----------------------------------------------------------
 
@@ -449,6 +553,8 @@ class Interpreter:
             self._exec_declare_handler(node)
         elif kind == "ReturnNode":
             self._exec_return(node)
+        elif kind == "CallStatement":
+            self._exec_call(node)
         else:
             raise InterpreterError(
                 f"Don't know how to execute node type {kind!r}", node.get("line")
@@ -562,6 +668,126 @@ class Interpreter:
         # to Interpreter.run(). No statement after this one ever runs,
         # even a later one in the same block.
         raise _ReturnSignal()
+
+    # -- procedure calls (CALL) --------------------------------------------
+
+    def _exec_call(self, node: dict) -> None:
+        """Execute a CallStatement -- see the module docstring's
+        "Procedure calls (CALL)" section for the full design. Structural/
+        static problems (unknown target, wrong target type, wrong
+        argument count, an OUT/INOUT argument that isn't a plain
+        variable, or exceeding MAX_CALL_DEPTH) all raise BEFORE anything
+        is recorded, matching every other statement's existing pattern
+        (e.g. _exec_set's "variable not declared" check). Only a dynamic
+        per-value problem -- DIVISION_BY_ZERO while evaluating an
+        argument expression -- gets attached to this statement's own
+        DebugStep, exactly like any other statement boundary."""
+        name = node["name"]
+
+        if self._call_depth >= MAX_CALL_DEPTH:
+            raise InterpreterError(
+                f"CALL to '{name}' exceeded the maximum call depth of {MAX_CALL_DEPTH} "
+                "(possible infinite recursion)",
+                node["line"],
+            )
+
+        target = self._procedures.get(name)
+        if target is None:
+            raise InterpreterError(f"Procedure '{name}' is not defined", node["line"])
+        if target.get("type") != "ProcedureNode":
+            raise InterpreterError(
+                f"'{name}' is not a procedure and cannot be CALLed "
+                "(only CREATE PROCEDURE definitions are valid CALL targets)",
+                node["line"],
+            )
+
+        params: list[dict] = target.get("params") or []
+        args: list[dict] = node["args"]
+        if len(args) != len(params):
+            raise InterpreterError(
+                f"Procedure '{name}' expects {len(params)} argument(s) but {len(args)} "
+                "were given",
+                node["line"],
+            )
+
+        for param, arg in zip(params, args):
+            mode = param.get("mode", "IN")
+            if mode in ("OUT", "INOUT") and arg["type"] != "Identifier":
+                raise InterpreterError(
+                    f"Argument for {mode} parameter '{param['name']}' of '{name}' must "
+                    "be a variable, not an expression",
+                    node["line"],
+                )
+
+        error_info = None
+        arg_values: list = []
+        try:
+            for arg in args:
+                arg_values.append(self._evaluate(arg))
+        except _DivisionByZeroSignal as signal:
+            # Raises here (aborting the whole run) if unhandled -- see
+            # _handle_division_by_zero. If a handler IS registered, this
+            # statement's own step still gets recorded with the error
+            # below, but the call itself is skipped entirely (mirrors
+            # _exec_set's "the assignment simply didn't happen").
+            error_info = self._handle_division_by_zero(signal)
+
+        self._record_step(node, render_statement_header(node), error=error_info)
+        self._run_handler_if_triggered(error_info)
+        if error_info is not None:
+            return
+
+        # -- bind the callee's fresh, fully isolated scope -------------
+        callee_scope: dict = {}
+        output_names: set[str] = set()
+        for param, value in zip(params, arg_values):
+            mode = param.get("mode", "IN")
+            if mode == "OUT":
+                callee_scope[param["name"]] = None
+                output_names.add(param["name"])
+            else:  # IN or INOUT
+                callee_scope[param["name"]] = value
+                if mode == "INOUT":
+                    output_names.add(param["name"])
+
+        # Swap in the callee's frame; scope/cursors/handlers/the changed-
+        # value baseline are ALL per-invocation (see module docstring) --
+        # self.steps/self._step_number are deliberately NOT touched, so
+        # the callee's steps land in the same continuous trace.
+        saved_scope = self.scope
+        saved_previous = self._previous_values
+        saved_outputs = self._output_param_names
+        saved_cursors = self.cursors
+        saved_handlers = self.handlers
+
+        self.scope = callee_scope
+        self._previous_values = dict(callee_scope)
+        self._output_param_names = output_names
+        self.cursors = {}
+        self.handlers = {}
+        self._call_depth += 1
+        self._call_stack.append(name)
+        try:
+            self.run(target["body"], entry_node=target, function_name=name)
+        finally:
+            self._call_depth -= 1
+            self._call_stack.pop()
+            # Capture OUT/INOUT final values BEFORE restoring the
+            # caller's scope, from whichever scope is currently active
+            # (the callee's -- this always runs, success or exception).
+            out_values = {pname: self.scope.get(pname) for pname in output_names}
+            self.scope = saved_scope
+            self._previous_values = saved_previous
+            self._output_param_names = saved_outputs
+            self.cursors = saved_cursors
+            self.handlers = saved_handlers
+
+        # Propagate OUT/INOUT final values back into the caller's own
+        # variables -- already validated above to be plain Identifiers.
+        for param, arg in zip(params, args):
+            mode = param.get("mode", "IN")
+            if mode in ("OUT", "INOUT"):
+                self.scope[arg["name"]] = out_values[param["name"]]
 
     # -- exception handlers -----------------------------------------------
 
@@ -808,6 +1034,20 @@ class Interpreter:
         self._previous_values = dict(self.scope)
         return snapshot
 
+    def _current_call_info(self) -> dict | None:
+        """The `call` field for whatever step is about to be recorded --
+        see the module docstring's "Procedure calls (CALL)" section.
+        None (omitted entirely from the DebugStep) at the top level
+        (`_call_depth == 0`), so every trace that never uses CALL is
+        completely unaffected."""
+        if self._call_depth == 0:
+            return None
+        return {
+            "procedureName": self._call_stack[-1],
+            "depth": self._call_depth,
+            "stack": list(self._call_stack),
+        }
+
     def _record_step(
         self,
         node: dict,
@@ -830,6 +1070,7 @@ class Interpreter:
             cursor=cursor,
             error=error,
             return_value=return_value,
+            call=self._current_call_info(),
         )
         self.steps.append(step)
         return step
@@ -838,21 +1079,40 @@ class Interpreter:
 _UNSET = object()
 
 
+def _build_procedure_registry(definitions: list[dict]) -> dict[str, dict]:
+    """Name -> AST-node registry a CALL statement resolves against (see
+    app.parser's "CALL and multi-procedure sources" and this module's
+    "Procedure calls (CALL)" docstring sections). Includes every
+    definition passed in, by name -- the entry procedure/function is
+    registered too, which is exactly what makes self-recursion work
+    with no extra syntax. A bare Procedure (no "name" key at all) is
+    silently skipped rather than erroring, since `run()` below calls
+    this with `[ast]` unconditionally for the single-definition case."""
+    return {d["name"]: d for d in definitions if d.get("name")}
+
+
 def run(
     ast: dict,
     initial_params: dict | None = None,
     db_connection: sqlite3.Connection | None = None,
 ) -> list[DebugStep]:
-    """Execute a Procedure, ProcedureNode, or FunctionNode AST and
-    return its full DebugStep trace.
+    """Execute a Procedure, ProcedureNode, FunctionNode, or (multi-
+    procedure source) ProgramNode AST and return its full DebugStep
+    trace.
 
     Args:
         ast: the root produced by ``app.parser.parse`` -- one of
             ``{"type": "Procedure", "body": [...]}`` (bare, no params),
             ``{"type": "ProcedureNode", "name", "params", "body"}``
-            (wrapped, params carry a "mode"), or
-            ``{"type": "FunctionNode", "name", "params", "returnType",
-            "body"}`` (params never carry a mode).
+            (wrapped, params carry a "mode"), ``{"type": "FunctionNode",
+            "name", "params", "returnType", "body"}`` (params never
+            carry a mode), or ``{"type": "ProgramNode", "definitions":
+            [...]}`` -- two or more chained CREATE definitions, of which
+            the LAST is the one actually executed (see app.parser's
+            "CALL and multi-procedure sources" section); every
+            definition, entry included, is registered by name so a
+            CallStatement (see app.interpreter's "Procedure calls
+            (CALL)" section) anywhere in the executed body can find it.
         initial_params: starting values for the procedure/function's
             variables and parameters (e.g. ``{"price": 20, "quantity":
             6}``). IN and INOUT params are looked up here by name, the
@@ -872,19 +1132,24 @@ def run(
 
     Returns:
         One DebugStep per executed statement (and, for WHILE, one
-        extra DebugStep per condition check), in execution order. For a
-        FunctionNode or ProcedureNode, step 1 is an extra "entry" step
-        for the CREATE .../BEGIN line itself (see the module docstring's
-        "Functions" section) -- the bare/legacy Procedure form has no
-        such step, and its trace is exactly what it always was. Every
-        step's `variables` entries carry an `isOutput` flag, True only
-        for a ProcedureNode's declared OUT/INOUT params -- so an OUT
-        param's final value is visible (and identifiable as an output)
-        in the last step's snapshot, the same way any other variable's
-        final value already is. For a FunctionNode, execution stops at
-        the first RETURN -- see the module docstring's "Functions"
-        section -- so no step after that one appears, even if there
-        was more source left unexecuted.
+        extra DebugStep per condition check), in execution order,
+        INCLUDING every statement any CALLed procedure executes -- the
+        whole call chain is one flat, continuous list, not a separate
+        trace per procedure (see "Procedure calls (CALL)" above for the
+        `call` field that marks which steps belong to a nested call).
+        For a FunctionNode or ProcedureNode (the entry one, for a
+        ProgramNode), step 1 is an extra "entry" step for the CREATE
+        .../BEGIN line itself (see the module docstring's "Functions"
+        section) -- the bare/legacy Procedure form has no such step, and
+        its trace is exactly what it always was. Every step's
+        `variables` entries carry an `isOutput` flag, True only for a
+        ProcedureNode's declared OUT/INOUT params -- so an OUT param's
+        final value is visible (and identifiable as an output) in the
+        last step's snapshot, the same way any other variable's final
+        value already is. For a FunctionNode, execution stops at the
+        first RETURN -- see the module docstring's "Functions" section
+        -- so no step after that one appears, even if there was more
+        source left unexecuted.
 
     Raises:
         InterpreterError: on undefined variables, an unhandled
@@ -894,38 +1159,62 @@ def run(
             (undeclared/already-open/not-open cursor, a query that
             fails against the database, or a FETCH whose target count
             doesn't match the query's column count), a duplicate
-            CONTINUE HANDLER for the same condition, or -- for a
-            FunctionNode only -- a body that completes without ever
-            executing a RETURN. NOT_FOUND never raises -- see "Cursors"
-            above.
+            CONTINUE HANDLER for the same condition, a CALL naming a
+            procedure that isn't defined or that names a FunctionNode
+            instead of a ProcedureNode, a CALL whose argument count
+            doesn't match the target's parameter count, a CALL passing a
+            non-Identifier expression for an OUT/INOUT parameter, a CALL
+            chain exceeding MAX_CALL_DEPTH, or -- for a FunctionNode only
+            -- a body that completes without ever executing a RETURN.
+            NOT_FOUND never raises -- see "Cursors" above.
     """
     initial_params = dict(initial_params or {})
     output_param_names: set[str] = set()
+
+    # ProgramNode: multiple chained CREATE definitions -- the LAST one is
+    # the entry point (see app.parser), every one (including entry) goes
+    # into the CALL registry. Otherwise (the single-definition case,
+    # unchanged from before ProgramNode existed) `entry` is just `ast`
+    # itself, and it's registered too -- solely so it can CALL itself
+    # (self-recursion) with no other syntax needed; a bare Procedure has
+    # no "name" and contributes nothing to the registry either way.
+    if ast.get("type") == "ProgramNode":
+        definitions = ast["definitions"]
+        entry = definitions[-1]
+        procedures = _build_procedure_registry(definitions)
+    else:
+        entry = ast
+        procedures = _build_procedure_registry([ast])
 
     # Only a ProcedureNode's params carry a mode at all (a bare
     # Procedure has no "params" key, and a FunctionNode's params never
     # have OUT/INOUT semantics -- see parser module docstring), so this
     # is a no-op for both of those.
-    if ast.get("type") == "ProcedureNode":
-        for param in ast.get("params") or []:
+    if entry.get("type") == "ProcedureNode":
+        for param in entry.get("params") or []:
             mode = param.get("mode", "IN")
             if mode in ("OUT", "INOUT"):
                 output_param_names.add(param["name"])
             if mode == "OUT" and param["name"] not in initial_params:
                 initial_params[param["name"]] = None
 
-    interpreter = Interpreter(initial_params, db_connection=db_connection, output_param_names=output_param_names)
+    interpreter = Interpreter(
+        initial_params,
+        db_connection=db_connection,
+        output_param_names=output_param_names,
+        procedures=procedures,
+    )
     try:
-        require_return = ast.get("type") == "FunctionNode"
+        require_return = entry.get("type") == "FunctionNode"
         # Only the two wrapped forms have a CREATE .../BEGIN line to
         # give its own entry step -- the bare/legacy Procedure form
         # (no "name"/"params" at all) is intentionally excluded, so its
         # trace is byte-for-byte what it always was.
-        entry_node = ast if ast.get("type") in ("FunctionNode", "ProcedureNode") else None
+        entry_node = entry if entry.get("type") in ("FunctionNode", "ProcedureNode") else None
         return interpreter.run(
-            ast["body"],
+            entry["body"],
             require_return=require_return,
-            function_name=ast.get("name"),
+            function_name=entry.get("name"),
             entry_node=entry_node,
         )
     finally:

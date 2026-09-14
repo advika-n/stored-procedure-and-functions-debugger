@@ -770,3 +770,151 @@ description of the behavior is still accurate — only the name changed) and sti
 nothing about breakpoints/Continue at all. Documented in `HANDOFF.md` §6/§7 as a small
 follow-up for a future Help-tab-scoped phase, rather than silently left inconsistent or
 fixed outside this phase's stated scope.
+
+---
+
+## 12. CALL Support (procedure calling procedure)
+
+**Date:** 2026-09-14 · **Not yet committed** (see `HANDOFF.md` §3/§6)
+
+**Prompt (verbatim):**
+
+> PHASE: CALL Support (procedure calling procedure)
+>
+> Context: Read CLAUDE.md and HANDOFF.md first for full project context before starting.
+> This is the first Tier 1 phase that touches the interpreter core — confirm the full
+> backend test suite passes (223+) BEFORE starting, since this is the baseline everything
+> else in this phase will be judged against. Confirm again after, and the count must not
+> drop below the pre-phase number.
+>
+> Goal: allow one stored procedure to call another via `CALL procedure_name(args);`, with
+> correct parameter passing (including OUT/INOUT) and step-trace visibility into the nested
+> call.
+>
+> 1. IMPORTANT — before writing any code: inspect the existing grammar/parser/AST to
+>    understand exactly what's needed to add a CALL statement type, and inspect the
+>    interpreter's execution model to understand how a nested procedure invocation should
+>    work within the existing step-trace generation. Report your findings (what needs to
+>    change, where) before implementing, so scope is clear.
+>
+> 2. Grammar/Parser: add support for `CALL procedure_name(arg1, arg2, ...);` as a new
+>    statement type in the AST.
+>
+> 3. Interpreter:
+>    - On encountering a CALL statement, look up the target procedure (by name, from
+>      whatever registry/store of defined procedures already exists), bind arguments to its
+>      parameters (respecting IN/OUT/INOUT semantics already used for top-level procedures),
+>      and execute its body.
+>    - The step-trace must clearly show entering and exiting the called procedure — e.g.
+>      each step within the nested call should carry an indicator of which procedure it
+>      belongs to / a call-depth level, so the frontend can eventually render this as a call
+>      stack (that's the NEXT phase, don't build the visualization now — just make sure the
+>      data is there).
+>    - OUT/INOUT parameters must correctly propagate their final values back to the caller's
+>      variables after the called procedure returns.
+>    - Handle the target procedure not existing (clear error, not a crash).
+>    - Handle recursive calls sanely — at minimum, don't infinite-loop the server; add a
+>      reasonable max call-depth guard with a clear error if exceeded.
+>
+> 4. Do NOT build the call-stack UI in this phase — that's the next phase, once this data
+>    exists. This phase is backend/interpreter only, plus whatever minimal step-trace schema
+>    addition is needed to carry call-depth/procedure-name info forward.
+>
+> 5. Testing (this phase needs more than usual, given the risk):
+>    - Add unit tests for: a simple two-level CALL (proc A calls proc B), correct OUT
+>      parameter propagation back to the caller, calling a nonexistent procedure (clean
+>      error), and a recursive call hitting the depth guard.
+>    - Confirm ALL existing 223+ tests still pass — do not modify or delete any existing
+>      test to make it pass; if an existing test's expectations are now genuinely
+>      invalidated by this change, stop and report why rather than editing around it.
+>    - Add at least one new sample procedure pair demonstrating CALL (e.g. a helper
+>      procedure computing a subtotal, called by a main procedure).
+>
+> Don't touch the frontend, Breakpoints, Continue/Restart, the Anti-Pattern Advisor,
+> Side-by-Side Comparison, Download, Help/Learn tabs, or flowchart generation — this phase
+> is scoped to CALL support in the grammar/parser/interpreter only.
+>
+> After finishing: update HANDOFF.md with exactly what changed in the grammar/AST/step-trace
+> schema (this matters for the next phase, Call Stack, which depends on it), and log this
+> phase in PROMPT_LOG.md.
+
+**Findings reported before implementing (per requirement #1):** confirmed the backend
+suite was at 223 first. `parser.parse()` could only ever produce ONE top-level definition
+per submission — no multi-procedure "program" concept and no procedure registry existed
+anywhere, so CALL had nothing to resolve against until that gap was closed.
+`Interpreter` had exactly one flat `scope`/`cursors`/`handlers`/change-baseline per run,
+with no mechanism to isolate a nested invocation's state from its caller's.
+
+**What shipped:**
+
+*Grammar/parser* (`tokenizer.py`, `parser.py`): `CALL` added as a keyword; new
+`CallStatement` node (`CALL name(args);`, parseable anywhere any statement is).
+`parse()` now accepts **multiple chained `CREATE PROCEDURE`/`CREATE FUNCTION`
+definitions** in one submission — exactly one still returns the bare
+`ProcedureNode`/`FunctionNode` unchanged (verified by a dedicated test and by all 223
+pre-existing tests passing unmodified); two or more are wrapped in a new
+`{"type": "ProgramNode", "definitions": [...]}` node. **Convention: the LAST definition
+in source order is the entry point**; every definition (entry included, enabling
+self-recursion) is registered by name for CALL to resolve, regardless of source order.
+The bare/legacy Procedure form is completely unaffected (no name, can never be a CALL
+target).
+
+*Interpreter* (`interpreter.py`): `_exec_call` resolves the target in a registry built
+once by `run()`, requires it to be a `ProcedureNode` (calling a `FunctionNode` via CALL
+is a clear error — no expression-position function calls exist in this grammar at all).
+**Scope isolation is total**: the callee gets a completely fresh scope/cursors/handlers/
+change-baseline, saved and restored around a **recursive call to `Interpreter.run()`
+itself** for the callee's body (reusing its entry-step and `_ReturnSignal` handling
+unchanged) — `self.steps`/`self._step_number` are never swapped, so the whole call chain
+lands in one continuous trace. Only explicit IN/OUT/INOUT parameters cross the boundary;
+an OUT/INOUT argument must be a plain Identifier (clear error otherwise — can't write
+back into an expression). `MAX_CALL_DEPTH = 50` guards recursion (self- and mutual) with
+a clear `InterpreterError`, never a hang or Python `RecursionError`. Structural problems
+(unknown target, wrong type, wrong arg count, non-Identifier OUT/INOUT arg) raise before
+anything is recorded; a `DIVISION_BY_ZERO` while evaluating an argument is attached to
+the CALL statement's own step and, if handled, skips the call entirely (mirrors
+`_exec_set`'s "the assignment simply didn't happen").
+
+**Step-trace schema addition** (what the next phase, Call Stack, needs): every
+`DebugStep` inside a CALLed procedure's own execution carries an optional
+`call: { procedureName, depth, stack }` field (`stack` = full enclosing-procedure-name
+chain, outermost first). **Omitted entirely for every top-level step** — exactly like
+`branch`/`loop`/`cursor`/`error` already are when not applicable — so every trace that
+predates this phase, and every trace that never uses CALL, has a byte-identical wire
+shape.
+
+**No backend endpoint/other-module changes needed** — confirmed by inspection: `main.py`
+passes `ast`/`steps` through regardless of shape; `history.py` only `json.dumps`/`loads`s
+them; the Anti-Pattern Advisor's `analyze()` does `ast.get("body", [])`, confirmed by
+direct test to return `[]` (no crash) for a `ProgramNode`. `cfg.js`/Compare/Download
+don't recognize the new AST shape yet — accepted, explicitly out of this phase's scope.
+
+**Testing**: 28 new tests in `test_call_statement.py` (tokenizer/parser coverage, two-
+level CALL with OUT propagation, INOUT propagation, scope isolation with a same-named
+variable, a callee not inheriting the caller's handler/cursor, nonexistent-procedure and
+not-a-procedure errors, wrong argument count, non-Identifier OUT/INOUT arguments,
+self-recursion computing 5! correctly, direct AND mutual infinite recursion both hitting
+the depth guard, unhandled/handled DIVISION_BY_ZERO in a CALL argument) plus 1 new
+`/debug`-endpoint test. The requested "new sample procedure pair"
+(`ComputeSubtotal`/`OrderTotal`) was added as a **backend test fixture**, not to
+`frontend/src/samples.js` — flagged explicitly as an interpretation choice, since the
+frontend was out of scope and wouldn't render a `ProgramNode`-shaped AST meaningfully yet
+anyway. Full suite: **252 passing** (223 before + 29 new) — confirmed both before and
+after this phase, exactly as required; nothing existing was modified or deleted.
+Performance re-measured directly (interpreter changed, per `CLAUDE.md` §4's policy):
+both a no-CALL and a CALL-based procedure averaged well under 1ms per run.
+
+**Scope discipline**: `git status --short` after finishing showed only
+`backend/app/tokenizer.py`, `parser.py`, `interpreter.py`, `tests/test_call_statement.py`
+(new), and `tests/test_debug_endpoint.py` changed — no frontend files, no Breakpoints/
+Continue-Restart/Advisor/Compare/Download/Help/Learn/flowchart files touched at all.
+
+**Environment note**: the long-running local dev backend (port 8000) did not pick up
+these changes even after retries — confirmed via a live `curl` smoke test still showing
+old (single-definition) parsing behavior. Its listening PID could not be found by any
+process-inspection tool available (a recurring unverifiable-PID quirk in this
+environment, noted in an earlier session too), so it was deliberately left alone rather
+than risking a blind kill — the pytest suite (which exercises the current source
+directly via FastAPI's `TestClient`, not that external process) is this phase's actual,
+fully-satisfied verification gate regardless. Noted in `HANDOFF.md` as a manual restart
+the user may want before trying `CALL` support live.

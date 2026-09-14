@@ -7,7 +7,7 @@ to JSON for inspection or shipped over the wire to a frontend.
 
 Supported grammar (informal, keywords in CAPS are literal tokens):
 
-    program     := function_def | procedure_def | statement*
+    program     := (function_def | procedure_def)+ | statement*
 
     function_def := CREATE FUNCTION IDENT '(' func_param (',' func_param)* ')'
                      RETURNS IDENT
@@ -21,6 +21,7 @@ Supported grammar (informal, keywords in CAPS are literal tokens):
     statement   := declare_stmt | declare_cursor_stmt | declare_handler_stmt
                     | set_stmt | if_stmt | while_stmt | return_stmt
                     | open_cursor_stmt | fetch_cursor_stmt | close_cursor_stmt
+                    | call_stmt
 
     declare_stmt        := DECLARE IDENT IDENT (DEFAULT expr)? ';'
     declare_cursor_stmt := DECLARE IDENT CURSOR FOR <raw tokens up to ';'> ';'
@@ -35,6 +36,7 @@ Supported grammar (informal, keywords in CAPS are literal tokens):
     open_cursor_stmt  := OPEN IDENT ';'
     fetch_cursor_stmt := FETCH IDENT INTO IDENT (',' IDENT)* ';'
     close_cursor_stmt := CLOSE IDENT ';'
+    call_stmt         := CALL IDENT '(' (expr (',' expr)*)? ')' ';'
 
     expr         := comparison
     comparison   := term (('>' | '<' | '=' | '!=') term)*
@@ -87,6 +89,62 @@ defaulting to "IN" when omitted) -- unlike a function_def's params,
 which never have a mode at all (see "Functions" below). See
 app.interpreter's module docstring for what OUT/INOUT actually do at
 runtime.
+
+-- CALL and multi-procedure sources (procedure calling procedure) --------
+
+`CALL name(arg1, arg2, ...);` invokes another procedure by name --
+parses to ``{"type": "CallStatement", "name", "args", "line"}``, where
+`args` is a list of ordinary expression nodes (see `expr` above; a bare
+Identifier, a literal, or any arithmetic expression are all valid
+argument syntax -- app.interpreter is what later requires an OUT/INOUT
+argument specifically to be an Identifier, since that's a semantic rule
+about writability, not a grammar rule). `CALL` is parseable anywhere an
+ordinary statement is (inside IF/WHILE bodies, inside a handler's
+action, inside another procedure's own body), exactly like every other
+statement type.
+
+For CALL to have anything to call, `parse()` now accepts **more than
+one** `CREATE PROCEDURE`/`CREATE FUNCTION` definition chained back to
+back in a single submission -- previously (and still, when there's only
+one) `parse()` returns exactly that one ProcedureNode/FunctionNode, byte
+-identical to before this existed. When it sees a *second* `CREATE`
+right after the first definition's closing `END`/`END;`, it keeps
+parsing definitions until they run out, and wraps them in a new
+top-level node:
+
+    {"type": "ProgramNode", "definitions": [ProcedureNode | FunctionNode, ...], "line": ...}
+
+**Convention: the LAST definition in source order is the entry point**
+-- the one app.interpreter actually executes when you run this AST,
+exactly the way you'd run a single procedure today. Every definition
+(including the entry one itself, and including any FunctionNode
+definitions) is registered by name so `CALL` can find it -- app.
+interpreter is what enforces that a `CALL` target must specifically be
+a ProcedureNode (calling a FunctionNode by name via CALL is a clear
+runtime error, not silently allowed -- expression-position function
+calls like `x = double(5)` are a different feature this grammar does
+not have at all). Registering the entry procedure under its own name
+too is what makes straightforward self-recursion possible without any
+extra syntax. Definition order in the source does NOT matter for
+resolving a CALL target -- the whole registry is built before anything
+executes, so a definition can freely CALL a sibling defined earlier OR
+later in the same source; only WHICH one is the entry point depends on
+position (the last one).
+
+The bare/legacy Procedure form (no CREATE wrapper at all) is
+**unaffected by any of this** -- it has no name, so it can never be a
+CALL target, and a submission that starts with anything other than
+CREATE always parses as exactly one bare Procedure, exactly as before.
+A CALL statement inside a bare Procedure's body is syntactically legal
+(CALL is just another statement) but will always fail at runtime with
+"procedure is not defined", since a bare-form submission can never
+carry sibling definitions for it to find -- an honest limitation, not a
+bug: mixing the bare form with CREATE-wrapped multi-procedure sources in
+one submission isn't supported.
+
+See app.interpreter's module docstring for exactly how a CALL executes
+(argument binding, scope isolation, OUT/INOUT propagation, the call-
+depth guard, and the step-trace fields that make a nested call visible).
 
 -- Functions ------------------------------------------------------------
 
@@ -334,9 +392,11 @@ class Parser:
             return self._parse_close_cursor()
         if self._check("KEYWORD", "RETURN"):
             return self._parse_return()
+        if self._check("KEYWORD", "CALL"):
+            return self._parse_call()
 
         raise self._error(
-            "Expected DECLARE, SET, IF, WHILE, RETURN, OPEN, FETCH, or CLOSE", token
+            "Expected DECLARE, SET, IF, WHILE, RETURN, OPEN, FETCH, CLOSE, or CALL", token
         )
 
     def _parse_return(self) -> dict:
@@ -344,6 +404,26 @@ class Parser:
         value = self._parse_expr()
         self._expect("PUNCTUATION", ";")
         return {"type": "ReturnNode", "value": value, "line": start["line"]}
+
+    def _parse_call(self) -> dict:
+        start = self._keyword("CALL")
+        name_token = self._expect("IDENTIFIER")
+
+        self._expect("PUNCTUATION", "(")
+        args: list[dict] = []
+        if not self._check("PUNCTUATION", ")"):
+            args.append(self._parse_expr())
+            while self._match("PUNCTUATION", ","):
+                args.append(self._parse_expr())
+        self._expect("PUNCTUATION", ")")
+        self._expect("PUNCTUATION", ";")
+
+        return {
+            "type": "CallStatement",
+            "name": name_token["value"],
+            "args": args,
+            "line": start["line"],
+        }
 
     def _parse_declare(self) -> dict:
         start = self._keyword("DECLARE")
@@ -651,9 +731,24 @@ def _render_raw_query(tokens: list[dict]) -> str:
     return " ".join(parts)
 
 
+def _parse_one_definition(parser: Parser) -> dict:
+    """Parse exactly one CREATE PROCEDURE/CREATE FUNCTION definition
+    starting at the parser's current position (which must be sitting on
+    a CREATE token) -- factored out of `parse()` so it can be called
+    once for the common single-definition case or repeatedly for a
+    chained multi-procedure source (see the module docstring's "CALL
+    and multi-procedure sources" section)."""
+    following = parser.tokens[parser.pos + 1] if parser.pos + 1 < len(parser.tokens) else None
+    if following is not None and following["type"] == "KEYWORD" and following["value"].upper() == "PROCEDURE":
+        return parser.parse_procedure_def()
+    if following is not None and following["type"] == "KEYWORD" and following["value"].upper() == "FUNCTION":
+        return parser.parse_function_def()
+    raise parser._error("Expected FUNCTION or PROCEDURE after CREATE", following)
+
+
 def parse(tokens: list[dict]) -> dict:
-    """Parse a full token list into a Procedure, ProcedureNode, or
-    FunctionNode AST.
+    """Parse a full token list into a Procedure, ProcedureNode,
+    FunctionNode, or (multi-procedure source) ProgramNode AST.
 
     Dispatches by peeking at the first one or two tokens: a leading
     ``CREATE PROCEDURE`` parses a full ``CREATE PROCEDURE ... BEGIN
@@ -666,6 +761,16 @@ def parse(tokens: list[dict]) -> dict:
     already does. See the module docstring's "Procedures: two forms"
     section.
 
+    If, after one CREATE definition, another CREATE immediately
+    follows, parsing continues -- collecting every chained definition
+    -- rather than stopping at the first one. With exactly one
+    definition the return value is byte-identical to before this
+    existed (a bare ProcedureNode/FunctionNode, not wrapped in
+    anything); with two or more, they're wrapped in a ProgramNode. See
+    the module docstring's "CALL and multi-procedure sources" section
+    for the full convention (the LAST definition is the entry point;
+    every definition is registered by name for CALL to find).
+
     Args:
         tokens: the token list produced by ``app.tokenizer.tokenize``.
 
@@ -673,9 +778,11 @@ def parse(tokens: list[dict]) -> dict:
         One of:
           - ``{"type": "Procedure", "body": [...]}`` (bare form)
           - ``{"type": "ProcedureNode", "name", "params", "body"}``
-            (wrapped form)
+            (wrapped form, alone)
           - ``{"type": "FunctionNode", "name", "params", "returnType",
-            "body"}``
+            "body"}`` (alone)
+          - ``{"type": "ProgramNode", "definitions": [...], "line"}``
+            (two or more CREATE definitions chained together)
 
     Raises:
         ParserError: if the tokens don't match the supported grammar,
@@ -684,10 +791,14 @@ def parse(tokens: list[dict]) -> dict:
     """
     parser = Parser(tokens)
     if parser._check("KEYWORD", "CREATE"):
-        following = parser.tokens[parser.pos + 1] if parser.pos + 1 < len(parser.tokens) else None
-        if following is not None and following["type"] == "KEYWORD" and following["value"].upper() == "PROCEDURE":
-            return parser.parse_procedure_def()
-        if following is not None and following["type"] == "KEYWORD" and following["value"].upper() == "FUNCTION":
-            return parser.parse_function_def()
-        raise parser._error("Expected FUNCTION or PROCEDURE after CREATE", following)
+        definitions = [_parse_one_definition(parser)]
+        while parser._check("KEYWORD", "CREATE"):
+            definitions.append(_parse_one_definition(parser))
+        if len(definitions) == 1:
+            return definitions[0]
+        return {
+            "type": "ProgramNode",
+            "definitions": definitions,
+            "line": definitions[0]["line"],
+        }
     return parser.parse_procedure()

@@ -8,23 +8,28 @@ stable project facts (architecture, schema, design tokens) see `CLAUDE.md` inste
 
 ## 1. Last updated
 
-**2026-09-14**, end of the session that added **"Continue" and "Restart"** to the step
-navigator — a cleanup/completion pass on Tier 1's navigation controls, directly following
-the session that built **Breakpoints + Run-to-Breakpoint** (the first Tier 1 addition;
-Tier 1 also includes Step controls, Call Stack, and `CALL` support — strengthening the
-project beyond the original mandatory/innovation scope, given extra time available). That
-session followed the one that built Side-by-Side Run Comparison (the second Innovation
-feature), which followed the one that built the SQL Anti-Pattern Advisor (the first
-Innovation feature), which followed the Download feature (multi-format report export,
-the last mandatory section), which followed the Learn tab session (which created
-`PROMPT_LOG.md`), which followed the Help tab session, which followed the session that
-created this file/`CLAUDE.md` and built Day/Night Mode + the Developed By modal.
+**2026-09-14**, end of the session that built **`CALL` support (procedure calling
+procedure)** — the third Tier 1 addition, and the **first Tier 1 phase to touch the
+interpreter core** (`tokenizer.py`/`parser.py`/`interpreter.py`; every previous Tier 1
+phase was frontend-only). This followed the session that added "Continue" and "Restart"
+to the step navigator (a cleanup pass on Tier 1's navigation controls), which directly
+followed the session that built Breakpoints + Run-to-Breakpoint (the first Tier 1
+addition). Tier 1 (Breakpoints, Step controls, Call Stack, `CALL` support) is a
+reassessed push strengthening the project beyond the original mandatory/innovation scope,
+given extra time available; it followed the session that built Side-by-Side Run
+Comparison (the second Innovation feature), which followed the SQL Anti-Pattern Advisor
+session (the first Innovation feature), which followed the Download feature (multi-format
+report export, the last mandatory section), which followed the Learn tab session (which
+created `PROMPT_LOG.md`), which followed the Help tab session, which followed the session
+that created this file/`CLAUDE.md` and built Day/Night Mode + the Developed By modal.
 
-**Re-verified via `git log`/`git status` at the start of this session**: the Breakpoints
-work was already committed (`9b4b6e1`), on top of everything else already committed in
-`56a629a`. Working tree was fully clean at the start. Backend baseline confirmed at 223
-passing before starting (this phase's own required gate) and 223 again at the end — no
-backend files were touched.
+**Re-verified via `git log`/`git status` at the start of this session**: the Continue/
+Restart rename was already committed (`5bb3534`), on top of everything else already
+committed (`9b4b6e1`, `56a629a`, ...). Working tree was fully clean at the start. Backend
+baseline confirmed at **223 passing before starting** (this phase's own required gate,
+and the number every future phase must not drop below) and **252 passing at the end**
+(223 pre-existing + 28 new `test_call_statement.py` tests + 1 new `/debug`-endpoint test)
+— nothing existing was modified or deleted to make it pass, exactly as required.
 
 ---
 
@@ -438,6 +443,136 @@ extra time available, on top of the 5 mandatory sections and 4 innovation featur
     `git status --short` shows only `DebuggerPage.jsx` changed). `npm run lint`/
     `npm run build` both clean (same 2 pre-existing warnings). Test-run history rows
     created during verification (ids 131-135) deleted afterward via `DELETE /history/{id}`.
+- **`CALL` support (procedure calling procedure)** — **Done**, the third Tier 1 item, and
+  the first one to touch `tokenizer.py`/`parser.py`/`interpreter.py`. Full details below
+  since this is exactly the grammar/AST/step-trace schema info the NEXT phase (Call
+  Stack) needs.
+  - **Findings reported before implementing, per this phase's own instruction**: the
+    parser could only ever produce ONE top-level definition per submission — there was no
+    multi-procedure "program" concept and no procedure registry anywhere, so `CALL` had no
+    way to find a callee at all until that was added. The interpreter had exactly one flat
+    `scope`/`cursors`/`handlers`/change-baseline per run, with no way to isolate a nested
+    invocation's variables from its caller's.
+  - **Grammar/parser changes** (`backend/app/tokenizer.py`, `backend/app/parser.py`):
+    - `CALL` added as a keyword.
+    - New statement: `CALL name(arg1, arg2, ...);` → `{"type": "CallStatement", "name",
+      "args", "line"}` (`args` is a list of ordinary expression nodes — any expression is
+      syntactically valid; the interpreter is what later requires an OUT/INOUT argument
+      specifically to be an Identifier). Parseable anywhere any other statement is
+      (top level, inside IF/WHILE, inside a handler's action).
+    - **`parse()` now accepts multiple chained `CREATE PROCEDURE`/`CREATE FUNCTION`
+      definitions in one submission.** Exactly one definition still returns the bare
+      `ProcedureNode`/`FunctionNode` shape, byte-identical to before this phase (verified
+      by a dedicated test, and by all 223 pre-existing tests still passing unmodified) —
+      **zero risk to any existing single-procedure sample or History entry.** Two or more
+      chained definitions are wrapped in a new top-level node:
+      `{"type": "ProgramNode", "definitions": [ProcedureNode | FunctionNode, ...], "line"}`.
+    - **Convention: the LAST definition in source order is the entry point** — the one
+      actually executed. Every definition (including the entry one itself) is registered
+      by name so `CALL` can find it; registering the entry under its own name is what
+      makes self-recursion work with no extra syntax. Definition order does NOT affect
+      which sibling a `CALL` can reach (the whole registry is built before anything
+      executes) — only WHICH definition is the entry point depends on position.
+    - The bare/legacy Procedure form (no `CREATE` wrapper) is **completely unaffected** —
+      it has no name, so it can never be a `CALL` target, and mixing it with `CREATE`-
+      wrapped multi-procedure sources in one submission isn't supported (an honest
+      limitation, documented in `parser.py`'s own module docstring, not a bug).
+  - **Interpreter changes** (`backend/app/interpreter.py`):
+    - `Interpreter._exec_call` resolves the target by name in a registry
+      (`Interpreter._procedures`, built once by the module-level `run()` from every
+      `CREATE` definition in the source), and only accepts a `ProcedureNode` target —
+      calling a `FunctionNode`'s name via `CALL` is a clear `InterpreterError`, not
+      silently allowed (this grammar has no expression-position function calls at all —
+      out of scope for "procedure calling procedure").
+    - **Scope isolation is total.** The callee gets a completely fresh
+      `scope`/`cursors`/`handlers`/changed-value-baseline — none of the caller's
+      variables, cursors, or handlers are visible to it, and vice versa. Only explicit
+      parameter binding crosses the boundary: IN/INOUT argument expressions are evaluated
+      once in the CALLER's scope before the callee's frame is installed; OUT/INOUT
+      parameters' final values are written back into the caller's variables after the
+      callee returns. **An OUT/INOUT argument must be a plain Identifier** (there's no way
+      to "write back" into an expression like `x + 1`) — a clear `InterpreterError` if
+      violated. Implemented by saving/restoring five `Interpreter` attributes around a
+      **recursive call to `Interpreter.run()` itself** for the callee's body (reusing its
+      existing entry-step + `_ReturnSignal` handling unchanged) — `self.steps`/
+      `self._step_number` are deliberately NEVER swapped, so the whole call chain
+      (including recursive/mutual recursion) lands in ONE continuous, flat trace, not a
+      separate trace per procedure.
+    - **Recursion is allowed** (self-recursion and mutual recursion through a chain of
+      procedures both work — both are covered by tests). `MAX_CALL_DEPTH = 50` guards it:
+      exceeding it raises a clear `InterpreterError` ("exceeded the maximum call depth"),
+      never a hung server or a Python `RecursionError`.
+    - **Target-not-found / wrong-target-type / wrong-argument-count / non-Identifier-OUT-
+      argument** all raise BEFORE anything is recorded (matching every other statement's
+      existing "structural problems raise before the step" pattern, e.g. `_exec_set`'s
+      "variable not declared" check). Only a genuinely dynamic problem — a
+      `DIVISION_BY_ZERO` while evaluating an argument expression — is attached to the
+      `CALL` statement's own step; if a handler makes it non-fatal, the call itself is
+      simply skipped entirely (the callee's body never runs), mirroring `_exec_set`'s
+      "the assignment simply didn't happen."
+  - **Step-trace schema addition (this is the part the next phase, Call Stack, depends
+    on)**: every `DebugStep` recorded while inside a CALLed procedure's own execution
+    (including its synthetic entry step) now carries an extra, **optional** field:
+    ```
+    call?: { procedureName: string, depth: number, stack: string[] }
+    ```
+    `stack` is the full chain of enclosing procedure names, outermost first
+    (`stack[-1] === procedureName`, `stack.length === depth`) — included so a future
+    frontend can render "what's currently on the call stack" directly from one step,
+    without replaying the whole trace and tracking depth deltas itself. **Omitted
+    entirely (not `null`, not present at all) for every step at the top level** (depth 0)
+    — exactly like `branch`/`loop`/`cursor`/`error` already are when not applicable — so
+    **every trace that existed before this phase, and every trace that never uses `CALL`,
+    has a completely unchanged wire shape.** The `CALL` statement's own step (e.g. "CALL
+    Foo(a, b);") is recorded in the CALLER's frame, at the caller's own depth, BEFORE the
+    callee's frame is installed — so it only carries `call` if the caller itself is
+    already nested.
+  - **No backend endpoint/other-module changes needed at all** — confirmed by inspection,
+    not assumed: `main.py`'s `/debug` handler passes `ast`/`steps` straight through
+    regardless of shape (unmodified, zero risk to Download/History); `history.py` only
+    ever `json.dumps`/`json.loads`s `ast`/`steps` generically (unmodified); the SQL
+    Anti-Pattern Advisor's `analyze()` does `ast.get("body", [])`, which returns `[]` for
+    a `ProgramNode` (no `"body"` key) — confirmed by direct test to return `[]` with no
+    crash, a graceful, deliberate degradation rather than a fix (out of this phase's
+    scope) — so a `CALL`-based submission today shows "no anti-patterns detected" rather
+    than erroring, simply because the Advisor doesn't understand this AST shape yet. The
+    frontend's flowchart builder (`cfg.js`) and the Compare page likewise don't recognize
+    `ProgramNode`/`CallStatement` yet — out of this phase's explicit scope (frontend
+    untouched entirely) — see §6 for the consequence.
+  - **Testing** (`backend/app/tests/test_call_statement.py`, new, 28 tests; one new test
+    in `test_debug_endpoint.py`): tokenizer/parser coverage (CALL parses with/without
+    args, inside an IF body, missing semicolon/paren errors, multi-definition chaining,
+    the last-definition-is-entry convention, single-definition backward compatibility);
+    interpreter coverage (two-level CALL with OUT propagation, INOUT propagation across
+    two sequential calls, an arbitrary expression as an IN argument, caller/callee scope
+    isolation with a same-named variable, a callee NOT inheriting the caller's handler or
+    cursor, calling a nonexistent procedure, calling a FunctionNode via CALL, wrong
+    argument count, non-Identifier OUT/INOUT arguments, self-recursion computing a correct
+    result (5! via `Fact` calling itself) with the expected max depth reached, direct
+    infinite recursion hitting the depth guard, MUTUAL recursion (A calls B calls A ...)
+    also hitting the depth guard, unhandled and handled `DIVISION_BY_ZERO` in a CALL
+    argument) plus one `/debug`-endpoint test confirming the whole pipeline end-to-end
+    with no `main.py` changes. **The new "sample procedure pair"** this phase's own spec
+    asked for (`ComputeSubtotal`/`OrderTotal`) is a backend test fixture, not a
+    `frontend/src/samples.js` addition — see the note in the test file itself for why
+    (frontend explicitly out of scope, and `ProgramNode`/`CallStatement` wouldn't render
+    meaningfully in the flowchart/Advisor UI yet anyway). Full suite: **252 passing**
+    (223 before this phase + 29 new).
+  - **Performance**: re-measured directly (tokenize→parse→run, in-process, bypassing the
+    stale live dev server — see below) since this phase touched the interpreter, per
+    `CLAUDE.md` §4's own policy — both a no-CALL and a CALL-based procedure averaged well
+    under 1ms per run; no measurable overhead introduced.
+  - **One environment quirk hit and left alone**: the long-running local dev backend
+    (port 8000) did not pick up these code changes even after several seconds/retries —
+    `netstat` shows it listening under a PID that no process-inspection tool (`tasklist`,
+    PowerShell `Get-Process`/`Get-CimInstance`) can actually find, an unverifiable-PID
+    quirk this environment has surfaced before (see the SQL Anti-Pattern Advisor
+    session's own notes). Did **not** attempt to kill/restart it, since the actual PID
+    couldn't be confirmed and this phase's real verification gate is the pytest suite
+    (which imports the current source directly via FastAPI's `TestClient`, not the stale
+    external process) — fully satisfied regardless. If the user wants to try `CALL`
+    support live via curl or the running app, the dev backend process likely needs a
+    manual restart to pick up these changes.
 
 ---
 
@@ -445,9 +580,11 @@ extra time available, on top of the 5 mandatory sections and 4 innovation featur
 
 Nothing is genuinely half-built right now — every feature in §2 is code-complete.
 
-- **This session's own Continue/Restart rename is uncommitted** — `frontend/src/pages/
-  DebuggerPage.jsx` only (confirmed via `git status --short`); the Breakpoints phase
-  before it is already committed (`9b4b6e1`). Same "commit soon" recommendation as every
+- **This session's own `CALL` support is uncommitted** — `backend/app/tokenizer.py`,
+  `backend/app/parser.py`, `backend/app/interpreter.py`, `backend/app/tests/
+  test_call_statement.py` (new), `backend/app/tests/test_debug_endpoint.py` (confirmed
+  via `git status --short` — no frontend files touched); the Continue/Restart rename
+  before it is already committed (`5bb3534`). Same "commit soon" recommendation as every
   prior phase — see §7.
 - The student photo in the Developed By modal is still the placeholder inline SVG
   silhouette, not a real photo file (the text content itself is real and committed).
@@ -469,14 +606,14 @@ in this list. What's left is real content for the Learn tab (§6) and everything
   a prior session's own closing instruction rather than left as "not started" — it was
   never begun, no code exists for it, and none should be added later under this name
   without a fresh scoping prompt from the user.
-- **Two of the four Tier 1 items** — Call Stack, and `CALL` support (calling one
-  procedure/function from another — not currently supported by the grammar at all per
-  `parser.py`, so Call Stack likely depends on `CALL` support existing first). Both need
-  a fresh scoping prompt before starting, same as Quiz page enhancements below.
-  (Breakpoints and Step controls, the other two Tier 1 items, are both done — see §2. A
-  genuine Step-Into-vs-Step-Over distinction isn't meaningful until `CALL` support exists
-  to step into, so "Step controls" is being treated as satisfied by Previous/Next/
-  Continue/Restart together rather than left half-open waiting on that dependency.)
+- **One of the four Tier 1 items** — Call Stack (the frontend visualization of the
+  `call`/depth/stack data `CALL` support now produces — see §2's entry for the exact
+  schema). Needs a fresh scoping prompt before starting, same as Quiz page enhancements
+  below. (Breakpoints, Step controls, and `CALL` support, the other three Tier 1 items,
+  are all done — see §2. A genuine Step-Into-vs-Step-Over distinction wasn't built as
+  part of "Step controls" since `CALL` didn't exist yet at the time; worth reconsidering
+  now that it does, but only as part of a scoped Call Stack phase or a fresh prompt, not
+  assumed here.)
 
 ---
 
@@ -509,12 +646,14 @@ Then the reassessed Tier 1 push (§2's new subsection), given extra time availab
 
 1. ~~Breakpoints + Run-to-Breakpoint~~ — code-complete, thoroughly verified, **committed**
    (`9b4b6e1`). Its "Run to Breakpoint" button was renamed to "Continue" in the very next
-   session (below) — same underlying logic, no behavior change.
-2. ~~Step controls~~ — **Done**, via this session's "Continue"/"Restart" cleanup pass
-   (§2), thoroughly verified, not yet committed (§3/§6). (Call Stack and `CALL` support,
-   the other two Step-controls-adjacent Tier 1 items, remain not started — see below.)
-3. Call Stack — not started, needs scoping (§4).
-4. `CALL` support — not started, needs scoping (§4); no grammar support exists yet.
+   session — same underlying logic, no behavior change.
+2. ~~Step controls~~ — **Done**, via the "Continue"/"Restart" cleanup pass (§2),
+   thoroughly verified, **committed** (`5bb3534`).
+3. ~~`CALL` support~~ — **Done** this session, thoroughly verified (§2 has the full
+   grammar/AST/step-trace details), not yet committed (§3/§6).
+4. Call Stack — not started, needs scoping (§4). Depends on `CALL` support's `call`
+   DebugStep field (§2) — that data now exists; this item is purely the frontend
+   visualization on top of it.
 
 See §7 for what has to happen *before* moving further down this list, though.
 
@@ -559,12 +698,29 @@ Scanned directly (`grep` for `TODO`/`FIXME`/`XXX`/`HACK`/placeholder markers acr
   (Side-by-Side Run Comparison) then left the Download feature, the Anti-Pattern Advisor,
   the Developed-By content edit, and its own Compare work all genuinely uncommitted — and
   **all of that was committed since**, in one commit (`56a629a`) made outside a Claude
-  Code session; the following Breakpoints session was itself committed too (`9b4b6e1`).
-  Re-verified via `git status --short`/`git log` at the start of *this* session: the
-  working tree was fully clean before this phase started. **What's uncommitted right
-  now** is only this session's own Continue/Restart rename — see §3. Lesson keeps
-  standing: `git log`/`git status` are ground truth, checked fresh every session,
-  never carried over from what the last session's notes said.
+  Code session; the following Breakpoints and Continue/Restart sessions were each
+  committed too (`9b4b6e1`, `5bb3534`). Re-verified via `git status --short`/`git log` at
+  the start of *this* session: the working tree was fully clean before this phase
+  started. **What's uncommitted right now** is only this session's own `CALL` support —
+  see §3. Lesson keeps standing: `git log`/`git status` are ground truth, checked fresh
+  every session, never carried over from what the last session's notes said.
+- **`ProgramNode`/`CallStatement` aren't understood by any frontend consumer yet** — this
+  phase's own explicit scope (backend/interpreter only). Concretely, for a `CALL`-based
+  multi-procedure submission today: `cfg.js`'s flowchart builder will not render a
+  meaningful diagram (it doesn't recognize `ast.type === "ProgramNode"`); the SQL
+  Anti-Pattern Advisor degrades to "no issues found" rather than actually analyzing
+  anything (confirmed to not crash — see §2 — but it's not really checking); the Download
+  report and Side-by-Side Comparison pages haven't been exercised against this AST shape
+  at all. None of this is a bug in what shipped this session (every one of those was
+  explicitly out of scope, and each was confirmed to at least not crash where checked) —
+  it's the expected, deliberate state until a future frontend-facing phase teaches those
+  consumers about `call`/`ProgramNode`. By code inspection (not live-browser-verified
+  this session — frontend was explicitly out of scope, and the live dev backend was
+  stale, see §2), the Debugger page's step navigator/variable table/breakpoints/Continue/
+  Restart should all keep working fine against a `CALL`-based trace regardless, since none
+  of them index into `ast` by shape — they only ever read the flat `steps` array (the new
+  `call` field would just be present-but-unused, harmlessly) — worth a quick live check in
+  a future session before relying on that claim.
 - **Learn tab ships with placeholder content by design** (§2) — draft concept-explanation
   prose (unreviewed against the actual course rubric), a literal `YOUR_VIDEO_ID_HERE`
   video embed, and placeholder references in every category. All three are visibly
@@ -587,12 +743,12 @@ Scanned directly (`grep` for `TODO`/`FIXME`/`XXX`/`HACK`/placeholder markers acr
   itself, not just `.site-header-right`).
 - **`backend/data/debug_history.db` needed manual cleanup again this session** (every
   session so far has needed this) — live-verification testing against the real dev
-  backend always writes real history rows. This session's Continue/Restart testing
-  (CDP-driven real mouse clicks against `SumUntilLimit` and `CalculateTotal`, dark +
-  light theme) added ids 131-135, deleted afterward via `DELETE /history/{id}`; checked
-  first for stragglers past the previous session's own claimed cleanup range (none found
-  — ids 128-130 were genuinely all gone). Same reminder as every prior session: hitting
-  the *real* running backend during manual verification always needs this cleanup step.
+  backend always writes real history rows. This session's few `curl` smoke-test calls
+  against the (stale, see §2) live backend added ids 136-138, deleted afterward via
+  `DELETE /history/{id}`; checked first for stragglers past the previous session's own
+  claimed cleanup range (none found — ids 131-135 were genuinely all gone). Same reminder
+  as every prior session: hitting the *real* running backend during manual verification
+  always needs this cleanup step.
 - **Anti-Pattern Advisor doesn't cover a history-replayed run** (§2) — `issues` is only
   ever set from a live `/debug` response; replaying a saved History entry restores
   `ast`/`steps` but leaves `issues` at `null`, so the Advisor panel shows its
@@ -628,20 +784,30 @@ Scanned directly (`grep` for `TODO`/`FIXME`/`XXX`/`HACK`/placeholder markers acr
 
 ## 7. Immediate next step
 
-1. **Commit this session's Continue/Restart rename** (`frontend/src/pages/
-   DebuggerPage.jsx` only — see §3/§6). Small and low-risk; same recommendation as ever:
-   commit before starting the next phase rather than letting uncommitted work accumulate.
-2. **Small Help-tab follow-up, whenever a Help/Learn-scoped phase is convenient** (§6):
+1. **Commit this session's `CALL` support** (`backend/app/tokenizer.py`, `parser.py`,
+   `interpreter.py`, `tests/test_call_statement.py`, `tests/test_debug_endpoint.py` — see
+   §3/§6). This one is riskier to leave uncommitted than prior small UI renames, since it
+   touched the interpreter core — commit before starting the next phase.
+2. **Restart the local dev backend before trying `CALL` support live** (§2/§6) — the
+   long-running process on port 8000 did not pick up these changes; a manual restart
+   should fix it (the pytest suite already fully verifies the code itself, so this is
+   only relevant for manual/browser-driven checking).
+3. **Small Help-tab follow-up, whenever a Help/Learn-scoped phase is convenient** (§6):
    update the control-reference list item that still says "Reset" to say "Restart," and
    add a line describing breakpoints/Continue — neither was in scope for the phase that
    caused the gap.
-3. Get the real student photo for the Developed By modal (the text content itself is
+4. Get the real student photo for the Developed By modal (the text content itself is
    already real and already committed — §3).
-4. Get a real educational video (swap `YOUR_VIDEO_ID_HERE` in `LearnPage.jsx`) and real,
+5. Get a real educational video (swap `YOUR_VIDEO_ID_HERE` in `LearnPage.jsx`) and real,
    verified references (replacing every badge-marked placeholder entry) for the Learn
    tab (§2/§6) — and have the concept-explanation draft reviewed against the actual
    course rubric.
-5. Continue the Tier 1 push (§5) — Call Stack and `CALL` support are both still unscoped
-   (§4) and need a fresh phase prompt each, same as Quiz page enhancements and Variable
-   Timeline/sparklines. Live Parameter Tuning stays dropped (§4) and
-   shouldn't be picked up under that name without a fresh scoping prompt.
+6. Continue the Tier 1 push (§5) — **Call Stack** (needs scoping — §4) is now the only
+   remaining Tier 1 item, and can build directly on this phase's `call`/depth/stack
+   DebugStep field (§2) without touching the interpreter again. Also still unscoped: Quiz
+   page enhancements and Variable Timeline/sparklines. Live Parameter Tuning stays
+   dropped (§4) and shouldn't be picked up under that name without a fresh scoping
+   prompt. Whichever frontend-facing phase comes next should also consider teaching
+   `cfg.js`/the Anti-Pattern Advisor/Compare/Download about `ProgramNode`/`CallStatement`
+   (§6) if `CALL`-based procedures are meant to be user-facing rather than just an
+   interpreter capability.
