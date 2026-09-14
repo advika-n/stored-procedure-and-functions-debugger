@@ -2667,3 +2667,192 @@ h2 {
   font-size: 0.88rem;
   color: var(--text-primary);
 }
+
+/* ==========================================================================
+   Test-Case Runner (frontend/src/TestCaseRunner.jsx, pages/TestRunnerPage.jsx)
+   Reuses the existing badge/table/panel vocabulary (compare .advisor-*,
+   .compare-divergence-*) rather than inventing new visual language --
+   same three accents, hairline borders, no shadows.
+   ========================================================================== */
+
+.test-runner-page .panel-test-runner {
+  padding-top: 1.25rem;
+}
+
+.testrunner-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.testrunner-progress {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.testrunner-summary {
+  margin: 1rem 0;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-hairline);
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  font-size: 0.95rem;
+}
+
+.testrunner-summary-pass {
+  color: var(--accent-teal);
+  border-color: var(--accent-teal);
+  background: var(--accent-teal-bg);
+}
+
+.testrunner-summary-fail {
+  color: var(--accent-coral);
+  border-color: var(--accent-coral);
+  background: var(--accent-coral-bg);
+}
+
+.testrunner-summary-note {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.testrunner-case-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.testrunner-case {
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--border-hairline);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  padding: 0.75rem 0.9rem;
+}
+
+.testrunner-case-pass {
+  border-left-color: var(--accent-teal);
+}
+
+.testrunner-case-fail,
+.testrunner-case-error {
+  border-left-color: var(--accent-coral);
+}
+
+.testrunner-case-no-expectation {
+  border-left-color: var(--text-muted);
+}
+
+.testrunner-case-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.testrunner-case-name {
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.testrunner-case-kind {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  padding: 0.05rem 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.testrunner-badge {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius);
+  border: 1px solid;
+}
+
+.testrunner-badge-pass {
+  color: var(--accent-teal);
+  background: var(--accent-teal-bg);
+  border-color: var(--accent-teal);
+}
+
+.testrunner-badge-fail {
+  color: var(--accent-coral);
+  background: var(--accent-coral-bg);
+  border-color: var(--accent-coral);
+}
+
+.testrunner-badge-unknown {
+  color: var(--text-muted);
+  background: transparent;
+  border-color: var(--border-hairline);
+}
+
+.testrunner-case-steps {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.testrunner-case-message {
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+
+.testrunner-diff-table {
+  width: 100%;
+  margin-top: 0.55rem;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+.testrunner-diff-table th,
+.testrunner-diff-table td {
+  text-align: left;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--border-hairline);
+  vertical-align: top;
+}
+
+.testrunner-diff-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.testrunner-diff-field {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.testrunner-diff-expected {
+  color: var(--accent-teal);
+}
+
+.testrunner-diff-actual {
+  color: var(--accent-coral);
+}

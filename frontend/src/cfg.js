@@ -31,6 +31,13 @@ function renderExpr(node) {
       return `${node.cursor}%FOUND`
     case 'CursorNotFoundExpr':
       return `${node.cursor}%NOTFOUND`
+    case 'FunctionCallExpr':
+      // Function calls inside procedures (a later phase than the rest
+      // of this mirror) -- without this case a statement using one
+      // (e.g. `SET y = Square(x);`) would render as `SET y = ?;` in the
+      // flowchart node label, same as backend/app/interpreter.py's own
+      // render_expr needed the matching case for the same reason.
+      return `${node.name}(${node.args.map(renderExpr).join(', ')})`
     default:
       return '?'
   }

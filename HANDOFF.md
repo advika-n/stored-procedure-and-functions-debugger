@@ -8,37 +8,67 @@ stable project facts (architecture, schema, design tokens) see `CLAUDE.md` inste
 
 ## 1. Last updated
 
-**2026-09-14**, end of the session that built the **Variable Timeline** — the second of
-the four Innovation features to ship (Variable Timeline/sparklines), leaving only Live
-Parameter Tuning (dropped, out of scope — §4) unaddressed from that original list. It
-followed the session that built the **Call Stack panel** (the fourth and final Tier 1
-item, completing Tier 1 entirely), which followed the session that built **`CALL`
-support (procedure calling procedure)** — the third Tier 1 addition, and the first Tier 1
-phase to touch the interpreter core — which followed the session that added "Continue"
-and "Restart" to the step navigator, which directly followed the session that built
-Breakpoints + Run-to-Breakpoint (the first Tier 1 addition). Tier 1 (Breakpoints, Step
-controls, Call Stack, `CALL` support) was a reassessed push strengthening the project
-beyond the original mandatory/innovation scope, given extra time available; it followed
-the session that built Side-by-Side Run Comparison (the second Innovation feature at the
-time), which followed the SQL Anti-Pattern Advisor session (the first Innovation
-feature), which followed the Download feature (the last mandatory section), which
-followed the Learn tab session (which created `PROMPT_LOG.md`), which followed the Help
-tab session, which followed the session that created this file/`CLAUDE.md` and built
-Day/Night Mode + the Developed By modal.
+**2026-09-14**, end of the session that built **function calls inside procedures** — a
+procedure (or another function) can now invoke a FUNCTION from within an expression
+(an assignment, an IF/WHILE condition, another call's own argument) and use its RETURNed
+value, not just a standalone CALL of a procedure; see §2's new entry and
+`PROMPT_LOG.md` §17 for full detail. It followed the session that built **Extended Static
+Analysis Warnings** — three more checks (`unreachable-code`, `unused-variable`,
+`never-read-variable`) added directly into the existing SQL Anti-Pattern Advisor's own
+AST-analysis pass (`backend/app/advisor.py`), not a parallel analysis or a new panel; see
+§2's own entry and `PROMPT_LOG.md` §16. That followed the session that built the
+**Test-Case Runner** — a pass/fail regression panel over the built-in sample library,
+layered on top of (not part of) the original 5 mandatory sections / 4 innovation
+features / Tier 1 plan; see §2's Test-Case Runner entry and `PROMPT_LOG.md` §15. That
+followed the session that built the **Variable Timeline** — the second of the four
+Innovation features to ship
+(Variable Timeline/sparklines), leaving only Live Parameter Tuning (dropped, out of
+scope — §4) unaddressed from that original list. That followed the session that built
+the **Call Stack panel** (the fourth and final Tier 1 item, completing Tier 1 entirely),
+which followed the session that built **`CALL` support (procedure calling procedure)** —
+the third Tier 1 addition, and the first Tier 1 phase to touch the interpreter core —
+which followed the session that added "Continue" and "Restart" to the step navigator,
+which directly followed the session that built Breakpoints + Run-to-Breakpoint (the
+first Tier 1 addition). Tier 1 (Breakpoints, Step controls, Call Stack, `CALL` support)
+was a reassessed push strengthening the project beyond the original mandatory/innovation
+scope, given extra time available; it followed the session that built Side-by-Side Run
+Comparison (the second Innovation feature at the time), which followed the SQL
+Anti-Pattern Advisor session (the first Innovation feature), which followed the Download
+feature (the last mandatory section), which followed the Learn tab session (which
+created `PROMPT_LOG.md`), which followed the Help tab session, which followed the
+session that created this file/`CLAUDE.md` and built Day/Night Mode + the Developed By
+modal.
 
-**Re-verified via `git log`/`git status` at the start of this session — and a correction
-to the prior session's own claim here**: `CALL` support is genuinely committed
-(`8a7cc35`), but contrary to what the Call Stack session's own HANDOFF entry asserted
-("working tree was fully clean... only this session's own 3 frontend files... are
-uncommitted now" — misleadingly phrased as if that were a fresh, clean start), that
-session's own `DebuggerPage.jsx`/`App.css`/`samples.js` changes were **never actually
-committed** and were still sitting in the working tree at the start of *this* session.
-This session's own changes to the *same three files* (plus a new one) are layered on top
-of that still-uncommitted Call Stack work, not on a clean base — worth committing both
-phases' work together, or at least being aware the diff now spans two phases. Backend
-suite re-run before/after this session as a sanity check even though nothing backend-side
-was touched: **252 passing both times** (unchanged) — confirms the "backend untouched"
-claim rather than just asserting it.
+**Re-verified via `git log`/`git status` at the start of this session, and again at the
+end** — `24ee5d8` ("Added Call Stack and Variable Timeline") is still genuinely the most
+recent commit; no external commit landed mid-session this time. What's uncommitted right
+now is **three** sessions' worth layered together: the Test-Case Runner session's own
+work (`App.jsx`/`Layout.jsx`/`App.css` edits, `TestCaseRunner.jsx`/
+`testCaseExpectations.js`/`pages/TestRunnerPage.jsx`), the Extended Static Analysis
+Warnings session's own work (`backend/app/advisor.py`/`backend/app/tests/
+test_advisor.py`/`frontend/src/samples.js`/`CLAUDE.md` edits), and this session's own work
+(`backend/app/parser.py`/`backend/app/interpreter.py`/`backend/app/advisor.py` again/
+`frontend/src/cfg.js`/`frontend/src/samples.js` again/`testCaseExpectations.js` again, plus
+the new `backend/app/tests/test_function_call_expression.py`) — see §3. Backend suite:
+**270 passing** at the start of this session (confirming the previous phase's own
+baseline), **305 passing** at the end (270 + 33 new `test_function_call_expression.py`
+tests + 2 more `test_advisor.py` regression tests for a cross-cutting fix this phase's own
+grammar change required — see §2). This is the second phase in a row to genuinely touch
+the interpreter/parser core (after `CALL` support itself), so this is a real correctness
+gate, not a sanity check on an untouched backend.
+
+**One real environment snag worth recording, not glossed over**: port 8000 (this
+project's own conventional dev-backend port) was already bound by a **pre-existing**
+`uvicorn --reload` process (PID 932, genuinely found via `Get-NetTCPConnection`/
+`Get-CimInstance`, not another "unverifiable-PID" case this time) that predates this
+session — it wasn't started by this session's own launches (none of which used
+`--reload`), so per this phase's own explicit instruction ("kill by the specific PID you
+launched, not a blanket kill"), **it was left running, untouched**, rather than assumed
+to be safe cruft. Verification instead used a throwaway backend on port 8001 plus a
+small dependency-free static-file-server-and-same-origin-proxy (serving the already-built
+`frontend/dist/`, proxying API paths to 8001) — the same pattern a prior session
+established for this exact kind of situation — rather than editing `vite.config.js`'s
+proxy target. See §2 for what this actually verified.
 
 ---
 
@@ -401,6 +431,293 @@ not restated from memory:
     (mirroring the Call Stack session's own cleanup approach, since no backend was left
     running at cleanup time), confirmed the surviving max id (94) matches every prior
     session's own baseline.
+- **Test-Case Runner** (`frontend/src/TestCaseRunner.jsx`,
+  `frontend/src/testCaseExpectations.js`, `frontend/src/pages/TestRunnerPage.jsx`, route
+  `/tests`) — **Done**, an extra addition beyond the original mandatory/innovation/Tier 1
+  scope (like the Variable Timeline's sibling additions, this wasn't on the original
+  4-innovation-feature list). A pass/fail regression panel: runs every built-in sample
+  through the real `/debug` pipeline (no second execution path) and checks the final
+  `DebugStep`'s variable state / return value against a hand-verified expected outcome.
+  **No backend changes at all** (confirmed by `git status --short`; full 252-test backend
+  suite re-run as a sanity check anyway — unchanged).
+  - **Finding reported before implementing, per this phase's own instruction**: no
+    expected-output data existed anywhere in the repo, and `samples.js` now holds **13**
+    samples, not the 10 the phase's own prompt assumed (two later phases — Call Stack,
+    Anti-Pattern Advisor — each added one/two since that framing was last true:
+    `OrderTotal`, `RecursiveFactorial`, `AntiPatternShowcase`). Rather than inventing
+    values or silently dropping the 3 newer samples from coverage, all 13 samples' expected
+    final state was **hand-derived from their own deterministic source** (every sample
+    self-contains its values via `DECLARE ... DEFAULT`; the cursor samples' `products`
+    table is fixed — Widget/10, Gadget/25, Gizmo/15), then **cross-checked against a real
+    run of the actual interpreter pipeline** — all 13 matched exactly. Full derivation is
+    documented inline in `testCaseExpectations.js`. See `PROMPT_LOG.md` §15 for the full
+    writeup.
+  - **Self-contained component, same reasoning as `VariableTimeline.jsx`**: takes no
+    required props (defaults to the real `samples.js`/`testCaseExpectations.js`), owns its
+    own run state, sequential `/debug` calls, diffing (float-epsilon-tolerant), and
+    rendering — a future redesign only touches `pages/TestRunnerPage.jsx`'s thin wrapper.
+    A sample with no expectation entry surfaces its own "NO EXPECTED OUTPUT" status,
+    excluded from the pass/fail denominator rather than silently skipped or assumed
+    passing.
+  - **Own page/nav tab** (`/tests`, between Compare and Theory), not bolted onto the
+    Debugger page — same precedent Compare already set, since a fixed 13-sample sweep
+    doesn't depend on whatever's currently loaded in the Debugger's one editor.
+  - **Verified live**: real dev servers started fresh (both found stopped at session
+    start), driven via the same raw-CDP approach this project's history has used
+    throughout — confirmed **13 / 13 passed** against the real backend. The fail-diff path
+    was verified by temporarily breaking one expected value (`CalculateTotal`'s `total` to
+    999): correctly reported **12 / 13 passed** with a coral card showing
+    `total | 999 | 108`; reverted. The no-expectation path was verified by temporarily
+    removing `ComputeTax`'s entry: correctly reported **12 / 12 passed, 1 sample skipped**
+    with the flagged badge/message; reverted, then a final run reconfirmed the clean
+    13/13 state. Screenshotted in both dark and light theme; 400px-width check confirmed
+    the panel's own `scrollWidth` (350px) fits the viewport, not adding to the
+    pre-existing `.top-nav` overflow (§6). Zero console errors across every run. `npm run
+    lint`/`npm run build` both clean (same 2 pre-existing warnings).
+  - **Cleanup**: 164 test-run history rows this session's verification created (ids
+    95-258) deleted via direct SQL delete afterward, confirmed the surviving max id (94)
+    matches every prior session's baseline; both dev servers stopped afterward. One
+    process-hygiene note: this session's Chrome cleanup used `taskkill /IM chrome.exe /T`,
+    which kills every Chrome process on the machine rather than just the one launched for
+    verification — overly broad, flagged rather than repeated silently (see
+    `PROMPT_LOG.md` §15); a future session should kill by the specific launched PID
+    instead.
+- **Extended Static Analysis Warnings** (`backend/app/advisor.py`) — **Done**, another
+  extra addition beyond the original scope, hooked directly into the existing SQL
+  Anti-Pattern Advisor's own AST traversal rather than a parallel analysis pass or a new
+  UI panel, per this phase's own explicit instruction. Three new checks, taking the
+  Advisor from 6 to 9 total; **zero frontend changes needed at all** (confirmed by
+  `git status --short`: only `backend/app/advisor.py`/`backend/app/tests/
+  test_advisor.py`/`frontend/src/samples.js`/`CLAUDE.md` changed) — the existing
+  `.advisor-issue`/`.advisor-severity-badge` rendering in `DebuggerPage.jsx` is fully
+  generic over `severity`/`title`/`line`/`message`/`suggestion`, with no per-category
+  logic anywhere, so three new categories using only the existing "warning"/"suggestion"
+  severities render correctly with the code that already existed.
+  - **`unreachable-code`** (severity "warning", both sub-cases) — two distinct,
+    purely-AST-provable patterns:
+    1. Any statement positionally after a RETURN within the SAME statement list — a new
+       `_iter_statement_lists` walker (unlike the existing `_iter_statements`, which
+       flattens the whole tree, this preserves block boundaries) finds the first RETURN
+       in each block and flags everything after it in that same block as dead, anchored
+       at the first dead line. **LEAVE/EXIT are NOT implemented**: this grammar has no
+       such statement at all (confirmed directly against `app.parser`'s own grammar,
+       not assumed) — RETURN is the only unconditional-exit construct that exists.
+    2. An IF whose condition is a compile-time constant (`IF 1 > 2 THEN ...`) — a new
+       `_fold_constant` evaluator mirrors `Interpreter._evaluate_binary` exactly (same
+       `+ - * / > < = !=` operator set) and returns `None` the instant anything isn't a
+       literal (an Identifier, a %FOUND check, ...), so an ordinary data-dependent
+       condition — the overwhelming common case — is correctly left alone. Deliberately
+       NOT extended to WHILE (a constant-false WHILE never running is rarer and more
+       contrived; IF/ELSE branch-level dead code is the well-scoped, high-value case).
+  - **`unused-variable`** (severity "suggestion") — a DECLAREd local never read by ANY
+    expression anywhere in the procedure/function (a condition, another statement's
+    right-hand side, a RETURN, or a CALL argument) — being assigned one or more times
+    does not count as "used", per this phase's own explicit instruction. A
+    self-referencing accumulation (`SET x = x + 1;`) correctly counts as reading `x`, so
+    it's never flagged (this app's own WHILE-loop counters/running-totals are all exactly
+    this shape). **Deliberately scoped to DECLAREd locals only, not procedure/function
+    parameters** — this grammar's parameter nodes carry no line number of their own (see
+    `app.parser._parse_procedure_param`/`_parse_function_param`), so there's no single
+    unambiguous line to point at the way there is for a DECLARE; a future phase could
+    extend this against the procedure/function's own header line if it turns out to
+    matter. This scoping choice also means an OUT parameter (write-only by design) is
+    never at risk of a spurious "unused" flag, without needing any special-case code for
+    OUT specifically.
+  - **`never-read-variable`** (severity "warning") — "dead store" detection: a SET
+    assigns a value, then a LATER SET to the same name overwrites it before anything
+    reads the first value. **Genuinely distinguishable from unused-variable in this
+    grammar, not a collapse into the same case** (the phase's own instruction asked to
+    judge this): a dead-stored variable can still be read *elsewhere* in the procedure —
+    being read at all is exactly what keeps it off the unused-variable list — so the two
+    checks catch different, non-overlapping situations (proven directly by a dedicated
+    test asserting a variable flagged `never-read-variable` is NOT also flagged
+    `unused-variable`). Deliberately scoped to a straight-line run within ONE statement
+    list — this grammar has no cross-branch/cross-loop-iteration dataflow analysis (a
+    real liveness analysis needs a fixed-point computation over the control-flow graph,
+    out of scope here), so any IF/WHILE/handler/CALL encountered between two writes is
+    treated as a conservative barrier (a new `_touched_names` helper) rather than
+    analyzed — it stops tracking whatever names that statement could plausibly touch,
+    rather than risk a wrong accusation. **`DECLARE x TYPE DEFAULT expr;` is deliberately
+    NOT treated as a "first write" the way a SET is** — `DECLARE total NUMBER DEFAULT 0;
+    SET total = price * quantity;` is the standard, idiomatic initialize-then-compute
+    pattern used throughout this app's own sample library (CalculateTotal,
+    CalculateDiscount, TieredPricingCalculator, and more); treating it as a dead store
+    would fire on a large fraction of completely normal code. This was not assumed —
+    verified directly by running the extended Advisor against all 13 pre-existing
+    samples (see below) before finalizing this scoping decision.
+  - **Verified against all 13 pre-existing samples, not just imagined**: three
+    previously-"clean" samples now genuinely, correctly surface new findings —
+    `GradeClassifier` (`grade` computed via 3 separate IF/ELSE branches but never read
+    anywhere — a real, accurate finding, not a bug in the check), `ProductPriceTotal` and
+    `SafeAverageWithHandlers` (`item_name`, FETCHed from the cursor but never used; the
+    latter's `average` also never read). All three were investigated and confirmed as
+    genuine true positives under the phase's own literal definition ("assignment-only
+    doesn't count as used"), not suppressed to keep old samples artificially quiet. Every
+    one of the other 10 (including `AntiPatternShowcase`, whose 7 pre-existing findings
+    are completely unchanged, plus 2 new genuine ones) produced **zero** false positives
+    from any of the three new checks — confirmed by an in-process script running the real
+    tokenizer/parser/`advisor.analyze()` against every sample's actual source, not
+    hand-reasoned. `OrderTotal`/`RecursiveFactorial` (`ProgramNode`-shaped, multi-
+    definition sources) still produce zero issues from any check, old or new — a
+    pre-existing, documented limitation from the `CALL` support phase (`ast.get("body",
+    [])` degrades to `[]` for a `ProgramNode`) that every new check inherits unchanged
+    rather than silently working around.
+  - **One pre-existing test fixture broke, correctly** — `test_advisor.py`'s
+    `test_clean_procedure_has_no_issues` used a stripped-down `CalculateTotal` snippet
+    that (unlike the real sample) never read `total` a second time, so it now correctly
+    triggers `unused-variable` — fixed by extending the fixture to actually read `total`
+    again (`SET total = total + 1;`), the same way the real sample does via `SET tax =
+    total * 0.08;`. Not a bug in the new checks; a stale test fixture exposed by them.
+  - **New sample added**: `StaticAnalysisShowcase` (`frontend/src/samples.js`), mirroring
+    `AntiPatternShowcase`'s precedent — deliberately bad on purpose, all four new-finding
+    shapes in one small, still-successfully-executing procedure (the interpreter genuinely
+    reaches and fires the early `RETURN 0;`, then stops — 8 real steps, no error). Gives
+    the three new checks a live, permanent, discoverable home in the sample library
+    instead of only being provable via backend unit tests.
+  - **Testing**: 18 new `test_advisor.py` unit tests (isolated ASTs, both true-positive
+    and true-negative cases per check — self-reference not flagged, a normal
+    data-dependent condition not flagged, writes in different IF branches not flagged, an
+    unrelated statement between two writes doesn't block detection, a `ProgramNode`
+    source still produces nothing). Full backend suite: **270 passing** (252 before this
+    phase + 18 new).
+  - **Verified live**, not just via pytest: real dev servers started fresh (both found
+    stopped at session start; backend/frontend PIDs noted explicitly this time), a raw-CDP
+    driver (same dependency-free approach as every prior phase) loaded `/debugger`,
+    selected each of `GradeClassifier`/`ProductPriceTotal`/`SafeAverageWithHandlers`/
+    `AntiPatternShowcase`/`StaticAnalysisShowcase`, clicked Debug, and read the real
+    rendered Advisor panel DOM — every new finding's severity/title/line matched the
+    pytest-level predictions exactly, word for word. All other 9 samples (including
+    `OrderTotal`/`RecursiveFactorial`) confirmed to still show the clean "No anti-patterns
+    detected" state. `StaticAnalysisShowcase` screenshotted in both dark and light theme —
+    the coral "Warning" badge/left-border styling (the exact same classes
+    `cursor-not-closed`/the division-by-zero check already use) renders correctly in both
+    with zero new CSS. Zero console errors across every sample/run. `npm run lint`/`npm
+    run build` both clean (same 2 pre-existing warnings).
+  - **Process hygiene, per this phase's own explicit instruction (a direct callback to
+    the previous phase's own noted learning)**: Chrome was launched with
+    `--remote-debugging-port`, the exact PID that ended up owning that port was confirmed
+    via `netstat`/`tasklist` before use, and cleanup killed **only that specific PID**
+    (`taskkill /F /PID <n>`) — never a blanket `taskkill /IM chrome.exe`. Confirmed this
+    mattered for real, not just in theory: `tasklist` immediately after showed ~27 other
+    `chrome.exe` processes still running (the user's own real browser session/its
+    multi-process architecture) that a blanket kill would have taken down. The backend and
+    frontend dev servers were likewise stopped by their own specific PIDs.
+  - **Cleanup**: history rows created during this session's live verification (ids
+    95-273) deleted via direct SQL delete afterward, confirmed the surviving max id (94)
+    still matches the established baseline; both dev servers and the specific Chrome PID
+    stopped afterward.
+- **Function calls inside procedures** (`backend/app/parser.py`, `backend/app/
+  interpreter.py`) — **Done**, another extra addition beyond the original scope (like
+  Extended Static Analysis Warnings before it). A procedure (or another function) can now
+  invoke a FUNCTION from *within an expression* — an assignment's right-hand side, an
+  IF/WHILE condition, another call's own argument — and use its RETURNed value, not just
+  a standalone `CALL` of a procedure. **Deliberately reuses `_exec_call`'s exact
+  scope-isolation/call-depth/call-stack machinery, not a second implementation** — per
+  this phase's own explicit instruction.
+  - **Parser**: `name(args)` is now valid anywhere `expr` is, parsed at the `primary`
+    grammar level (`_parse_primary`) as a new `FunctionCallExpr` node
+    (`{"type", "name", "args", "line"}`, same shape as `CallStatement`'s own `args`).
+    Disambiguated from a plain `Identifier`/`%FOUND`-check by a simple one-token `(`
+    lookahead — the three are mutually exclusive by construction, so there's no real
+    ambiguity to resolve.
+  - **Interpreter**: a new `_evaluate_function_call` (dispatched from `_evaluate` on
+    `FunctionCallExpr`) mirrors `_exec_call` almost line for line — same
+    save/swap/restore of `scope`/`_previous_values`/`_output_param_names`/`cursors`/
+    `handlers`, same `_call_depth`/`_call_stack` push/pop, same `MAX_CALL_DEPTH` guard.
+    The differences are narrow: the target must be a `FunctionNode` (calling a
+    `ProcedureNode` this way, or `CALL`ing a `FunctionNode`, are both clear
+    `InterpreterError`s — verified, not just designed, via dedicated tests both
+    directions), every argument binds like a plain IN (a `FunctionNode`'s params never
+    carry a mode, so there's no OUT/INOUT unwind needed), and `run()` is called with
+    `require_return=True`. **A new `self._last_return_value` instance attribute** carries
+    the callee's `{value, type}` out — set by `_exec_return` immediately before it raises
+    `_ReturnSignal`, read by `_evaluate_function_call` immediately after the *matching*
+    `run()` call returns; proven safe for nested calls specifically (a RETURN's own value
+    expression containing another function call resolves and is fully consumed before
+    that RETURN's own `_exec_return` runs), not just asserted.
+  - **DIVISION_BY_ZERO handling needed zero new code** — a signal raised while evaluating
+    a function-call argument simply propagates up through `_evaluate` like any other
+    deep-expression division, caught by whichever *enclosing statement's* own try/except
+    is already watching for it; a signal raised inside the callee's own body is handled
+    (or not) entirely by that callee's own isolated `handlers`, exactly like a CALLed
+    procedure's own internal handler already works. Both directions verified live via
+    dedicated tests, not assumed from the design alone.
+  - **Step-trace / Call Stack schema: verified to need NO change, per this phase's own
+    "flag it if the schema can't represent this... rather than force-fitting it"
+    instruction** — `_current_call_info`/`_record_step` are already fully generic over
+    *what* is on the call stack, so a called function's own steps get the identical
+    `call: {procedureName, depth, stack}` shape a called procedure's steps already do,
+    confirmed by direct inspection of the actual trace output (not just code-read) before
+    writing a single line of frontend code. The one deliberate, documented non-change:
+    the field stays named `call.procedureName` even though it may now hold a function's
+    name — renaming it would ripple through every DebugStep consumer (Call Stack panel,
+    Variable Timeline, Download reports) for a purely cosmetic gain, and `DebugStep` is
+    this app's central wire contract (CLAUDE.md §4).
+  - **Zero changes needed to the Call Stack panel or Variable Timeline** — both already
+    read the generic `call` field with no procedure-specific branching, confirmed live
+    (see below), not just by code inspection. **One real frontend gap found and fixed**:
+    `frontend/src/cfg.js` keeps its own mirrored, client-side copy of `render_expr` (for
+    the flowchart's node labels) and had no `FunctionCallExpr` case, which would have
+    rendered `SET y = ?;` instead of `SET y = Square(x);` — fixed with the matching case.
+  - **One cross-cutting correctness gap found and fixed in `backend/app/advisor.py`**
+    (from the *previous* phase, Extended Static Analysis Warnings): its shared `_iter_exprs`
+    walker didn't know about `FunctionCallExpr`'s `args`, so a variable used ONLY as a
+    function-call argument would have been wrongly flagged `unused-variable` by that
+    phase's own new checks. Fixed at the single shared walker (not per-check), covered by
+    2 new regression tests. Confirmed via a full sweep against all 15 samples that this
+    introduced zero new findings on any sample that predates function calls.
+  - **New sample**: `CheckoutTotal` (`frontend/src/samples.js`) — a FUNCTION
+    (`ComputeDiscountedPrice`) called TWICE from a PROCEDURE, once in an IF's own
+    condition and once more in the taken branch's assignment, proving the mechanism is
+    genuinely re-entrant (two separate invocations, not a cached one-shot call). Its
+    `price`/`rate` parameter names deliberately collide with `CheckoutTotal`'s own local
+    `price` — an accidental-but-kept demonstration that scope isolation and the Variable
+    Timeline's multi-instance-per-name logic both handle a same-name collision across a
+    function call correctly, confirmed live (see below). `testCaseExpectations.js` got a
+    matching entry, hand-derived and cross-checked against a real interpreter run,
+    following the same rigor the Test-Case Runner phase established.
+  - **Testing**: 33 new `backend/app/tests/test_function_call_expression.py` tests
+    (parser: every valid expression position, disambiguation from a plain
+    Identifier/%FOUND check, a malformed-call parse error; interpreter: basic
+    substitution in an assignment/IF/WHILE condition, multiple/zero arguments, an
+    arbitrary expression as an argument, function-calling-a-different-function, self-
+    recursion — verified against a real 5-level-deep `Fact`, mutual recursion between two
+    functions, mixing CALL+function-call-expression in one chain, both infinite-recursion
+    depth-guard directions, all 4 DIVISION_BY_ZERO combinations (argument vs. inside the
+    body, handled vs. not), scope isolation including same-named variables, and the
+    step-trace `call` field's exact shape both one level deep and nested two levels deep)
+    plus 2 new `test_advisor.py` regression tests for the cross-cutting fix. Full backend
+    suite: **305 passing** (270 before this phase + 33 + 2 new).
+  - **Verified live**, not just via pytest, including a real environment snag worked
+    through rather than worked around (see §1): `CheckoutTotal` loaded and Debugged
+    against a throwaway backend/static-proxy setup, stepped to inside
+    `ComputeDiscountedPrice`'s own frame — the Call Stack panel correctly showed
+    "ComputeDiscountedPrice (current)" / "CheckoutTotal (caller)" with the Variables
+    table correctly scoped to just `price`/`rate`, in both dark and light theme,
+    zero frontend code changes needed for either. The Variable Timeline correctly showed
+    `price ×3` (CheckoutTotal's own local plus the two separate function-call
+    invocations, visually distinct segments) and `rate ×2` (the two different rate
+    arguments, 0.1 and 0.2) — a real, live exercise of the exact same-name-across-frames
+    logic the Variable Timeline phase built for recursion, now proven to generalize to
+    function calls too. The flowchart panel rendered without crashing and its node text
+    genuinely contained `ComputeDiscountedPrice(...)` (confirmed by reading the rendered
+    DOM text, not assumed from the code fix). The Test-Case Runner correctly reported
+    `CheckoutTotal` as a 12-step PASS alongside the other 13 samples with expectations
+    (14/14 passed, `StaticAnalysisShowcase` still correctly flagged as having no expected
+    output defined — a pre-existing gap from the phase before, not this phase's to fix).
+    Zero console errors across every run. `npm run lint`/`npm run build` both clean (same
+    2 pre-existing warnings).
+  - **Process hygiene, per this phase's own explicit instruction**: every process this
+    session launched (a throwaway backend on port 8001, a small static-file-server-plus-
+    proxy on port 5175, headless Chrome) was tracked by its own specific PID and killed
+    individually at cleanup (`taskkill /F /PID <n>`) — confirmed via `tasklist` before
+    each kill that the PID was genuinely the process just launched. The **pre-existing**
+    process found bound to port 8000 (PID 932, a `uvicorn --reload` this session never
+    started) was deliberately left running, untouched — not assumed to be safe cruft
+    just because it looked like leftover dev-server debris.
+  - **Cleanup**: history rows created during this session's live verification deleted via
+    direct SQL delete afterward, confirmed the surviving max id (94) still matches the
+    established baseline.
 
 ### Tier 1 additions (beyond the original mandatory/innovation scope)
 
@@ -807,14 +1124,27 @@ extra time available, on top of the 5 mandatory sections and 4 innovation featur
 
 Nothing is genuinely half-built right now — every feature in §2 is code-complete.
 
-- **Two sessions' worth of frontend work is now uncommitted, layered together** — the
-  Call Stack session's own `DebuggerPage.jsx`/`App.css`/`samples.js` changes were never
-  committed (contrary to what that session's own HANDOFF entry implied — see §1's
-  correction), and this session's Variable Timeline work (`DebuggerPage.jsx`/`App.css`
-  again, plus the new `frontend/src/VariableTimeline.jsx`) is now on top of that same
-  uncommitted diff. Confirmed via `git status --short` — no backend files touched by
-  either session. This is riskier to leave uncommitted than a single phase's worth of
-  changes — commit before starting anything else. See §7.
+- **Three sessions' worth of work is now uncommitted, layered together** (Call Stack +
+  Variable Timeline were committed by the user partway through the Test-Case Runner
+  session — `24ee5d8` — see §1, and nothing new has been committed since). What's left
+  uncommitted right now:
+  - From the **Test-Case Runner** session: edits to `frontend/src/App.jsx`,
+    `frontend/src/Layout.jsx`, `frontend/src/App.css` (the `/tests` route/nav tab +
+    styling), the new `frontend/src/TestCaseRunner.jsx`,
+    `frontend/src/testCaseExpectations.js`, `frontend/src/pages/TestRunnerPage.jsx`.
+  - From the **Extended Static Analysis Warnings** session: `backend/app/advisor.py`,
+    `backend/app/tests/test_advisor.py`, `frontend/src/samples.js` (the
+    `StaticAnalysisShowcase` sample), `CLAUDE.md`.
+  - From **this session** (**function calls inside procedures**): `backend/app/parser.py`,
+    `backend/app/interpreter.py`, `backend/app/advisor.py` again (the
+    `FunctionCallExpr`/`_iter_exprs` fix), `frontend/src/cfg.js`, `frontend/src/
+    samples.js` again (`CheckoutTotal`), `frontend/src/testCaseExpectations.js` again,
+    `CLAUDE.md` again, plus the new `backend/app/tests/test_function_call_expression.py`.
+  - All three sessions' doc updates (`HANDOFF.md`/`PROMPT_LOG.md`).
+
+  Confirmed via `git status --short`. Three phases deep on top of each other now,
+  including two that touched the interpreter/parser core — worth committing before it
+  grows further. See §7.
 - The student photo in the Developed By modal is still the placeholder inline SVG
   silhouette, not a real photo file (the text content itself is real and committed).
 - Day/Night Mode itself was only ever exercised in one headless-Chrome instance during
@@ -1030,13 +1360,20 @@ Scanned directly (`grep` for `TODO`/`FIXME`/`XXX`/`HACK`/placeholder markers acr
 
 ## 7. Immediate next step
 
-1. **Commit the last two sessions' frontend work together** (Call Stack + Variable
-   Timeline, both uncommitted — see §3): `frontend/src/pages/DebuggerPage.jsx`,
-   `frontend/src/App.css`, `frontend/src/samples.js`, and the new
-   `frontend/src/VariableTimeline.jsx`. Both **Tier 1** (Breakpoints, Step controls,
-   `CALL` support, Call Stack) and three of the four **Innovation features** (Advisor,
-   Compare, Variable Timeline) are now fully complete — a good, natural commit boundary,
-   and overdue given two full phases have accumulated uncommitted.
+1. **Commit the Test-Case Runner + Extended Static Analysis Warnings + function-calls-
+   inside-procedures work together** (Call Stack + Variable Timeline were already
+   committed by the user mid-session, `24ee5d8` — see §1/§3): `frontend/src/App.jsx`,
+   `frontend/src/Layout.jsx`, `frontend/src/App.css`, `frontend/src/TestCaseRunner.jsx`,
+   `frontend/src/testCaseExpectations.js`, `frontend/src/pages/TestRunnerPage.jsx`,
+   `backend/app/advisor.py`, `backend/app/tests/test_advisor.py`,
+   `frontend/src/samples.js`, `backend/app/parser.py`, `backend/app/interpreter.py`,
+   `frontend/src/cfg.js`, `backend/app/tests/test_function_call_expression.py`,
+   `CLAUDE.md` (and this doc/`PROMPT_LOG.md`). Both **Tier 1** (Breakpoints, Step
+   controls, `CALL` support, Call Stack) and all four **Innovation features** (Advisor —
+   now with 9 checks, not the original 6 — Compare, Variable Timeline; Live Parameter
+   Tuning stays deliberately dropped, §4), plus the Test-Case Runner and function calls
+   inside procedures, are now fully complete — a good, natural commit boundary, and
+   overdue given three sessions have accumulated uncommitted.
 2. **Restart the local dev backend before trying `CALL`/Call Stack live** (§2/§6) — the
    long-running process on port 8000 still hadn't picked up the `CALL` support changes as
    of the Call Stack session (the unverifiable-PID quirk); this session found both dev

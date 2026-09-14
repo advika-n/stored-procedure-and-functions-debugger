@@ -248,6 +248,87 @@ shape is completely unchanged. The CALL statement's OWN step (e.g.
 own depth, BEFORE the callee's frame is installed -- so if the caller
 itself is top-level, the CALL statement's step has no `call` field
 either; only steps genuinely running *inside* Foo get depth >= 1.
+
+-- Function calls in expressions ----------------------------------------
+
+A FunctionCallExpr (see app.parser's "Function calls in expressions"
+section) is the expression-position counterpart to CALL: it can appear
+anywhere an expression can (an assignment's right-hand side, an
+IF/WHILE condition, a RETURN's own value, another call's argument, ...)
+and evaluates to the callee's RETURNed value, substituted directly into
+the surrounding expression -- `SET total = ComputeTax(price) + fee;`
+runs the whole ComputeTax function and uses its result exactly like any
+other sub-expression.
+
+`_evaluate_function_call` deliberately reuses the *exact same*
+scope-isolation/call-depth/call-stack machinery `_exec_call` already
+established for CALL -- not a second implementation of any of it. The
+differences from `_exec_call` are narrow and specific to being an
+expression rather than a statement:
+
+  - The target must be a FunctionNode, not a ProcedureNode (calling a
+    ProcedureNode's name this way, or CALLing a FunctionNode's name
+    the other way, are both clear InterpreterErrors -- the two
+    mechanisms are deliberately kept exclusive, matching how a real
+    SQL dialect keeps "invoke for a value" and "invoke for a side
+    effect" as genuinely different operations).
+  - A FunctionNode's params never carry a mode (see app.parser's
+    "Functions" section) -- every argument is evaluated once in the
+    CALLER's scope and bound like an IN argument; there is no
+    OUT/INOUT propagation to unwind afterward, so `_evaluate_function_
+    call`'s cleanup is correspondingly simpler than `_exec_call`'s.
+  - `run()` is invoked with `require_return=True` (a function must
+    RETURN something, exactly like a top-level function call already
+    requires) instead of the `False` a procedure CALL uses, and the
+    RETURNed value is captured via `self._last_return_value` --
+    `_exec_return` stores its own `{value, type}` there immediately
+    before raising `_ReturnSignal`, and `_evaluate_function_call` reads
+    it back immediately after the matching `run()` call returns
+    (`_ReturnSignal` only ever unwinds as far as the nearest catching
+    `run()` frame -- the one this exact call just started -- so no
+    other RETURN, at any depth, can overwrite it in between; a nested
+    function call evaluated while building that RETURN's own value
+    resolves and is fully consumed before this RETURN's `_exec_return`
+    ever runs).
+
+**A DIVISION_BY_ZERO while evaluating one of a FunctionCallExpr's own
+argument expressions needs no special handling at all** -- unlike
+CALL (a statement, so it needs its own try/except to decide whether a
+registered handler makes it non-fatal right there), a FunctionCallExpr
+is just one more sub-expression; `_DivisionByZeroSignal` simply
+propagates up through `_evaluate` exactly like it already does from
+deep inside any other compound expression (e.g. `(a / b) + 1`), and is
+caught by whichever *enclosing statement's* own try/except is already
+watching for it (`_exec_set`, `_exec_if`, ...) -- attached to that
+statement's DebugStep, not a step of its own. An unhandled
+InterpreterError from anywhere inside the callee's own body (including
+one from a DIVISION_BY_ZERO with no handler registered *inside that
+callee*) is likewise not caught here -- it propagates all the way up
+and aborts the whole run, exactly like an unhandled error inside a
+CALLed procedure already does; `_evaluate_function_call`'s `finally`
+block only ever restores scope/cursors/handlers state, it never
+swallows an error.
+
+**Step-trace / Call Stack schema: no change needed, verified rather
+than assumed.** `_evaluate_function_call` increments `_call_depth` and
+pushes onto `_call_stack` exactly like `_exec_call` does, so
+`_current_call_info`/`_record_step` -- already fully generic over
+*what* is on the stack -- produce the identical `call` shape for a
+step running inside a called FUNCTION as they already do for a called
+PROCEDURE, with zero code changes to either. The one naming wrinkle,
+flagged rather than silently ignored: the field is still called
+`call.procedureName` (a name chosen back when only procedures could be
+CALLed) even though it may now hold a *function's* name -- deliberately
+NOT renamed, since `DebugStep` is this app's central wire contract
+(see CLAUDE.md SS4) and a field rename ripples through every consumer
+(the Call Stack panel, the Variable Timeline, Download reports, ...)
+for a purely cosmetic gain; the value itself (whichever definition is
+currently executing) is exactly what every existing consumer already
+wants, and a future caller that specifically needs to know "is this
+frame a function or a procedure" can already answer that by cross-
+referencing the name against `ast`'s own definitions client-side --
+exactly what the frontend's `entryProcedureName` derivation already
+does for the entry frame, so no interpreter data is actually missing.
 """
 
 from __future__ import annotations
@@ -371,6 +452,9 @@ def render_expr(node: dict) -> str:
         return f"{node['cursor']}%FOUND"
     if kind == "CursorNotFoundExpr":
         return f"{node['cursor']}%NOTFOUND"
+    if kind == "FunctionCallExpr":
+        args = ", ".join(render_expr(arg) for arg in node["args"])
+        return f"{node['name']}({args})"
     raise InterpreterError(f"Cannot render unknown expression node {kind!r}")
 
 
@@ -490,6 +574,16 @@ class Interpreter:
         self._procedures: dict[str, dict] = procedures or {}
         self._call_depth = 0
         self._call_stack: list[str] = []
+
+        # The most recently RETURNed `{value, type}` (see module
+        # docstring's "Function calls in expressions" section) -- set by
+        # `_exec_return` immediately before it raises `_ReturnSignal`,
+        # and read by `_evaluate_function_call` immediately after the
+        # matching `run()` call returns. Never read at the top level
+        # (nothing there calls `_evaluate_function_call`), so this has
+        # no effect on any run that never uses an expression-position
+        # function call.
+        self._last_return_value: dict | None = None
 
     # -- public API -----------------------------------------------------------
 
@@ -660,6 +754,14 @@ class Interpreter:
             value = None
 
         return_value = {"value": value, "type": _type_name(value)}
+        # Recorded before the step itself, and unconditionally (even if
+        # this RETURN belongs to a plain top-level run that nothing will
+        # ever read it back from) -- see the module docstring's
+        # "Function calls in expressions" section for why this is safe:
+        # only the nearest enclosing `_evaluate_function_call` call, if
+        # any, ever reads it, immediately after this exact RETURN's
+        # `_ReturnSignal` unwinds to the matching `run()` frame.
+        self._last_return_value = return_value
         self._record_step(node, render_statement_header(node), error=error_info, return_value=return_value)
         self._run_handler_if_triggered(error_info)
 
@@ -788,6 +890,84 @@ class Interpreter:
             mode = param.get("mode", "IN")
             if mode in ("OUT", "INOUT"):
                 self.scope[arg["name"]] = out_values[param["name"]]
+
+    # -- function calls in expressions -------------------------------------
+
+    def _evaluate_function_call(self, node: dict):
+        """Evaluate a FunctionCallExpr -- see the module docstring's
+        "Function calls in expressions" section for the full design.
+        Reuses `_exec_call`'s scope-isolation/call-depth/call-stack
+        machinery verbatim; the differences are: the target must be a
+        FunctionNode, every argument binds like a plain IN (a
+        FunctionNode's params never carry a mode, so there's no
+        OUT/INOUT propagation to unwind), `run()` is called with
+        `require_return=True`, and the callee's RETURNed value --
+        captured via `self._last_return_value` -- is returned to the
+        caller instead of discarded."""
+        name = node["name"]
+
+        if self._call_depth >= MAX_CALL_DEPTH:
+            raise InterpreterError(
+                f"Call to '{name}' exceeded the maximum call depth of {MAX_CALL_DEPTH} "
+                "(possible infinite recursion)",
+                node["line"],
+            )
+
+        target = self._procedures.get(name)
+        if target is None:
+            raise InterpreterError(f"Function '{name}' is not defined", node["line"])
+        if target.get("type") != "FunctionNode":
+            raise InterpreterError(
+                f"'{name}' is not a function and cannot be called in an expression -- "
+                f"only a CREATE FUNCTION definition can be (did you mean CALL {name}(...); ?)",
+                node["line"],
+            )
+
+        params: list[dict] = target.get("params") or []
+        args: list[dict] = node["args"]
+        if len(args) != len(params):
+            raise InterpreterError(
+                f"Function '{name}' expects {len(params)} argument(s) but {len(args)} "
+                "were given",
+                node["line"],
+            )
+
+        # Every argument is evaluated once, here, in the CALLER's scope
+        # -- a DIVISION_BY_ZERO signal raised while doing so is NOT
+        # caught here; it propagates up to whichever enclosing
+        # statement's own try/except is already watching for one (see
+        # the module docstring for why that's correct, not an
+        # oversight).
+        arg_values = [self._evaluate(arg) for arg in args]
+        callee_scope = {param["name"]: value for param, value in zip(params, arg_values)}
+
+        # Swap in the callee's fully isolated frame -- identical to
+        # `_exec_call`'s own swap, minus the OUT/INOUT bookkeeping a
+        # FunctionNode's params never need.
+        saved_scope = self.scope
+        saved_previous = self._previous_values
+        saved_outputs = self._output_param_names
+        saved_cursors = self.cursors
+        saved_handlers = self.handlers
+
+        self.scope = callee_scope
+        self._previous_values = dict(callee_scope)
+        self._output_param_names = set()
+        self.cursors = {}
+        self.handlers = {}
+        self._call_depth += 1
+        self._call_stack.append(name)
+        try:
+            self.run(target["body"], require_return=True, entry_node=target, function_name=name)
+            return self._last_return_value["value"]
+        finally:
+            self._call_depth -= 1
+            self._call_stack.pop()
+            self.scope = saved_scope
+            self._previous_values = saved_previous
+            self._output_param_names = saved_outputs
+            self.cursors = saved_cursors
+            self.handlers = saved_handlers
 
     # -- exception handlers -----------------------------------------------
 
@@ -984,6 +1164,8 @@ class Interpreter:
             return self._cursor_has_more(node["cursor"], node.get("line"))
         if kind == "CursorNotFoundExpr":
             return self._cursor_last_fetch_not_found(node["cursor"], node.get("line"))
+        if kind == "FunctionCallExpr":
+            return self._evaluate_function_call(node)
         raise InterpreterError(
             f"Cannot evaluate unknown expression node {kind!r}", node.get("line")
         )

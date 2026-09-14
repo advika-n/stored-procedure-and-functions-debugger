@@ -344,4 +344,68 @@ BEGIN
 END
 `,
   },
+  // Added specifically for the Extended Static Analysis Warnings phase --
+  // same reasoning as AntiPatternShowcase above: a small, deliberately
+  // flawed, live demo of the three new checks (backend/app/advisor.py SS7-9)
+  // so they show up the moment someone loads this and clicks Debug,
+  // rather than only being provable via backend unit tests. Still
+  // executes successfully end to end (the interpreter genuinely reaches
+  // the early RETURN and stops there -- see the comments below) -- the
+  // point is the *structure* has real issues, not that it crashes.
+  {
+    name: 'StaticAnalysisShowcase',
+    kind: 'PROCEDURE',
+    description: 'New for this phase -- deliberately bad on purpose: a value overwritten before it’s ever read, a variable that’s set but never read, dead code after an early RETURN, and an IF branch that can never run. Load it and click Debug to see all four new warnings flagged live below the editor.',
+    code: `CREATE PROCEDURE StaticAnalysisShowcase()
+BEGIN
+    DECLARE total NUMBER DEFAULT 0;
+    DECLARE label NUMBER DEFAULT 0;
+    SET total = 5;
+    SET total = 200;
+    SET label = 1;
+    IF total > 100 THEN
+        RETURN 0;
+        SET total = -1;
+    END IF;
+    IF 1 > 2 THEN
+        SET label = 99;
+    END IF;
+END
+`,
+  },
+  // Added specifically for the "function calls inside procedures" phase --
+  // a procedure invoking a FUNCTION from within an expression (backend/
+  // app/parser.py's FunctionCallExpr, backend/app/interpreter.py's
+  // `_evaluate_function_call`), distinct from CALL (which can only target
+  // a procedure and never produces a value -- see OrderTotal/
+  // RecursiveFactorial above for that). ComputeDiscountedPrice is called
+  // TWICE: once inside the IF's own condition (its return value compared
+  // against a literal), and once more inside the taken branch's
+  // assignment -- exercising both positions the phase asked for in one
+  // small sample, and proving the function is genuinely re-entrant (two
+  // separate invocations, not a cached/one-shot call).
+  {
+    name: 'CheckoutTotal',
+    kind: 'PROCEDURE',
+    description: 'CheckoutTotal calls a FUNCTION, ComputeDiscountedPrice, from inside an expression -- once in an IF condition, once more in the assignment that follows -- step through it and watch the Call Stack panel show the function as its own frame, twice.',
+    code: `CREATE FUNCTION ComputeDiscountedPrice(price NUMBER, rate NUMBER) RETURNS NUMBER
+BEGIN
+    RETURN price - (price * rate);
+END;
+
+CREATE PROCEDURE CheckoutTotal()
+BEGIN
+    DECLARE price NUMBER DEFAULT 250;
+    DECLARE quantity NUMBER DEFAULT 3;
+    DECLARE subtotal NUMBER DEFAULT 0;
+    DECLARE finalTotal NUMBER DEFAULT 0;
+    SET subtotal = price * quantity;
+    IF ComputeDiscountedPrice(subtotal, 0.1) < 700 THEN
+        SET finalTotal = ComputeDiscountedPrice(subtotal, 0.2);
+    ELSE
+        SET finalTotal = ComputeDiscountedPrice(subtotal, 0.1);
+    END IF;
+END
+`,
+  },
 ]

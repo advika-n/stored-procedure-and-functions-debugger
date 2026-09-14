@@ -44,17 +44,87 @@ computed the input for.
   6. cursor-not-closed        -- an OPENed cursor with no matching CLOSE
      anywhere in the procedure
 
+-- Extended static analysis warnings (three more, added in a later phase) --
+
+  7. unreachable-code        -- two distinct, purely AST-provable
+     sub-cases, both severity "warning" (dead code is a correctness
+     smell, not just a style nit):
+       a. any statement positionally after a RETURN, within the SAME
+          statement list (see `_iter_statement_lists`) -- RETURN
+          unconditionally unwinds execution the instant it runs (see
+          interpreter.py's "Functions" section: "no statement after a
+          RETURN ever runs, even other statements later in the same
+          block"), regardless of whether it's inside a procedure or a
+          function, and regardless of whether the RETURN's own
+          enclosing IF/WHILE is even entered at runtime -- the
+          statements are dead *by position*, independent of any one
+          run's actual control flow. LEAVE/EXIT are NOT implemented:
+          this grammar has no such statement at all (see the grammar in
+          app.parser's module docstring) -- RETURN is the only
+          unconditional-exit construct that exists for this check to
+          find.
+       b. an IF whose condition is a compile-time constant (every leaf
+          a NumberLiteral, e.g. `IF 1 > 2 THEN ...`) -- one of its two
+          arms can then never run no matter what happens elsewhere.
+          Deliberately does NOT extend this to WHILE (a
+          constant-false WHILE never running is a much rarer, more
+          contrived pattern, and this grammar's non-comparison "bare
+          value as a condition" and other constant-condition shapes
+          multiply the cases fast for little real payoff) -- IF/ELSE
+          branch-level dead code is the well-scoped, high-value case.
+  8. unused-variable          -- a DECLAREd local whose value is never
+     read by ANY expression anywhere in the procedure/function (a
+     condition, another statement's right-hand side, a RETURN, or a
+     CALL argument) -- being assigned one or more times does not count
+     as "used" (see `_all_read_names`). Deliberately scoped to
+     DECLAREd locals only, not procedure/function parameters: this
+     grammar's parameter nodes carry no line number of their own (see
+     `app.parser._parse_procedure_param`/`_parse_function_param`), so
+     there is no single unambiguous line to point at for "this
+     parameter is unused" the way there is for a DECLARE -- a future
+     phase could extend this against the procedure/function's own
+     header line if that turns out to matter. Severity "suggestion"
+     (cleanup, not a runtime risk).
+  9. never-read-variable      -- "dead store" detection, related to
+     unused-variable but genuinely distinguishable from it in this
+     grammar (see the long comment above `_check_never_read_variables`
+     for the full reasoning, and the "explicitly NOT implemented"
+     section below for what was deliberately left out to keep it
+     false-positive-free): a SET assigns a value to a variable, then a
+     LATER SET to that same name overwrites it before anything ever
+     reads the first value -- the first assignment's work was wasted,
+     even though the variable IS read at some other point (which is
+     exactly what makes this a different case from "never read at
+     all"). Severity "warning" (much likelier to be an actual forgotten
+     read than ordinary unused cleanup).
+
 -- Explicitly NOT implemented ---------------------------------------------
 
 "Dynamic SQL string concatenation (SQL injection risk pattern)" was one
-of the candidates for this phase but is NOT implemented: this grammar
-has no EXECUTE/EXEC-IMMEDIATE construct and no way to build a SQL string
-at runtime and hand it to the database -- every cursor's query is fixed,
-literal text captured verbatim at parse time (see
-`app.parser._parse_declare_cursor`/`CursorDeclNode`), never assembled
-from concatenated variables. There is nothing of that shape in this
-language for a check to find, so none was written, rather than forcing
-one that could never fire.
+of the candidates for the original six checks but is NOT implemented:
+this grammar has no EXECUTE/EXEC-IMMEDIATE construct and no way to
+build a SQL string at runtime and hand it to the database -- every
+cursor's query is fixed, literal text captured verbatim at parse time
+(see `app.parser._parse_declare_cursor`/`CursorDeclNode`), never
+assembled from concatenated variables. There is nothing of that shape
+in this language for a check to find, so none was written, rather than
+forcing one that could never fire.
+
+For the never-read-variable check specifically, `DECLARE x TYPE DEFAULT
+expr;` is deliberately NOT treated as a "first write" the way a SET is,
+even though it fits the letter of "written multiple times... before
+being overwritten" when immediately followed by a SET to the same name.
+`DECLARE total NUMBER DEFAULT 0; SET total = price * quantity;` is the
+standard, idiomatic way this grammar initializes a variable right
+before computing it -- used throughout this app's own sample library
+(CalculateTotal, CalculateDiscount, TieredPricingCalculator, and more).
+Treating that pattern as a dead store would fire on a large fraction of
+completely normal code; this was verified directly against all 13
+built-in samples before settling on SET-to-SET only (see
+PROMPT_LOG.md/HANDOFF.md for this phase). The same reasoning excludes a
+procedure parameter's own caller-supplied starting value from ever
+seeding a "pending write" -- see `_check_never_read_variables`'s own
+docstring.
 """
 
 from __future__ import annotations
@@ -112,6 +182,19 @@ def _iter_exprs(node: dict | None) -> Iterator[dict]:
         yield from _iter_exprs(node["right"])
     elif kind == "UnaryExpr":
         yield from _iter_exprs(node["operand"])
+    elif kind == "FunctionCallExpr":
+        # A FunctionCallExpr (see app.parser's "Function calls in
+        # expressions" section -- added in a later phase than the six
+        # original checks below) carries its own sub-expressions in
+        # `args`, not `left`/`right`/`operand`. Descending into them
+        # here, at this single shared low-level walker, is what makes
+        # every check built on top of `_iter_exprs`/`_statement_exprs`
+        # (magic-number, unused-variable, never-read-variable, ...)
+        # correctly see a variable used ONLY as a function-call
+        # argument as read/touched, without any of those checks needing
+        # their own FunctionCallExpr-specific code.
+        for arg in node["args"]:
+            yield from _iter_exprs(arg)
 
 
 def _statement_exprs(stmt: dict) -> Iterator[dict]:
@@ -127,6 +210,87 @@ def _statement_exprs(stmt: dict) -> Iterator[dict]:
         yield from _iter_exprs(stmt["condition"])
     elif kind == "ReturnNode":
         yield from _iter_exprs(stmt["value"])
+
+
+def _iter_statement_lists(statements: list[dict]) -> Iterator[list[dict]]:
+    """Yield `statements` itself, then recursively the body of every
+    nested IF/WHILE/handler-action list it contains -- every distinct
+    statement list this grammar has. Unlike `_iter_statements` (which
+    flattens the whole tree into one sequence of individual statements),
+    this preserves block boundaries, for a check that cares about
+    *sequential position within one straight-line block* -- unreachable-
+    after-RETURN and the never-read/dead-store check both need this;
+    the six original checks never did, which is why it didn't exist
+    before this phase."""
+    yield statements
+    for stmt in statements:
+        kind = stmt["type"]
+        if kind == "IfStatement":
+            yield from _iter_statement_lists(stmt["then_body"])
+            if stmt["else_body"] is not None:
+                yield from _iter_statement_lists(stmt["else_body"])
+        elif kind == "WhileStatement":
+            yield from _iter_statement_lists(stmt["body"])
+        elif kind == "HandlerDeclNode":
+            yield from _iter_statement_lists([stmt["action"]])
+
+
+def _fold_constant(expr: dict):
+    """Attempt to evaluate `expr` as a compile-time constant, using only
+    NumberLiteral leaves and this grammar's arithmetic (+ - * /) and
+    comparison (> < = !=) operators -- mirrors `Interpreter._evaluate`/
+    `_evaluate_binary` exactly (interpreter.py) so a folded result always
+    means the same thing the interpreter would compute at runtime.
+    Returns None the moment anything isn't a compile-time constant (an
+    Identifier, a STRING literal, a cursor %FOUND/%NOTFOUND check, ...)
+    -- by far the common case, and correctly leaves those conditions
+    alone."""
+    kind = expr["type"]
+    if kind == "NumberLiteral":
+        return expr["value"]
+    if kind == "UnaryExpr":
+        operand = _fold_constant(expr["operand"])
+        if operand is None or expr["operator"] != "-":
+            return None
+        return -operand
+    if kind == "BinaryExpr":
+        left = _fold_constant(expr["left"])
+        right = _fold_constant(expr["right"])
+        if left is None or right is None:
+            return None
+        op = expr["operator"]
+        if op == "+":
+            return left + right
+        if op == "-":
+            return left - right
+        if op == "*":
+            return left * right
+        if op == "/":
+            return left / right if right != 0 else None
+        if op == ">":
+            return left > right
+        if op == "<":
+            return left < right
+        if op == "=":
+            return left == right
+        if op == "!=":
+            return left != right
+    return None
+
+
+def _render_constant_expr(expr: dict) -> str:
+    """A minimal stringifier for a message -- only ever called on an
+    expression `_fold_constant` already proved is built entirely from
+    NumberLiteral/UnaryExpr/BinaryExpr, so it never needs to handle
+    Identifier/StringLiteral/cursor-check nodes at all."""
+    kind = expr["type"]
+    if kind == "NumberLiteral":
+        return _format_number(expr["value"])
+    if kind == "UnaryExpr":
+        return f"-{_render_constant_expr(expr['operand'])}"
+    if kind == "BinaryExpr":
+        return f"{_render_constant_expr(expr['left'])} {expr['operator']} {_render_constant_expr(expr['right'])}"
+    return "?"
 
 
 def _format_number(value) -> str:
@@ -395,6 +559,237 @@ def _check_cursor_not_closed(statements: list[dict], issues: list[dict]) -> None
         )
 
 
+# -- 7. Unreachable code --------------------------------------------------------
+
+
+def _check_unreachable_code(statements: list[dict], issues: list[dict]) -> None:
+    # a) anything positionally after a RETURN in the same statement list.
+    for block in _iter_statement_lists(statements):
+        for index, stmt in enumerate(block):
+            if stmt["type"] != "ReturnNode":
+                continue
+            remainder = block[index + 1 :]
+            if remainder:
+                first_line = remainder[0]["line"]
+                last_line = remainder[-1]["line"]
+                line_range = f"{first_line}-{last_line}" if last_line != first_line else str(first_line)
+                issues.append(
+                    _issue(
+                        category="unreachable-code",
+                        severity="warning",
+                        title="Unreachable code after RETURN",
+                        line=first_line,
+                        message=(
+                            f"RETURN on line {stmt['line']} unconditionally exits execution here, so "
+                            f"the statement(s) on line {line_range} can never run, no matter what "
+                            "happens elsewhere in this procedure/function."
+                        ),
+                        suggestion=(
+                            "Remove the dead code, or move it before the RETURN if it was meant to "
+                            "run first."
+                        ),
+                    )
+                )
+            # Everything else in this block is already unreachable because
+            # of this same RETURN -- a second RETURN further down (if any)
+            # would itself be unreachable, not a new, independent case.
+            break
+
+    # b) an IF whose condition is a compile-time constant, so one arm can
+    #    never run regardless of anything else in the procedure.
+    for stmt in _iter_statements(statements):
+        if stmt["type"] != "IfStatement":
+            continue
+        folded = _fold_constant(stmt["condition"])
+        if folded is None:
+            continue
+        if bool(folded):
+            dead_body, branch_word = stmt["else_body"], "ELSE"
+        else:
+            dead_body, branch_word = stmt["then_body"], "THEN"
+        if not dead_body:
+            continue
+        rendered = _render_constant_expr(stmt["condition"])
+        issues.append(
+            _issue(
+                category="unreachable-code",
+                severity="warning",
+                title=f"{branch_word} branch can never execute",
+                line=dead_body[0]["line"],
+                message=(
+                    f"This IF's condition ({rendered}) is a fixed constant that always evaluates to "
+                    f"{'true' if folded else 'false'}, so the {branch_word} branch starting at line "
+                    f"{dead_body[0]['line']} can never run."
+                ),
+                suggestion=(
+                    "Remove the dead branch, or check whether the condition was meant to reference a "
+                    "variable instead of two literal values."
+                ),
+            )
+        )
+
+
+# -- 8. Unused variables ---------------------------------------------------------
+
+
+def _read_names_in_statement(stmt: dict) -> set[str]:
+    """Every variable name this ONE statement reads (not writes), not
+    recursing into a nested statement's own body -- combine with
+    `_iter_statements` for that, as `_all_read_names` below does. A
+    SET's own `target` (the LHS) and a FETCH's `targets` are writes, not
+    reads, and are deliberately excluded here; a SET's `value`
+    expression (including a self-reference, e.g. `SET x = x + 1;` --
+    accumulating into a variable is a legitimate read of it, not a
+    spurious "never read"), an IF/WHILE `condition`, a RETURN's
+    `value`, a DECLARE's own `default` expression, and a CALL's `args`
+    all count as reads."""
+    names: set[str] = set()
+    for expr in _statement_exprs(stmt):
+        for sub in _iter_exprs(expr):
+            if sub["type"] == "Identifier":
+                names.add(sub["name"])
+    if stmt["type"] == "CallStatement":
+        for arg in stmt["args"]:
+            for sub in _iter_exprs(arg):
+                if sub["type"] == "Identifier":
+                    names.add(sub["name"])
+    return names
+
+
+def _all_read_names(statements: list[dict]) -> set[str]:
+    names: set[str] = set()
+    for stmt in _iter_statements(statements):
+        names |= _read_names_in_statement(stmt)
+    return names
+
+
+def _check_unused_variables(statements: list[dict], issues: list[dict]) -> None:
+    read_names = _all_read_names(statements)
+    for stmt in _iter_statements(statements):
+        if stmt["type"] != "DeclareStatement":
+            continue
+        name = stmt["name"]
+        if name in read_names:
+            continue
+        issues.append(
+            _issue(
+                category="unused-variable",
+                severity="suggestion",
+                title=f"Variable '{name}' is never read",
+                line=stmt["line"],
+                message=(
+                    f"'{name}' is declared here, and may be assigned a value later, but that value is "
+                    "never read by any expression anywhere in this procedure/function -- not in a "
+                    "condition, another statement's right-hand side, a RETURN, or a CALL argument."
+                ),
+                suggestion=(
+                    f"Remove '{name}' if it's genuinely unneeded, or use its value somewhere -- if it's "
+                    "meant to be visible to the caller, consider an OUT parameter instead of a plain "
+                    "local."
+                ),
+            )
+        )
+
+
+# -- 9. Never-read variables (dead stores) ---------------------------------------
+
+
+def _touched_names(stmt: dict) -> set[str]:
+    """Every variable name potentially read OR written anywhere within
+    `stmt`, including inside any statement list nested inside it (an
+    IF/WHILE body, a handler's action) and a CALL's own arguments.
+    Used only by `_check_never_read_variables` below as a conservative
+    "this statement might consume or redefine any of these names, stop
+    tracking them" barrier -- not a precise read/write distinction,
+    since a false "might touch it" only costs a missed warning, never a
+    wrong one, which is the safe direction to err in here."""
+    names: set[str] = set()
+    for inner in _iter_statements([stmt]):
+        for expr in _statement_exprs(inner):
+            for sub in _iter_exprs(expr):
+                if sub["type"] == "Identifier":
+                    names.add(sub["name"])
+        kind = inner["type"]
+        if kind == "SetStatement":
+            names.add(inner["target"])
+        elif kind == "CallStatement":
+            for arg in inner["args"]:
+                for sub in _iter_exprs(arg):
+                    if sub["type"] == "Identifier":
+                        names.add(sub["name"])
+        elif kind == "FetchCursorNode":
+            names.update(inner["targets"])
+    return names
+
+
+def _check_never_read_variables(statements: list[dict], issues: list[dict]) -> None:
+    """"Dead store" detection: a SET assigns a value to a variable, then
+    a LATER SET to that same name overwrites it before anything ever
+    reads the first value in between -- the first assignment's work was
+    wasted. Distinguishable from unused-variable (8 above): a
+    dead-stored variable can still be read *elsewhere*, just not
+    between these two particular writes, and being read at all is
+    exactly what keeps it off the unused-variable list -- so this
+    check is genuinely a different, narrower finding on this grammar,
+    not the same case in disguise.
+
+    Deliberately scoped to a straight-line run within ONE statement
+    list (see `_iter_statement_lists`) -- this grammar has no dataflow
+    analysis across an IF's branches or across a WHILE loop's own
+    iterations (a write in one iteration reaching a read in the next is
+    exactly the kind of loop-carried dependency a real liveness
+    analysis needs a fixed-point computation over the control-flow
+    graph to get right, which is out of scope here), so this only
+    catches the unambiguous case: two SETs to the same name in the same
+    block, with nothing observed in between that could plausibly read
+    it. Any IF/WHILE/handler/CALL encountered between two writes is
+    treated as a conservative barrier (`_touched_names`) rather than
+    analyzed -- it stops tracking the names that statement could
+    plausibly touch, rather than risk a wrong accusation.
+
+    Deliberately does NOT treat `DECLARE x TYPE DEFAULT expr;` as a
+    "first write" the way a SET is -- see the module docstring's
+    "Explicitly NOT implemented" section for why (this idiom is used
+    throughout this app's own sample library, and flagging it would be
+    noise, not a real finding)."""
+    for block in _iter_statement_lists(statements):
+        pending: dict[str, int] = {}  # variable name -> line of its latest un-consumed SET
+        for stmt in block:
+            if stmt["type"] == "SetStatement":
+                target = stmt["target"]
+                read_here = {
+                    sub["name"]
+                    for expr in _statement_exprs(stmt)
+                    for sub in _iter_exprs(expr)
+                    if sub["type"] == "Identifier"
+                }
+                for name in read_here:
+                    pending.pop(name, None)
+                if target in pending:
+                    issues.append(
+                        _issue(
+                            category="never-read-variable",
+                            severity="warning",
+                            title=f"Value assigned to '{target}' is never read",
+                            line=pending[target],
+                            message=(
+                                f"'{target}' is set here, but that value is never read anywhere -- "
+                                f"it's unconditionally overwritten by another SET on line {stmt['line']} "
+                                "before anything gets the chance to use it."
+                            ),
+                            suggestion=(
+                                f"Remove this assignment if it's genuinely dead, or read '{target}' "
+                                "(in a condition, another expression, or a RETURN) before overwriting "
+                                "it if the first value was meant to matter."
+                            ),
+                        )
+                    )
+                pending[target] = stmt["line"]
+            else:
+                for name in _touched_names(stmt):
+                    pending.pop(name, None)
+
+
 # -- entry point ---------------------------------------------------------------
 
 _CHECKS = (
@@ -404,6 +799,9 @@ _CHECKS = (
     _check_missing_error_handling,
     _check_magic_numbers,
     _check_cursor_not_closed,
+    _check_unreachable_code,
+    _check_unused_variables,
+    _check_never_read_variables,
 )
 
 

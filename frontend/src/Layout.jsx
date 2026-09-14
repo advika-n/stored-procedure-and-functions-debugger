@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { to: '/', label: 'Home', end: true },
   { to: '/debugger', label: 'Debugger' },
   { to: '/compare', label: 'Compare' },
+  { to: '/tests', label: 'Tests' },
   { to: '/theory', label: 'Theory' },
   { to: '/history', label: 'History' },
   { to: '/quiz', label: 'Quiz' },

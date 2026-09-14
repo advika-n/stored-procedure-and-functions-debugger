@@ -51,11 +51,20 @@ Documentation (5), Innovation (5).
   `app.parser.parse()` already produces. Not a separate endpoint: `POST /debug` computes
   `analyze(ast)` right after a successful parse and returns the findings as an `issues`
   array alongside `ast`/`steps`, so the check runs automatically on every Debug click at
-  no extra network round trip. Six anti-patterns detected (`select-star`,
-  `cursor-could-be-set-based`, `nested-loops`, `missing-error-handling`, `magic-number`,
-  `cursor-not-closed`) — see the module's own docstring for what's detectable from this
-  grammar's AST and, just as deliberately, what isn't (no dynamic-SQL/injection check:
-  this grammar has no EXECUTE/EXEC-IMMEDIATE construct at all).
+  no extra network round trip. Nine anti-patterns/warnings detected — the original six
+  (`select-star`, `cursor-could-be-set-based`, `nested-loops`, `missing-error-handling`,
+  `magic-number`, `cursor-not-closed`) plus three **Extended static analysis warnings**
+  added in a later phase (`unreachable-code` — dead code after an unconditional RETURN,
+  or an IF branch whose condition is a compile-time constant; `unused-variable` — a
+  DECLAREd local never read by any expression, assignment alone doesn't count;
+  `never-read-variable` — a "dead store": a SET's value is unconditionally clobbered by a
+  later SET to the same name before anything reads it, distinct from `unused-variable`
+  since the variable IS read at some *other* point) — see the module's own docstring for
+  what's detectable from this grammar's AST and, just as deliberately, what isn't (no
+  dynamic-SQL/injection check: this grammar has no EXECUTE/EXEC-IMMEDIATE construct at
+  all; no LEAVE/EXIT unreachable-code case: this grammar has no such statement, only
+  RETURN; `DECLARE ... DEFAULT` is deliberately never treated as a dead-store's "first
+  write" — that idiom is used throughout this app's own sample library).
 - **Side-by-Side Run Comparison** (`frontend/src/pages/ComparePage.jsx`, route
   `/compare`) — two independent Monaco editor panes, each calling `POST /debug` on its
   own; no backend changes at all, since that endpoint is already stateless per request.
@@ -88,14 +97,39 @@ Documentation (5), Innovation (5).
   source order is the entry point** that actually runs; every definition (entry
   included, enabling self-recursion) is registered by name for `CallStatement` (`CALL
   name(args);`) to resolve at runtime. A `CALL` target must be a `ProcedureNode`
-  specifically (calling a `FunctionNode`'s name is a clear error — this grammar has no
-  expression-position function calls at all). `interpreter._exec_call` gives the callee a
+  specifically (calling a `FunctionNode`'s name via `CALL` is a clear error — see
+  "Function calls in expressions" below for how a `FunctionNode` actually IS invoked).
+  `interpreter._exec_call` gives the callee a
   **fully isolated** scope/cursors/handlers/changed-value-baseline (saved and restored
   around the nested call, via `Interpreter.run()` called recursively so the whole call
   chain lands in one continuous `self.steps` list) — only explicit IN/OUT/INOUT
   parameters cross the boundary; an OUT/INOUT argument must be a plain Identifier (can't
   write back into an expression). `MAX_CALL_DEPTH` (50) guards recursion with a clear
   `InterpreterError`, never a hang. See §4 for the `call` DebugStep field this adds.
+- **Function calls in expressions (added in a later phase than `CALL`)** — the
+  expression-position counterpart to `CALL`: `name(args)` is now valid anywhere `expr`
+  is (an assignment's right-hand side, an IF/WHILE condition, another call's own
+  argument, ...), parsed at the `primary` grammar level as `FunctionCallExpr` and
+  disambiguated from a plain `Identifier`/`%FOUND` check by a one-token `(` lookahead in
+  `parser._parse_primary`. `interpreter._evaluate_function_call` **reuses `_exec_call`'s
+  exact scope-isolation/call-depth/call-stack machinery** (not a second
+  implementation) — the differences are narrow: the target must be a `FunctionNode`
+  (calling a `ProcedureNode` this way is a clear error, symmetric to `CALL`'s own
+  restriction), every argument binds like a plain IN (a `FunctionNode`'s params never
+  carry a mode, so there's no OUT/INOUT propagation), and `Interpreter.run()` is called
+  with `require_return=True` — the callee's `RETURN`ed value is captured via
+  `self._last_return_value` (set by `_exec_return` immediately before it raises
+  `_ReturnSignal`) and substituted directly into the calling expression. **No `DebugStep`/
+  Call Stack schema change was needed** — a called function's own steps carry the exact
+  same `call: {procedureName, depth, stack}` field a called procedure's already do (the
+  field's own name predates this and was deliberately left as-is rather than renamed,
+  since `DebugStep` is a wire contract — see §4), so the existing Call Stack panel and
+  Variable Timeline render a function call correctly with **zero frontend changes**;
+  only `frontend/src/cfg.js`'s own mirrored `renderExpr` needed a `FunctionCallExpr` case
+  (for the flowchart's node labels) since it duplicates the backend's rendering logic
+  client-side. Recursion, mutual recursion, and function-calling-function all work by
+  the same generalized mechanism (verified directly, not assumed — see
+  `backend/app/tests/test_function_call_expression.py`).
 - **Execution is simulated, not hooked into a real DB engine.** The interpreter
   evaluates procedural-SQL constructs (DECLARE/SET/IF/WHILE/cursors/handlers) itself; the
   one place real SQL actually runs is cursor `SELECT` queries, executed against a small,
@@ -115,7 +149,7 @@ Documentation (5), Innovation (5).
 | `tokenizer.py` | Source text → token list |
 | `parser.py` | Tokens → AST (grammar documented in its module docstring) |
 | `interpreter.py` | AST → `DebugStep` list (tree-walking); also `DebugStep`/`render_expr`/`render_statement_header`/`render_definition_header` |
-| `advisor.py` | SQL Anti-Pattern Advisor — static `analyze(ast)` pass, six checks, rides along on every `/debug` response as `issues` |
+| `advisor.py` | SQL Anti-Pattern Advisor — static `analyze(ast)` pass, nine checks (six original + three extended static-analysis warnings), rides along on every `/debug` response as `issues` |
 | `explainer.py` | Gemini client wiring + per-step explanation (`/explain`) + free-form Q&A (`/ask`) + template fallback |
 | `quiz.py` | Gemini-backed 5-question MCQ quiz generation (`/quiz/generate`), reuses `explainer.py`'s client |
 | `demo_db.py` | Ephemeral cursor demo dataset |
@@ -227,15 +261,19 @@ JS for this reason; keep it in sync with `theme.css` by hand when either changes
     cursor?:   { name, rowIndex, currentRow, hasMore },
     error?:    { condition, message, handler },
     returnValue?: { value, type },                  // FunctionNode final RETURN only
-    call?:     { procedureName, depth, stack }       // only for steps INSIDE a CALLed procedure -- see §2's CALL entry
+    call?:     { procedureName, depth, stack }       // only for steps INSIDE a called procedure/function -- see §2
   }
   ```
   (`variables` entry shape is built by `_snapshot_variables()`, ~line 798 of the same file.)
   `call` was added in the CALL-support phase: present only when `depth >= 1` (a step
-  genuinely executing inside a `CALL`ed procedure), omitted entirely for every top-level
+  genuinely executing inside a `CALL`ed procedure or, since the "function calls in
+  expressions" phase, an invoked `FunctionNode`), omitted entirely for every top-level
   step — so every trace that predates CALL support, and every trace that never uses it,
-  is byte-for-byte unchanged. `stack` is the full chain of enclosing procedure names,
-  outermost first (`stack[-1] == procedureName`, `len(stack) == depth`).
+  is byte-for-byte unchanged. `stack` is the full chain of enclosing procedure/function
+  names, outermost first (`stack[-1] == procedureName`, `len(stack) == depth`).
+  `procedureName` keeps that name (chosen when only procedures could be invoked this way)
+  even though it may now hold a function's name — a deliberate non-rename, not an
+  oversight; see §2's "Function calls in expressions" entry for why.
 
 - **Gemini explainer accuracy depends on complete context.** `explainer.py`'s
   `_build_prompt()` (~line 82) explicitly forwards a step's `error` and `cursor` fields
@@ -250,14 +288,19 @@ JS for this reason; keep it in sync with `theme.css` by hand when either changes
   a live local server (the original 10 built-in `samples.js` procedures, via a Python
   timing script against `POST http://127.0.0.1:8000/debug`): **22.5–76.2ms per call,
   ~30ms average** — comfortably under budget. Not re-verified against the live server
-  since (`samples.js` now has an 11th sample, `AntiPatternShowcase` — see `HANDOFF.md` —
-  but it's a small, fast procedure with no reason to behave differently). The CALL-support
+  since (`samples.js` has grown several more samples since — see `HANDOFF.md` — but each
+  is a small, fast procedure with no reason to behave differently). The CALL-support
   phase *did* touch the interpreter and re-measured directly (tokenize→parse→run,
   in-process, bypassing the network/live-server layer entirely): a plain no-CALL
   procedure and a two-procedure CALL-based one both averaged **well under 1ms** per run —
-  no measurable overhead from the CALL-support changes. Re-time via the live-server
-  approach (loop the sample list, hit `/debug`, measure wall time) if the interpreter,
-  cursor handling, or history-write path changes again, and note the new numbers here.
+  no measurable overhead from the CALL-support changes. The "function calls in
+  expressions" phase touched the interpreter core again and re-measured the same way:
+  `CheckoutTotal` (two function-call-expression invocations) averaged **0.607ms**, a
+  5-level self-recursive function-call chain (`Fact`) averaged **0.478ms** — both still
+  well under 1ms, no measurable overhead from this phase either. Re-time via the
+  live-server approach (loop the sample list, hit `/debug`, measure wall time) if the
+  interpreter, cursor handling, or history-write path changes again, and note the new
+  numbers here.
 
 ---
 

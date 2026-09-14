@@ -43,8 +43,10 @@ Supported grammar (informal, keywords in CAPS are literal tokens):
     term         := factor (('+' | '-') factor)*
     factor       := unary (('*' | '/') unary)*
     unary        := '-' unary | primary
-    primary      := NUMBER | STRING | IDENT ('%' (FOUND | NOTFOUND))?
+    primary      := NUMBER | STRING | function_call_expr
+                     | IDENT ('%' (FOUND | NOTFOUND))?
                      | '(' expr ')'
+    function_call_expr := IDENT '(' (expr (',' expr)*)? ')'
 
 BEGIN/END (as a bare block), IN and OUT are recognized by the tokenizer
 as keywords but are not part of this grammar subset outside of a
@@ -121,9 +123,9 @@ exactly the way you'd run a single procedure today. Every definition
 definitions) is registered by name so `CALL` can find it -- app.
 interpreter is what enforces that a `CALL` target must specifically be
 a ProcedureNode (calling a FunctionNode by name via CALL is a clear
-runtime error, not silently allowed -- expression-position function
-calls like `x = double(5)` are a different feature this grammar does
-not have at all). Registering the entry procedure under its own name
+runtime error, not silently allowed -- a FunctionNode is invoked
+differently, as an expression: see "Function calls in expressions"
+below). Registering the entry procedure under its own name
 too is what makes straightforward self-recursion possible without any
 extra syntax. Definition order in the source does NOT matter for
 resolving a CALL target -- the whole registry is built before anything
@@ -161,6 +163,34 @@ IF/WHILE bodies included) via the normal `_parse_statement` dispatch --
 it is not restricted to appearing only at a function's top level.
 app.interpreter enforces that a function actually executes one before
 its body runs out.
+
+-- Function calls in expressions -------------------------------------------
+
+`name(arg1, arg2, ...)` is valid anywhere `expr` is -- an assignment's
+right-hand side, an IF/WHILE condition, a RETURN's own value, another
+function call's or CALL statement's own argument list, and so on --
+parsed at the `primary` level (`_parse_primary`) as
+``{"type": "FunctionCallExpr", "name", "args", "line"}``, where `args`
+is a list of ordinary expression nodes (same shape as a CALL
+statement's own `args` -- see "CALL and multi-procedure sources"
+above). This is the *expression-position* counterpart to `CALL`: CALL
+is a standalone statement that can only target a ProcedureNode and
+never produces a usable value, while a FunctionCallExpr is a value
+`app.interpreter` substitutes into whatever expression it appears in,
+and can only target a FunctionNode (calling a ProcedureNode's name
+this way, or CALLing a FunctionNode's name, are both clear runtime
+errors -- see app.interpreter's own module docstring for the full
+reasoning and the execution/scope-isolation mechanics, which are
+deliberately the same machinery `CALL` already uses, not a second
+implementation).
+
+Disambiguation from a plain variable reference is a simple one-token
+lookahead in `_parse_primary`: after consuming an IDENTIFIER, a `(`
+next means a function call, `%FOUND`/`%NOTFOUND` means a cursor-
+attribute expression, and anything else means an ordinary Identifier
+-- these three are mutually exclusive by construction (a variable
+name is never immediately followed by `(` in this grammar otherwise),
+so there is no real ambiguity to resolve, just a peek.
 
 -- Cursors -----------------------------------------------------------------
 
@@ -687,6 +717,15 @@ class Parser:
 
         if token["type"] == "IDENTIFIER":
             self._advance()
+            # name(...) -- a function call used as an expression (see
+            # the module docstring's "Function calls in expressions"
+            # section), distinct from a standalone CALL statement
+            # (call_stmt above, which can only target a procedure and
+            # is parsed by `_parse_call` instead). Checked before the
+            # cursor-attribute case below since the two are mutually
+            # exclusive by construction.
+            if self._check("PUNCTUATION", "("):
+                return self._parse_function_call_expr(token)
             # cur_name%FOUND / cur_name%NOTFOUND -- a cursor-attribute
             # expression rather than a plain variable reference. See
             # the module docstring's "Cursors" section for what %FOUND
@@ -707,6 +746,29 @@ class Parser:
             return expr
 
         raise self._error("Expected a number, string, identifier, or '('", token)
+
+    def _parse_function_call_expr(self, name_token: dict) -> dict:
+        """`name(arg1, arg2, ...)` as an expression -- see the module
+        docstring's "Function calls in expressions" section. Called from
+        `_parse_primary` once it's already peeked a `(` right after an
+        IDENTIFIER; `name_token` is that already-consumed IDENTIFIER
+        token. Same argument-list grammar as `_parse_call`'s
+        CallStatement (any expression is syntactically valid here --
+        app.interpreter is what later requires the target to actually be
+        a FunctionNode with a matching parameter count)."""
+        self._expect("PUNCTUATION", "(")
+        args: list[dict] = []
+        if not self._check("PUNCTUATION", ")"):
+            args.append(self._parse_expr())
+            while self._match("PUNCTUATION", ","):
+                args.append(self._parse_expr())
+        self._expect("PUNCTUATION", ")")
+        return {
+            "type": "FunctionCallExpr",
+            "name": name_token["value"],
+            "args": args,
+            "line": name_token["line"],
+        }
 
 
 # -- raw query reconstruction (for cursor declarations) ----------------------
