@@ -918,3 +918,210 @@ than risking a blind kill — the pytest suite (which exercises the current sour
 directly via FastAPI's `TestClient`, not that external process) is this phase's actual,
 fully-satisfied verification gate regardless. Noted in `HANDOFF.md` as a manual restart
 the user may want before trying `CALL` support live.
+
+---
+
+## 13. Call Stack (Tier 1 addition — completes Tier 1)
+
+**Date:** 2026-09-14 · **Not yet committed** (see `HANDOFF.md` §3)
+
+**Prompt (verbatim):**
+
+> Goal: visually show the call stack in the debugger UI so nested CALL execution is
+> legible.
+>
+> 1. Inspect the exact shape of the call field on step objects (procedureName, depth,
+>    stack) to confirm what's available before designing the display.
+>
+> 2. Add a Call Stack panel (e.g. alongside or near the existing Variables panel) that:
+>    - Shows nothing / a collapsed "top level" state when the current step has no call
+>      field
+>    - When present, shows the call chain top-to-bottom or bottom-to-top (pick whichever
+>      reads more naturally as a stack, e.g. innermost call at top) using the stack data
+>    - Updates live as the user steps through execution (Previous/Next/Continue/Restart,
+>      and Run to Breakpoint) — entering a CALL pushes a frame, returning from it pops one
+>    - Visually distinguish the currently-executing frame (e.g. highlighted) from its
+>      callers
+>
+> 3. Style theme-aware (existing ThemeContext/CSS variables), consistent with the
+>    Variables panel's visual style.
+>
+> 4. Verify with the ComputeSubtotal/OrderTotal pair (move it from the test fixture into
+>    samples.js now, since the frontend needs a real sample to demonstrate this against) —
+>    confirm the stack correctly shows 1 frame at top level, 2 frames inside the nested
+>    call, and back to 1 after returning. Also verify with a self-recursive or
+>    mutually-recursive case if one exists, to confirm depth display works beyond 2.
+>
+> 5. Confirm all navigation controls (Previous/Next/Continue/Restart/Run to Breakpoint/
+>    breakpoint toggling) still work correctly with the added panel.
+>
+> Don't touch interpreter/backend logic — this phase is scoped to displaying existing
+> call-trace data in the frontend only.
+>
+> After finishing: update HANDOFF.md to mark Call Stack as "Done" (completing Tier 1),
+> and log this phase in PROMPT_LOG.md.
+
+**Findings reported before implementing**: read `DebuggerPage.jsx`'s existing LIVE STATE
+panel layout (error banner → cursor panel → Variables → return value → explanation, all
+driven by `currentStep`) and `interpreter.py`'s `call` field shape (`{ procedureName,
+depth, stack }`, present only at `depth >= 1`). One gap identified up front: `stack` only
+lists procedures reached *via* a `CALL` — it never includes the entry procedure itself —
+so a literal "1 frame at top level" display needs the entry procedure's own name, which
+isn't in any one step; it has to be read from `ast` separately and prepended on the
+frontend.
+
+**What shipped**:
+- A new "Call Stack" panel in `DebuggerPage.jsx`'s LIVE STATE column (above the error
+  banner), driven by two `useMemo`s: `entryProcedureName` (from `ast`, handling
+  `ProgramNode`/`ProcedureNode`/`FunctionNode`/the legacy bare form) and
+  `callStackFrames` (the entry name plus `currentStep.call.stack`, reversed so the
+  currently-executing frame is always first). Zero new state, zero new plumbing for
+  navigation — it's a pure derivation off `currentStep`, so Previous/Next/Continue/
+  Restart/the scrubber/step-log/breakpoints all update it automatically.
+- Current frame: amber card + "current" badge (reusing this app's existing "current/
+  changed" accent language). Caller frames: muted card + depth number + "caller" badge.
+  A single-frame (top-level, no active `CALL`) procedure still shows itself as 1 current
+  frame rather than an empty panel — the one genuinely collapsed case is the legacy,
+  unnamed bare-Procedure form, which shows a plain "Top level — not inside a CALL." line.
+- New CSS in `App.css` (`.call-stack-*`), theme-aware, matching `.variable-table`/
+  `.cursor-panel`'s existing visual language exactly — no new colors.
+- **A real crash bug found and fixed**: `cfg.js`'s `buildFlowchartGraph` had never been
+  taught about the `ProgramNode` AST shape (no top-level `body` key) — clicking Debug on
+  either new sample would have thrown there with no error boundary anywhere in the app to
+  catch it, a hard whole-page crash. Reproduced first, then fixed **without touching
+  `cfg.js` itself** (per this phase's explicit scope): `DebuggerPage.jsx` now derives
+  `flowchartAst` (the entry definition for a `ProgramNode`, unchanged otherwise) before
+  calling `buildFlowchartGraph`, wrapped in a `try/catch` as a last-resort guard.
+- Two new samples in `frontend/src/samples.js`: `OrderTotal` (the `ComputeSubtotal`/
+  `OrderTotal` pair from the `CALL` support phase's test fixture, rewritten as a
+  zero-external-param entry point) and `RecursiveFactorial` (`Fact` self-recursion
+  computing 5!, with a deliberate trailing no-op `SET` after the `CALL` so the trace's
+  last step actually lands back in the caller's own frame with the final answer visible —
+  documented inline for why).
+
+**Verified live**, via a throwaway backend + a small dependency-free static-file-server-
+plus-same-origin-proxy (plain Node `http`, serving the already-built `frontend/dist/`) —
+built specifically because the real dev backend on port 8000 was confirmed genuinely
+occupied (a fresh bind attempt failed with `WinError 10048`) yet still unverifiable by PID
+(the same recurring quirk noted in the `CALL` support phase), and restarting the real Vite
+dev server to repoint it was correctly refused by the permission classifier (stopping a
+live user process) rather than forced through. Drove the actual built app via the same
+raw-CDP approach this project's history has used throughout: `OrderTotal` correctly shows
+1 frame → 2 frames (inside the `CALL`, Variables table correctly scoped to the callee
+only) → 1 frame (after Continue) → 1 frame again (after Restart); `RecursiveFactorial`
+correctly shows exactly 6 frames at a depth-5 step (5×`Fact` + `ComputeFactorial`,
+innermost current, descending depth numbers) unwinding to exactly 1 frame at the final
+step. Previous/Next/Continue/Restart/the scrubber all reconfirmed still working. Zero
+console errors throughout; screenshotted in both dark and light theme. The flowchart
+(post-fix) and the SQL Anti-Pattern Advisor were both confirmed to render without
+crashing for the new `ProgramNode`-based sample.
+
+**Scope discipline**: `git status --short` after finishing showed only
+`frontend/src/pages/DebuggerPage.jsx`, `frontend/src/App.css`, and
+`frontend/src/samples.js` changed — no backend files touched at all. Backend suite
+re-run before and after as a sanity check anyway: 252/252, unchanged.
+
+**Cleanup**: 9 test-run history rows created by the throwaway backend during live
+verification (ids 139-147 — `history.py`'s `DB_PATH` resolves relative to the module
+file, so any backend process running this codebase writes to the same real
+`backend/data/debug_history.db` regardless of port) were deleted via direct SQL delete
+afterward; the throwaway backend and static-proxy processes were both stopped, and the
+one `vite.config.js` edit made mid-session (attempting the now-abandoned proxy-repoint
+approach) was reverted before any dev-server restart was attempted, confirmed via
+`git status --short` showing no diff on that file.
+
+---
+
+## 14. Variable Timeline (Innovation feature — sparklines)
+
+**Date:** 2026-09-14 · **Not yet committed** (see `HANDOFF.md` §3)
+
+**Prompt (verbatim):**
+
+> Add a "Variable Timeline" view that shows a sparkline per variable, plotting its value
+> across the full step-trace of the current debug run. This is frontend-only and must
+> reuse the existing step-trace data already produced by the /debug endpoint (the
+> DebugStep schema) — do not modify that schema or add new backend endpoints. Each
+> sparkline should update/highlight in sync with the current step as the user steps
+> through execution, consistent with how the rest of the debugger's step navigation
+> works. Style it to match the Debugger Notebook design system.
+>
+> Build the sparkline computation/rendering logic as a self-contained component with a
+> clean, minimal wrapper — a future UI redesign will introduce a broader panel layout,
+> and this component's container may get re-wrapped then. Keep the core logic decoupled
+> from its current panel placement so that rework is cheap.
+>
+> Flag anything in the current DebugStep schema that's insufficient for the sparklines
+> (e.g., missing per-step variable snapshots) rather than silently changing the schema.
+
+**What shipped**:
+- `frontend/src/VariableTimeline.jsx` (new) — a self-contained component taking only
+  `steps`, `currentStepIndex`, `onStepSelect`. It computes its own variable
+  grouping/ordering internally (doesn't trust a caller-supplied order) and renders its
+  own placeholder/empty states, so it's droppable into any future wrapper with zero
+  changes to the file itself — only the thin panel JSX in `DebuggerPage.jsx` (heading +
+  one subtitle line + the component) would need to move in a future redesign.
+- One sparkline row per variable, plotted across the **full** trace (not just the
+  current step's frame) via inline SVG — no chart library added, consistent with this
+  project's zero-dependency approach elsewhere. Numeric/boolean values plot as an actual
+  line (booleans mapped 0/1); a `null` (not-yet-SET) snapshot is a gap, not a zero, and a
+  segment breaks across it; a variable that's ever a `string` instead renders a row of
+  tick marks at each `changed` step (reusing that existing field) plus its exact current
+  value as text.
+- **Schema-insufficiency finding, reported rather than silently patched around per this
+  phase's own instruction**: the `DebugStep.call` field has no unique per-invocation id,
+  yet a variable name is only unique within one call frame — the same name can belong to
+  several unrelated invocations in one trace (self-recursion, or two sequential `CALL
+  Foo(); CALL Foo();`). Naively joining every step where a name appears would silently
+  merge unrelated values (demonstrated concretely: `RecursiveFactorial`'s `result`
+  appears in literally every step of that trace, across 6 actually-unrelated variables).
+  On inspection, no schema addition is actually needed to solve it correctly: since the
+  interpreter can only be at one depth at a time and a `CALL` always increases `depth` by
+  exactly 1 relative to the previous step, a fresh call frame is unambiguously
+  identifiable purely from "depth just increased since the last step." `
+  assignFrameInstances` replays the trace once on exactly that rule (a pure function of
+  `call.depth` and step order) to segment each variable's sparkline into correctly
+  separated per-invocation runs. Verified live: `RecursiveFactorial`'s `result` row shows
+  **×6** instances, `n`/`sub` show **×5** each, rendered as visually distinct segments on
+  one shared x-axis.
+- In sync with step navigation via a pure `useMemo`/render off `currentStepIndex` — zero
+  new plumbing needed for Previous/Next/Continue/Restart/the scrubber/step log/
+  breakpoints, all reconfirmed still working live. Each sparkline has its own hover
+  crosshair (distinct from the current-step guide) with a caption, and clicking jumps
+  `currentStepIndex` there (the same click-to-jump convention as the Step Log/Compare's
+  "Jump to this step"). Styled with only this app's existing three accents (teal = line,
+  amber = changed/current), no new colors, matching `.variable-table`/the Call Stack
+  panel's visual language.
+
+**Verified live**: both dev servers were found stopped at the start of this session (no
+lingering unverifiable-PID quirk this time), so real ones were started fresh, driven via
+the same raw-CDP approach as every prior phase, and stopped again afterward to leave the
+environment as found. `CalculateDiscount` (no `CALL`) shows plain single-instance
+sparklines with correct values; clicking near a sparkline's start jumps to step 1;
+`RecursiveFactorial` demonstrates the ×6/×5 case at both a mid-recursion step and the
+final unwound step, with the hover guide and current-step guide both visible and
+distinct simultaneously; `SafeAverageWithHandlers`' `item_name` (a STRING variable)
+renders 0 lines/1 tick, no crash. Checked in both dark and light theme, and explicitly
+measured this panel's own contribution to the pre-existing 400px nav-overflow bug: its
+own `scrollWidth` (350px) is fully inside a 400px viewport, confirming the measured
+overflow is entirely `.top-nav`'s, not made worse by this phase. Zero console errors
+throughout.
+
+**Scope discipline**: `git status --short` after finishing showed only
+`frontend/src/pages/DebuggerPage.jsx`, `frontend/src/App.css`, and the new
+`frontend/src/VariableTimeline.jsx` changed by this phase specifically (`samples.js` was
+already modified from the prior, still-uncommitted Call Stack phase) — no backend files
+touched, no schema change, no new endpoint. Backend suite re-run before/after as a sanity
+check anyway: 252/252, unchanged.
+
+**Correction surfaced this session**: while checking `git log` before starting (as always
+required before trusting the previous HANDOFF entry), found that the Call Stack session's
+own claim of a "fully clean" working tree was wrong — that session's own frontend changes
+were never actually committed. Corrected in `HANDOFF.md` §1/§6 rather than silently
+carried forward.
+
+**Cleanup**: 8 test-run history rows created during live verification (ids 148-155)
+deleted via direct SQL delete afterward (both dev servers had already been stopped by
+cleanup time); both dev server processes this session started (backend on 8000, Vite on
+5173) were stopped again afterward, including uvicorn's separate `--reload` worker child
+process (found still holding the port after the parent reloader process was killed).

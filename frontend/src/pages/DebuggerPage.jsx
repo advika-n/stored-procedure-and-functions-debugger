@@ -8,6 +8,7 @@ import { writeLastProcedure } from '../lastProcedure'
 import { useTheme } from '../ThemeContext'
 import { getMermaidPalette } from '../mermaidColors'
 import { rasterizeSvgToPng } from '../svgToPng'
+import VariableTimeline from '../VariableTimeline'
 
 const REPORT_FORMATS = [
   { format: 'pdf', label: 'Download PDF' },
@@ -178,6 +179,42 @@ function DebuggerPage() {
   const currentStep = hasSteps ? steps[currentStepIndex] : null
   const isFirstStep = currentStepIndex <= 0
   const isLastStep = !hasSteps || currentStepIndex >= steps.length - 1
+
+  // -- Call Stack panel --------------------------------------------------
+  // Purely a display of data the interpreter already produces (see
+  // backend/app/interpreter.py's `call` DebugStep field, added in the
+  // CALL-support phase this one builds on) -- no interpreter/backend
+  // changes at all. Each step optionally carries
+  // `call: { procedureName, depth, stack }`, present only once execution
+  // is actually inside a CALLed procedure; `stack` is the chain of
+  // *called* procedure names only (outermost-called first) -- it does
+  // NOT include the entry procedure itself (the one that started running
+  // when Debug was clicked), since the interpreter's own call stack only
+  // grows on a CALL. To show a true "1 frame at top level, 2 frames once
+  // inside a nested call" picture, the entry procedure's name (read from
+  // `ast`, not from any one step) is prepended here on the frontend --
+  // this is a pure display convenience, not a change to the trace data.
+  const entryProcedureName = useMemo(() => {
+    if (!ast) return null
+    if (ast.type === 'ProgramNode') {
+      const definitions = ast.definitions ?? []
+      return definitions.length > 0 ? definitions[definitions.length - 1].name ?? null : null
+    }
+    if (ast.type === 'ProcedureNode' || ast.type === 'FunctionNode') return ast.name ?? null
+    return null // the bare, wrapper-less Procedure form has no name -- and thus can never be a CALL target either
+  }, [ast])
+
+  // Innermost (currently executing) frame first -- reads most naturally
+  // as "what's running right now, and what called it" without having to
+  // read the list bottom-up. Index 0 is always the currently-executing
+  // frame, whether that's a CALLed procedure (depth > 0) or the entry
+  // procedure itself sitting at the top level (depth 0).
+  const callStackFrames = useMemo(() => {
+    if (!currentStep) return []
+    const calledStack = currentStep.call?.stack ?? []
+    const frames = entryProcedureName ? [entryProcedureName, ...calledStack] : [...calledStack]
+    return frames.slice().reverse()
+  }, [currentStep, entryProcedureName])
 
   // Variable names in first-declared order, computed once per trace so the
   // watch table's row order never jumps around as new variables appear.
@@ -674,7 +711,41 @@ function DebuggerPage() {
 
   // The graph's shape comes purely from the AST and is rebuilt only when
   // a new procedure is parsed -- not on every step.
-  const flowchartGraph = useMemo(() => (ast ? buildFlowchartGraph(ast) : null), [ast])
+  //
+  // cfg.js's buildFlowchartGraph only understands a single
+  // FunctionNode/ProcedureNode/bare-Procedure body (see its own module
+  // docstring) -- it isn't taught about the CALL-support phase's
+  // `ProgramNode` wrapper (out of THIS phase's scope too: "don't touch
+  // flowchart generation"). Left completely unhandled, a ProgramNode's
+  // missing top-level `body` would throw inside buildFlowchartGraph the
+  // moment a CALL-based sample (e.g. OrderTotal/RecursiveFactorial,
+  // added this phase) is debugged, crashing the whole page (no error
+  // boundary exists anywhere in this app -- see App.jsx). The minimal,
+  // crash-preventing fix that still touches none of cfg.js's own
+  // graph-building/rendering logic: hand it the entry definition's own
+  // ProcedureNode/FunctionNode (the last one -- see parser.py's
+  // last-definition-is-entry convention) instead of the ProgramNode
+  // wrapper, so the flowchart shows the entry procedure's own control
+  // flow (a `CALL Foo(...)` line renders as a plain rect, labeled via
+  // cfg.js's existing default case since it doesn't recognize
+  // `CallStatement` specifically -- a cosmetic gap, not a crash).
+  const flowchartAst = useMemo(() => {
+    if (!ast) return null
+    if (ast.type === 'ProgramNode') {
+      const definitions = ast.definitions ?? []
+      return definitions.length > 0 ? definitions[definitions.length - 1] : null
+    }
+    return ast
+  }, [ast])
+
+  const flowchartGraph = useMemo(() => {
+    if (!flowchartAst) return null
+    try {
+      return buildFlowchartGraph(flowchartAst)
+    } catch {
+      return null // last-resort guard -- see the comment above; never expected to actually hit this
+    }
+  }, [flowchartAst])
 
   // Styling (current node, taken/untaken branches) is recomputed as the
   // user moves currentStepIndex over the already-computed step trace.
@@ -1065,6 +1136,32 @@ function DebuggerPage() {
         <aside className="panel panel-state">
           <span className="panel-tab">LIVE STATE</span>
 
+          <div className="call-stack-panel">
+            <h2>Call Stack</h2>
+            {!hasSteps && <p className="placeholder">Run Debug to see the call stack here.</p>}
+            {hasSteps && callStackFrames.length === 0 && (
+              <p className="call-stack-top-level">Top level — not inside a CALL.</p>
+            )}
+            {hasSteps && callStackFrames.length > 0 && (
+              <ol className="call-stack-list">
+                {callStackFrames.map((name, index) => (
+                  <li
+                    key={`${index}-${name}`}
+                    className={index === 0 ? 'call-stack-frame call-stack-frame-current' : 'call-stack-frame'}
+                  >
+                    <span className="call-stack-depth">{callStackFrames.length - 1 - index}</span>
+                    <span className="call-stack-name">{name}</span>
+                    {index === 0 ? (
+                      <span className="call-stack-current-badge">current</span>
+                    ) : (
+                      <span className="call-stack-caller-badge">caller</span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+
           {hasSteps && currentStep?.error && (
             <div
               className={`error-banner ${
@@ -1333,6 +1430,15 @@ function DebuggerPage() {
             <div className="diagram-svg" dangerouslySetInnerHTML={{ __html: diagramSvg }} />
           )}
         </div>
+      </div>
+
+      <div className="panel panel-timeline">
+        <span className="panel-tab">VARIABLE TIMELINE</span>
+        <p className="page-subtitle">
+          Every variable's value across the <em>whole</em> run so far, not just the current step -- click a
+          sparkline (or hover, then click) to jump straight to that step.
+        </p>
+        <VariableTimeline steps={steps} currentStepIndex={currentStepIndex} onStepSelect={setCurrentStepIndex} />
       </div>
 
       <div className="panel panel-steplog">

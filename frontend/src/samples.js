@@ -237,6 +237,73 @@ BEGIN
 END
 `,
   },
+  // Added specifically for the Call Stack phase -- demonstrates
+  // backend/app/interpreter.py's CALL support (a prior phase) with a
+  // real, live sample now that the frontend actually renders it (see
+  // the Call Stack panel in DebuggerPage.jsx). Two chained
+  // CREATE PROCEDURE definitions parse to a single `ProgramNode` (see
+  // backend/app/parser.py's module docstring); the LAST one, OrderTotal,
+  // is the entry point that runs. Deliberately zero-param at the top
+  // level (same "no external IN-param-collection UI yet" constraint
+  // documented above) -- OrderTotal self-contains its own values via
+  // DECLARE ... DEFAULT and only passes them onward via CALL.
+  {
+    name: 'OrderTotal',
+    kind: 'PROCEDURE',
+    description: 'OrderTotal CALLs a helper, ComputeSubtotal, passing an OUT parameter back -- step into the CALL and watch the Call Stack panel grow from 1 frame to 2, then shrink back to 1 once ComputeSubtotal returns.',
+    code: `CREATE PROCEDURE ComputeSubtotal(IN price NUMBER, IN quantity NUMBER, OUT subtotal NUMBER)
+BEGIN
+    SET subtotal = price * quantity;
+END;
+
+CREATE PROCEDURE OrderTotal()
+BEGIN
+    DECLARE price NUMBER DEFAULT 20;
+    DECLARE quantity NUMBER DEFAULT 6;
+    DECLARE taxRate NUMBER DEFAULT 0.08;
+    DECLARE subtotal NUMBER DEFAULT 0;
+    DECLARE grandTotal NUMBER DEFAULT 0;
+    CALL ComputeSubtotal(price, quantity, subtotal);
+    SET grandTotal = subtotal + subtotal * taxRate;
+END
+`,
+  },
+  // Also added for the Call Stack phase: a self-recursive CALL (Fact
+  // calls itself -- see app.interpreter's module docstring on how the
+  // entry procedure is registered under its own name to make this work
+  // with no extra syntax) so the Call Stack panel can be exercised past
+  // depth 2. ComputeFactorial (the entry point, last definition) takes
+  // no params and CALLs Fact with a literal argument, for the same
+  // no-external-IN-param-collection-UI reason as OrderTotal above. The
+  // trailing `SET result = result + 0;` is a deliberate no-op: without
+  // some statement after the CALL, the trace's last step would be deep
+  // inside Fact's own frame (whose OUT-propagated value never gets a
+  // step of its own back in ComputeFactorial's frame), so the demo would
+  // never show the Call Stack panel actually unwinding back to 1 frame
+  // with a final answer visible at the top level.
+  {
+    name: 'RecursiveFactorial',
+    kind: 'PROCEDURE',
+    description: 'Fact CALLs itself to compute 5! -- step through it to watch the Call Stack panel grow several frames deep (one per pending multiplication) and then unwind back to 1.',
+    code: `CREATE PROCEDURE Fact(IN n NUMBER, OUT result NUMBER)
+BEGIN
+    DECLARE sub NUMBER DEFAULT 1;
+    IF n > 1 THEN
+        CALL Fact(n - 1, sub);
+        SET result = n * sub;
+    ELSE
+        SET result = 1;
+    END IF;
+END;
+
+CREATE PROCEDURE ComputeFactorial()
+BEGIN
+    DECLARE result NUMBER DEFAULT 0;
+    CALL Fact(5, result);
+    SET result = result + 0;
+END
+`,
+  },
   // Added specifically for the SQL Anti-Pattern Advisor phase -- unlike
   // every sample above, this one is deliberately *bad*, so the six
   // detectable anti-patterns (see backend/app/advisor.py) have a live,

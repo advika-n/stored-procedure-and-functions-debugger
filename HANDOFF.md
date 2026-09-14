@@ -8,28 +8,37 @@ stable project facts (architecture, schema, design tokens) see `CLAUDE.md` inste
 
 ## 1. Last updated
 
-**2026-09-14**, end of the session that built **`CALL` support (procedure calling
-procedure)** — the third Tier 1 addition, and the **first Tier 1 phase to touch the
-interpreter core** (`tokenizer.py`/`parser.py`/`interpreter.py`; every previous Tier 1
-phase was frontend-only). This followed the session that added "Continue" and "Restart"
-to the step navigator (a cleanup pass on Tier 1's navigation controls), which directly
-followed the session that built Breakpoints + Run-to-Breakpoint (the first Tier 1
-addition). Tier 1 (Breakpoints, Step controls, Call Stack, `CALL` support) is a
-reassessed push strengthening the project beyond the original mandatory/innovation scope,
-given extra time available; it followed the session that built Side-by-Side Run
-Comparison (the second Innovation feature), which followed the SQL Anti-Pattern Advisor
-session (the first Innovation feature), which followed the Download feature (multi-format
-report export, the last mandatory section), which followed the Learn tab session (which
-created `PROMPT_LOG.md`), which followed the Help tab session, which followed the session
-that created this file/`CLAUDE.md` and built Day/Night Mode + the Developed By modal.
+**2026-09-14**, end of the session that built the **Variable Timeline** — the second of
+the four Innovation features to ship (Variable Timeline/sparklines), leaving only Live
+Parameter Tuning (dropped, out of scope — §4) unaddressed from that original list. It
+followed the session that built the **Call Stack panel** (the fourth and final Tier 1
+item, completing Tier 1 entirely), which followed the session that built **`CALL`
+support (procedure calling procedure)** — the third Tier 1 addition, and the first Tier 1
+phase to touch the interpreter core — which followed the session that added "Continue"
+and "Restart" to the step navigator, which directly followed the session that built
+Breakpoints + Run-to-Breakpoint (the first Tier 1 addition). Tier 1 (Breakpoints, Step
+controls, Call Stack, `CALL` support) was a reassessed push strengthening the project
+beyond the original mandatory/innovation scope, given extra time available; it followed
+the session that built Side-by-Side Run Comparison (the second Innovation feature at the
+time), which followed the SQL Anti-Pattern Advisor session (the first Innovation
+feature), which followed the Download feature (the last mandatory section), which
+followed the Learn tab session (which created `PROMPT_LOG.md`), which followed the Help
+tab session, which followed the session that created this file/`CLAUDE.md` and built
+Day/Night Mode + the Developed By modal.
 
-**Re-verified via `git log`/`git status` at the start of this session**: the Continue/
-Restart rename was already committed (`5bb3534`), on top of everything else already
-committed (`9b4b6e1`, `56a629a`, ...). Working tree was fully clean at the start. Backend
-baseline confirmed at **223 passing before starting** (this phase's own required gate,
-and the number every future phase must not drop below) and **252 passing at the end**
-(223 pre-existing + 28 new `test_call_statement.py` tests + 1 new `/debug`-endpoint test)
-— nothing existing was modified or deleted to make it pass, exactly as required.
+**Re-verified via `git log`/`git status` at the start of this session — and a correction
+to the prior session's own claim here**: `CALL` support is genuinely committed
+(`8a7cc35`), but contrary to what the Call Stack session's own HANDOFF entry asserted
+("working tree was fully clean... only this session's own 3 frontend files... are
+uncommitted now" — misleadingly phrased as if that were a fresh, clean start), that
+session's own `DebuggerPage.jsx`/`App.css`/`samples.js` changes were **never actually
+committed** and were still sitting in the working tree at the start of *this* session.
+This session's own changes to the *same three files* (plus a new one) are layered on top
+of that still-uncommitted Call Stack work, not on a clean base — worth committing both
+phases' work together, or at least being aware the diff now spans two phases. Backend
+suite re-run before/after this session as a sanity check even though nothing backend-side
+was touched: **252 passing both times** (unchanged) — confirms the "backend untouched"
+claim rather than just asserting it.
 
 ---
 
@@ -305,6 +314,93 @@ not restated from memory:
   - **Live Parameter Tuning dropped** — the fourth planned Innovation feature is out of
     scope per this phase's own closing instruction (see §4/§5); it was never started, so
     nothing needed removing from the code, only from the planning lists.
+- **Variable Timeline** (`frontend/src/VariableTimeline.jsx`, wired into
+  `frontend/src/pages/DebuggerPage.jsx`'s new "VARIABLE TIMELINE" panel) — **Done**, the
+  third of the four originally-planned Innovation features (Live Parameter Tuning stays
+  dropped — §4). A sparkline per variable, plotting its value across the **full**
+  step-trace of the current run (not just the current step's frame, unlike the Variables
+  table) — purely a frontend view over the exact `DebugStep` shape `/debug` already
+  returns; **no backend/schema changes, no new endpoint** (confirmed by `git status
+  --short`: zero files under `backend/` touched, and the full suite re-run before/after
+  as a sanity check anyway — 252/252, unchanged).
+  - **Self-contained component, deliberately decoupled from its panel placement** (per
+    this phase's own instruction, anticipating a future layout rework): `VariableTimeline`
+    takes only `steps`, `currentStepIndex`, and `onStepSelect` — it computes its own
+    variable grouping/ordering internally and renders its own empty/placeholder states,
+    so it doesn't trust or depend on anything `DebuggerPage.jsx` already computes (its
+    existing `variableOrder` memo, for instance). The actual JSX wired into the Debugger
+    page is a thin `<div className="panel panel-timeline">` wrapper (heading + one
+    subtitle line + the component) — that's the only part a future redesign would need to
+    touch to re-house this somewhere else.
+  - **A real design subtlety worked through, not glossed over (this phase's own
+    instruction was to flag schema insufficiencies rather than silently work around
+    them)**: a variable name is only unique *within one call frame*, and the same name can
+    legitimately belong to several unrelated invocations over one trace — self-recursion
+    (`RecursiveFactorial`'s `Fact` declares a fresh `sub`/`result` at every recursion
+    level), or two separate sequential `CALL Foo(); CALL Foo();` statements. Naively
+    joining every step where a name appears into one line would silently stitch together
+    values that have nothing to do with each other — concretely demonstrated against this
+    app's own `RecursiveFactorial` sample, where `result` appears in literally every
+    single step of the trace (once inside `ComputeFactorial`, once per `Fact` recursion
+    level — 6 unrelated variables sharing one name). **The `DebugStep.call` field has no
+    unique per-invocation id to key off** — flagged rather than silently patched around by
+    enlarging the schema — but on inspection none is actually needed: the interpreter can
+    only be at one depth at a time, and a `CALL` always increases `depth` by exactly 1
+    relative to the previous step (see `_exec_call`), so a fresh call frame is
+    unambiguously identifiable purely from "depth just increased since the last step," and
+    returning to a shallower depth always resumes an existing ancestor frame, never
+    fabricates a new one. `assignFrameInstances` (in `VariableTimeline.jsx`) replays the
+    trace once on exactly that rule -- a pure function of `call.depth` and step order,
+    needing no new field -- and correctly reunites a paused frame's own before/after-its-
+    nested-call steps into one segment while never merging two genuinely separate
+    invocations that happen to share a name, depth, and procedure. Verified live: the
+    `result` row on `RecursiveFactorial` correctly shows **×6** separate instances,
+    `n`/`sub` show **×5** each (one per `Fact` recursion level) — rendered as visually
+    distinct sparkline segments sharing one x-axis, never one misleading merged line.
+  - **Non-numeric variables**: a row plots as an actual line for `number`/`boolean` values
+    (`boolean` mapped 0/1); a `null` snapshot (a DECLAREd-but-not-yet-SET variable) is
+    treated as a gap, not a value of 0, and a segment breaks across it rather than
+    interpolating through unknown territory. A variable that's ever a `string` renders as
+    a row of small tick marks at each step the existing `changed` flag says its value
+    changed (reusing that field directly rather than diffing values itself), plus its
+    exact current value as text — a plain numeric line wouldn't be meaningful for text.
+    Verified live against `SafeAverageWithHandlers`' `item_name` (a STRING variable):
+    renders 0 lines, 1 tick, no crash.
+  - **In sync with the rest of the debugger's step navigation, with zero new plumbing for
+    it**: the whole component is a pure `useMemo`/render off `currentStepIndex`, so
+    Previous/Next/Continue/Restart/the scrubber/step log/breakpoints all update every
+    sparkline's current-step marker automatically — verified live, not assumed. Each
+    sparkline also has its own hover crosshair (a muted dashed guide, distinct from the
+    solid amber current-step guide) with a caption naming the hovered step's line/
+    statement text, and clicking a sparkline jumps `currentStepIndex` there via
+    `onStepSelect` — the same click-to-jump affordance the Step Log panel and Compare
+    page's "Jump to this step" already establish as this app's convention.
+  - **Styled to match the Debugger Notebook system, no new colors**: teal for the line
+    itself (this app's "at rest/visited" accent), amber for "this value just changed"
+    markers and the current-step guide (the same accent as `.var-row-changed`, the editor
+    caret, and the Call Stack panel's current-frame highlighting), hairline borders, no
+    shadows, `font-mono` for all data. New CSS lives in `App.css`'s "Variable Timeline"
+    block.
+  - **Verified live**, via a real (not throwaway) backend + Vite dev server this
+    session started fresh — both were found stopped at the start of this session (no
+    lingering unverifiable-PID quirk this time) and were stopped again afterward to leave
+    the environment as found. Confirmed via the same raw-CDP driver approach as every
+    prior phase: `CalculateDiscount` (no `CALL` involved) shows plain, single-instance
+    sparklines with correct final values (`total` → 108); clicking near the start of a
+    sparkline correctly jumps to step 1; Previous/Next/Continue/Restart all still work
+    correctly with the panel present. `RecursiveFactorial` demonstrates the ×6/×5
+    multi-instance case (above) at both a mid-recursion step and the final unwound step.
+    Screenshotted in both dark and light theme (light mode reuses only already
+    contrast-audited tokens, no new risk). Explicitly checked the panel's own contribution
+    to the pre-existing 400px nav-overflow bug (§6): `.panel-timeline`'s own
+    `scrollWidth` measured 350px, fully inside a 400px viewport — the overflow measured at
+    that width (`body.scrollWidth` 686px) is entirely attributable to `.top-nav` (625px),
+    confirmed directly rather than assumed, so this phase does not make that pre-existing
+    bug any worse. Zero console errors throughout. Test-run history rows this session's
+    verification created (ids 148-155) were deleted afterward via direct SQL delete
+    (mirroring the Call Stack session's own cleanup approach, since no backend was left
+    running at cleanup time), confirmed the surviving max id (94) matches every prior
+    session's own baseline.
 
 ### Tier 1 additions (beyond the original mandatory/innovation scope)
 
@@ -573,6 +669,137 @@ extra time available, on top of the 5 mandatory sections and 4 innovation featur
     external process) — fully satisfied regardless. If the user wants to try `CALL`
     support live via curl or the running app, the dev backend process likely needs a
     manual restart to pick up these changes.
+- **Call Stack panel** (`frontend/src/pages/DebuggerPage.jsx`, `frontend/src/App.css`) —
+  **Done**, the fourth and final Tier 1 item. **Purely a frontend consumption-layer
+  feature, exactly as scoped** — no interpreter/backend files touched at all (confirmed
+  by `git status --short`: only `DebuggerPage.jsx`/`App.css`/`samples.js` changed), and
+  the backend suite was re-run before and after as a sanity check anyway (252/252,
+  unchanged).
+  - **What it displays**: a new "Call Stack" panel in the Debugger's LIVE STATE column,
+    right above the error banner/Variables table. Reads the `call` field the `CALL`
+    support phase already produces per `DebugStep` (`{ procedureName, depth, stack }`,
+    present only once execution is inside a CALLed procedure) — no new backend data
+    needed.
+  - **One display detail worth documenting for future sessions**: the interpreter's own
+    `stack` only ever lists procedures reached *via a CALL* — it does not include the
+    entry procedure itself (the one that started running when Debug was clicked), since
+    the interpreter's own `_call_stack` list only grows on a `CALL`. To show a true
+    "1 frame at top level, 2 frames once inside a nested call" picture (matching how a
+    real debugger's call stack always includes the outermost frame), the frontend
+    prepends the entry procedure's name itself — read from `ast` (`ast.name` for a bare
+    `ProcedureNode`/`FunctionNode`, or `ast.definitions[last].name` for a `ProgramNode`,
+    `null` for the legacy bare/wrapper-less Procedure form, which has no name and can
+    never be a `CALL` target anyway) — onto the `call.stack` array before rendering. This
+    is a pure display computation (`entryProcedureName`/`callStackFrames`, both
+    `useMemo`s in `DebuggerPage.jsx`), not a change to the trace data itself.
+  - **Rendering**: innermost (currently executing) frame first — reads as "what's running
+    right now, and what called it" without reading bottom-up. The current frame gets an
+    amber-accented card + "current" badge (same amber this app already uses for
+    "current"/"changed" everywhere else — the current-line highlight, `.var-row-changed`,
+    `.changed-badge`); every caller above it in the list gets a muted card + "caller"
+    badge and a depth number. A procedure with no `CALL`s at all (i.e. every pre-existing
+    sample) still shows a 1-frame list with its own name marked current, rather than an
+    empty panel — this reads as "here's what's executing" at all times rather than only
+    appearing once `CALL` is used, and was a deliberate choice over a fully collapsed/
+    blank top-level state. The one genuinely collapsed case is the legacy bare-Procedure
+    form (no name, no `entryProcedureName`) with no active `call` — it shows a plain
+    "Top level — not inside a CALL." line instead of a list, since there's no name to
+    put in a frame there.
+  - **Live-updates automatically as the user steps** — Previous/Next/Continue/Restart/the
+    scrubber/step-log/breakpoints all already funnel through `currentStepIndex`, and the
+    panel is a pure `useMemo` off `currentStep`, so **no new plumbing was needed** for any
+    of them; this was verified live, not just assumed (see below).
+  - **A real crash bug was found and fixed in the course of this phase, in
+    `frontend/src/cfg.js`'s caller** (not in `cfg.js` itself — see below): `cfg.js`'s
+    `buildFlowchartGraph(ast)` only ever understood a single procedure/function body
+    (`ast.body`) and had never been taught about the `CALL`-support phase's `ProgramNode`
+    wrapper (`{ type: "ProgramNode", definitions: [...] }`, no top-level `body` key at
+    all). Since this phase is the first to put a `ProgramNode`-shaped AST in front of a
+    live Debug run (via the two new samples below), clicking Debug on either one would
+    have thrown inside `buildFlowchartGraph` (`for (const stmt of statements)` over
+    `undefined`) with **no error boundary anywhere in this app** to catch it — a hard
+    whole-page crash, confirmed by first reproducing it, not just reasoned about.
+    **Fixed without touching `cfg.js`'s own graph-building/rendering logic at all** (per
+    this phase's explicit "don't touch flowchart generation" scope): `DebuggerPage.jsx`
+    now derives a `flowchartAst` — the entry definition itself (last one, per the
+    last-definition-is-entry convention) for a `ProgramNode`, or the AST unchanged
+    otherwise — and passes that to `buildFlowchartGraph`, wrapped in a `try/catch` as a
+    last-resort guard. The resulting diagram shows the entry procedure's own control flow
+    only (a `CALL Foo(...)` line renders as a plain rect labeled "CallStatement" via
+    `cfg.js`'s existing default case, since it still doesn't recognize that node type
+    specifically — a cosmetic gap, not a crash, and still out of this phase's scope to
+    polish). Confirmed live: `OrderTotal` now renders a correct, non-crashing flowchart.
+  - **Two new samples added to `frontend/src/samples.js`**, per this phase's own
+    instruction to move the `CALL` demo out of the backend test suite and into the real
+    sample library now that the frontend understands it:
+    1. **`OrderTotal`** — `ComputeSubtotal`/`OrderTotal` (the same pair the `CALL`
+       support phase used as a backend test fixture), rewritten as a zero-external-param
+       entry point (`OrderTotal()` self-contains its values via `DECLARE ... DEFAULT`,
+       same constraint every other sample already documents — the frontend has no
+       IN-param-collection UI) that CALLs `ComputeSubtotal` with an OUT argument.
+       Demonstrates the 1-frame → 2-frame → 1-frame cycle.
+    2. **`RecursiveFactorial`** — `Fact`/`ComputeFactorial`, self-recursion (`Fact` CALLs
+       itself, registered under its own name per the `CALL` support phase's registry
+       convention) computing 5! via a zero-param entry point. Demonstrates the panel past
+       depth 2. **One deliberate addition beyond the interpreter test's original shape**:
+       a trailing `SET result = result + 0;` no-op after the `CALL` in `ComputeFactorial`
+       — without it, the trace's very last step would land deep inside `Fact`'s own frame
+       (whose OUT-propagated value never gets a step of its own back in
+       `ComputeFactorial`'s frame, since there'd be nothing left to execute there), so the
+       demo would never actually show the panel unwinding back to 1 frame with a visible
+       final answer. Documented inline in `samples.js` for why it's there.
+  - **Verified live**, not just read-through — and this took real troubleshooting worth
+    recording for future sessions:
+    - The real dev backend (port 8000) is confirmed **genuinely occupied** this session
+      (a fresh `uvicorn` bind attempt on it failed with `WinError 10048`, proving a real
+      listener), yet still the same unverifiable-PID quirk as every prior session
+      (`Get-Process`/`Get-CimInstance` find nothing for the PID `netstat` reports) — so a
+      cross-origin throwaway backend was started on port 8001 instead, purely for this
+      session's own verification, and shut down again afterward.
+    - Pointing the real Vite dev server (port 5173) at that throwaway backend would have
+      meant editing `vite.config.js`'s proxy target and restarting the dev server —
+      **the restart attempt was correctly blocked by the permission classifier**
+      (stopping a live process the user is running), so that path was abandoned; the
+      `vite.config.js` edit was reverted immediately, confirmed via `git status --short`
+      showing no diff.
+    - Instead, a small **dependency-free static-file-server-plus-same-origin-proxy**
+      (plain Node `http`, no dependencies) was written to serve the already-built
+      `frontend/dist/` (via `npm run build`, already required as this phase's frontend
+      gate) and same-origin-proxy the API paths to the throwaway backend — avoiding both
+      the blocked dev-server restart and the cross-origin CORS/preflight issues hit when
+      trying to fetch port 8001 directly from the port 5173 origin in headless Chrome.
+      This, plus the same raw-CDP driver approach (Node's native `fetch`/`WebSocket`,
+      Chrome headless) this project's history has used throughout, drove the **actual
+      built app**: loaded `OrderTotal`, clicked Debug, confirmed the panel shows exactly
+      1 frame (`OrderTotal`, current) at step 1; stepped to inside the `CALL`, confirmed
+      exactly 2 frames (`ComputeSubtotal` current, `OrderTotal` caller) with the Variables
+      table correctly scoped to the callee only; clicked Continue, confirmed it unwound
+      back to exactly 1 frame; clicked Restart, confirmed the panel and step counter both
+      correctly reset. Loaded `RecursiveFactorial`, clicked Debug, scrubbed to a
+      depth-5 step: confirmed **exactly 6 frames** (5×`Fact` + `ComputeFactorial`,
+      innermost `Fact` marked current, correct descending depth numbers 5→0), then
+      scrubbed to the final step: confirmed it unwound back to exactly 1 frame
+      (`ComputeFactorial`, current). Confirmed Previous/Next/Continue/Restart/the
+      scrubber all still work correctly against the new panel with zero JS console
+      errors throughout. Screenshotted in both dark (default) and light theme — the
+      amber "current"-frame styling reads cleanly in both. Also confirmed the flowchart
+      panel (post-fix, see above) and the SQL Anti-Pattern Advisor both render without
+      crashing for the new `ProgramNode`-based `OrderTotal` sample (Advisor correctly,
+      harmlessly shows "no anti-patterns detected" — the same documented degradation from
+      the `CALL` support phase, not a new gap this phase introduced).
+    - **9 test-run history rows this verification created** (ids 139-147 — the throwaway
+      backend writes to the exact same real `backend/data/debug_history.db`, since
+      `history.py`'s `DB_PATH` is resolved relative to the module file, not the process's
+      working directory) were deleted afterward via direct SQL delete (equivalent to the
+      usual `DELETE /history/{id}` cleanup — no backend was left running to call that
+      endpoint through at cleanup time), confirmed the surviving max id (94) matches
+      exactly what every prior session's own cleanup already left behind.
+  - **`cfg.js`/the Anti-Pattern Advisor still don't fully understand `CALL`-based
+    procedures** — only the one crash was fixed (see above); the flowchart still doesn't
+    render the callee's own control flow inline, and the Advisor still can't analyze a
+    `ProgramNode` at all. Both remain an accepted, documented gap (§6) for a future
+    frontend-facing phase, not something this phase's own scope ("displaying existing
+    call-trace data... don't touch interpreter/backend logic") asked for.
 
 ---
 
@@ -580,12 +807,14 @@ extra time available, on top of the 5 mandatory sections and 4 innovation featur
 
 Nothing is genuinely half-built right now — every feature in §2 is code-complete.
 
-- **This session's own `CALL` support is uncommitted** — `backend/app/tokenizer.py`,
-  `backend/app/parser.py`, `backend/app/interpreter.py`, `backend/app/tests/
-  test_call_statement.py` (new), `backend/app/tests/test_debug_endpoint.py` (confirmed
-  via `git status --short` — no frontend files touched); the Continue/Restart rename
-  before it is already committed (`5bb3534`). Same "commit soon" recommendation as every
-  prior phase — see §7.
+- **Two sessions' worth of frontend work is now uncommitted, layered together** — the
+  Call Stack session's own `DebuggerPage.jsx`/`App.css`/`samples.js` changes were never
+  committed (contrary to what that session's own HANDOFF entry implied — see §1's
+  correction), and this session's Variable Timeline work (`DebuggerPage.jsx`/`App.css`
+  again, plus the new `frontend/src/VariableTimeline.jsx`) is now on top of that same
+  uncommitted diff. Confirmed via `git status --short` — no backend files touched by
+  either session. This is riskier to leave uncommitted than a single phase's worth of
+  changes — commit before starting anything else. See §7.
 - The student photo in the Developed By modal is still the placeholder inline SVG
   silhouette, not a real photo file (the text content itself is real and committed).
 - Day/Night Mode itself was only ever exercised in one headless-Chrome instance during
@@ -599,21 +828,19 @@ Nothing is genuinely half-built right now — every feature in §2 is code-compl
 **All 5 mandatory course-graded sections are now code-complete** (§2) — none remain
 in this list. What's left is real content for the Learn tab (§6) and everything below:
 
-- **One of the four innovation features** — confirmed absent by grep, no partial code
-  anywhere: Variable Timeline/sparklines. (SQL Anti-Pattern Advisor and Side-by-Side Run
-  Comparison are both done — see §2.)
+**Three of the four originally-planned innovation features are now done** (SQL
+Anti-Pattern Advisor, Side-by-Side Run Comparison, Variable Timeline — see §2):
+
 - **Live Parameter Tuning — dropped, out of scope.** Explicitly removed from the plan by
   a prior session's own closing instruction rather than left as "not started" — it was
   never begun, no code exists for it, and none should be added later under this name
-  without a fresh scoping prompt from the user.
-- **One of the four Tier 1 items** — Call Stack (the frontend visualization of the
-  `call`/depth/stack data `CALL` support now produces — see §2's entry for the exact
-  schema). Needs a fresh scoping prompt before starting, same as Quiz page enhancements
-  below. (Breakpoints, Step controls, and `CALL` support, the other three Tier 1 items,
-  are all done — see §2. A genuine Step-Into-vs-Step-Over distinction wasn't built as
-  part of "Step controls" since `CALL` didn't exist yet at the time; worth reconsidering
-  now that it does, but only as part of a scoped Call Stack phase or a fresh prompt, not
-  assumed here.)
+  without a fresh scoping prompt from the user. This is now the only originally-planned
+  feature (mandatory or innovation) not either done or deliberately dropped.
+
+**All four Tier 1 items are also done** — Breakpoints, Step controls, `CALL` support, and
+Call Stack (§2) — Tier 1 is complete. A genuine Step-Into-vs-Step-Over distinction was
+never built as part of "Step controls" (Previous/Next already serve that role); worth
+reconsidering only under a fresh, explicitly-scoped prompt, not assumed here.
 
 ---
 
@@ -639,7 +866,8 @@ innovation features:
    (`56a629a`).
 2. ~~Side-by-Side Run Comparison~~ — code-complete, thoroughly verified, **committed**
    (`56a629a`).
-3. Variable Timeline/sparklines — not started.
+3. ~~Variable Timeline/sparklines~~ — **Done** this session, thoroughly verified (§2),
+   not yet committed (§3).
 4. ~~Live Parameter Tuning~~ — **dropped, out of scope** (§4), not attempted.
 
 Then the reassessed Tier 1 push (§2's new subsection), given extra time available:
@@ -649,11 +877,10 @@ Then the reassessed Tier 1 push (§2's new subsection), given extra time availab
    session — same underlying logic, no behavior change.
 2. ~~Step controls~~ — **Done**, via the "Continue"/"Restart" cleanup pass (§2),
    thoroughly verified, **committed** (`5bb3534`).
-3. ~~`CALL` support~~ — **Done** this session, thoroughly verified (§2 has the full
-   grammar/AST/step-trace details), not yet committed (§3/§6).
-4. Call Stack — not started, needs scoping (§4). Depends on `CALL` support's `call`
-   DebugStep field (§2) — that data now exists; this item is purely the frontend
-   visualization on top of it.
+3. ~~`CALL` support~~ — **Done**, thoroughly verified (§2 has the full grammar/AST/
+   step-trace details), **committed** since (see §6's commit-status history).
+4. ~~Call Stack~~ — **Done** this session, thoroughly verified (§2), not yet committed
+   (§3). **Tier 1 is now fully complete.**
 
 See §7 for what has to happen *before* moving further down this list, though.
 
@@ -698,29 +925,38 @@ Scanned directly (`grep` for `TODO`/`FIXME`/`XXX`/`HACK`/placeholder markers acr
   (Side-by-Side Run Comparison) then left the Download feature, the Anti-Pattern Advisor,
   the Developed-By content edit, and its own Compare work all genuinely uncommitted — and
   **all of that was committed since**, in one commit (`56a629a`) made outside a Claude
-  Code session; the following Breakpoints and Continue/Restart sessions were each
-  committed too (`9b4b6e1`, `5bb3534`). Re-verified via `git status --short`/`git log` at
-  the start of *this* session: the working tree was fully clean before this phase
-  started. **What's uncommitted right now** is only this session's own `CALL` support —
-  see §3. Lesson keeps standing: `git log`/`git status` are ground truth, checked fresh
-  every session, never carried over from what the last session's notes said.
-- **`ProgramNode`/`CallStatement` aren't understood by any frontend consumer yet** — this
-  phase's own explicit scope (backend/interpreter only). Concretely, for a `CALL`-based
-  multi-procedure submission today: `cfg.js`'s flowchart builder will not render a
-  meaningful diagram (it doesn't recognize `ast.type === "ProgramNode"`); the SQL
-  Anti-Pattern Advisor degrades to "no issues found" rather than actually analyzing
-  anything (confirmed to not crash — see §2 — but it's not really checking); the Download
-  report and Side-by-Side Comparison pages haven't been exercised against this AST shape
-  at all. None of this is a bug in what shipped this session (every one of those was
-  explicitly out of scope, and each was confirmed to at least not crash where checked) —
-  it's the expected, deliberate state until a future frontend-facing phase teaches those
-  consumers about `call`/`ProgramNode`. By code inspection (not live-browser-verified
-  this session — frontend was explicitly out of scope, and the live dev backend was
-  stale, see §2), the Debugger page's step navigator/variable table/breakpoints/Continue/
-  Restart should all keep working fine against a `CALL`-based trace regardless, since none
-  of them index into `ast` by shape — they only ever read the flat `steps` array (the new
-  `call` field would just be present-but-unused, harmlessly) — worth a quick live check in
-  a future session before relying on that claim.
+  Code session; the following Breakpoints, Continue/Restart, and `CALL` support sessions
+  were each committed too — except that claim was **wrong for the Call Stack session**:
+  `git log` shows `CALL` support did get committed (`8a7cc35`), but the Call Stack
+  session's own frontend changes were never committed despite that session's HANDOFF
+  entry describing the tree as freshly clean — an actual case of the exact mistake this
+  lesson keeps warning about, caught this session by checking `git log`/`git status`
+  directly rather than trusting the previous entry (see §1's correction). **What's
+  uncommitted right now** is the Call Stack session's work plus this session's own
+  Variable Timeline work, layered together — see §3. Lesson keeps standing, reinforced
+  by a real miss this time: `git log`/`git status` are ground truth, checked fresh every
+  session, never carried over from what the last session's notes said — and a HANDOFF
+  entry claiming "nothing to commit"/"tree is clean" should still be spot-checked against
+  `git log`, not taken on faith.
+- **`ProgramNode`/`CallStatement` are now partially understood by the frontend** — this
+  session (Call Stack) taught `DebuggerPage.jsx` enough about `ProgramNode` to display the
+  call stack and to avoid crashing the flowchart panel (see §2), but did not do a full
+  audit of every consumer, since that was explicitly out of this phase's scope too
+  ("displaying existing call-trace data... don't touch interpreter/backend logic," and
+  Download/Compare were both on the explicit do-not-touch list). Concretely, as of now:
+  the flowchart (`cfg.js`, via `DebuggerPage.jsx`'s new `flowchartAst` derivation) shows
+  the entry procedure's own control flow correctly (confirmed not to crash — see §2 — with
+  one cosmetic gap: a `CALL` statement renders as a generic rect labeled "CallStatement"
+  rather than "CALL Foo(args);", since `cfg.js`'s own `renderStatementHeader` still
+  doesn't have a case for it); the SQL Anti-Pattern Advisor still degrades to "no issues
+  found" rather than actually analyzing a `ProgramNode` (unchanged from the `CALL` support
+  phase, confirmed still non-crashing); the Download report and Side-by-Side Comparison
+  pages have still never been exercised against this AST shape at all — Compare has no
+  flowchart of its own so it's structurally unaffected by the crash this session fixed,
+  but Download does rasterize the flowchart image client-side and hasn't been specifically
+  checked against a `ProgramNode`-based sample. Worth a follow-up phase if `CALL`-based
+  procedures are meant to be fully first-class across every page, not just the main
+  Debugger.
 - **Learn tab ships with placeholder content by design** (§2) — draft concept-explanation
   prose (unreviewed against the actual course rubric), a literal `YOUR_VIDEO_ID_HERE`
   video embed, and placeholder references in every category. All three are visibly
@@ -742,13 +978,23 @@ Scanned directly (`grep` for `TODO`/`FIXME`/`XXX`/`HACK`/placeholder markers acr
   wasn't); worth a small dedicated fix later (e.g. `flex-wrap: wrap` on `.top-nav`
   itself, not just `.site-header-right`).
 - **`backend/data/debug_history.db` needed manual cleanup again this session** (every
-  session so far has needed this) — live-verification testing against the real dev
-  backend always writes real history rows. This session's few `curl` smoke-test calls
-  against the (stale, see §2) live backend added ids 136-138, deleted afterward via
-  `DELETE /history/{id}`; checked first for stragglers past the previous session's own
-  claimed cleanup range (none found — ids 131-135 were genuinely all gone). Same reminder
-  as every prior session: hitting the *real* running backend during manual verification
-  always needs this cleanup step.
+  session so far has needed this) — ids 148-155 (8 rows, from this session's live-browser
+  verification against a real backend this session started fresh on port 8000) were
+  deleted via direct SQL delete afterward (both dev servers had already been stopped by
+  the time cleanup ran, so no backend was left running to go through
+  `DELETE /history/{id}`); checked first for stragglers past the previous session's own
+  claimed cleanup range (none found — ids up to 147 were genuinely all gone, surviving max
+  id was 94, matching every prior session's own baseline exactly). Same reminder as every
+  prior session: any real run of this app's backend during manual verification always
+  needs this cleanup step.
+- **Variable Timeline shows every variable that ever appeared anywhere in the run, not
+  just ones reachable from the current frame** — a deliberate difference from the
+  Variables table (§2): the table is scoped to "what's in scope right now," the Timeline
+  is scoped to "everything that happened this run." A variable declared only inside a
+  procedure that was CALLed gets a row even while the current step is back at the caller
+  (its sparkline just shows nothing at the current-step x-position, correctly, since it's
+  out of scope there) — this is intentional, not a bug, but worth knowing if it looks odd
+  next to the Variables table showing fewer rows for the same step.
 - **Anti-Pattern Advisor doesn't cover a history-replayed run** (§2) — `issues` is only
   ever set from a live `/debug` response; replaying a saved History entry restores
   `ast`/`steps` but leaves `issues` at `null`, so the Advisor panel shows its
@@ -784,30 +1030,35 @@ Scanned directly (`grep` for `TODO`/`FIXME`/`XXX`/`HACK`/placeholder markers acr
 
 ## 7. Immediate next step
 
-1. **Commit this session's `CALL` support** (`backend/app/tokenizer.py`, `parser.py`,
-   `interpreter.py`, `tests/test_call_statement.py`, `tests/test_debug_endpoint.py` — see
-   §3/§6). This one is riskier to leave uncommitted than prior small UI renames, since it
-   touched the interpreter core — commit before starting the next phase.
-2. **Restart the local dev backend before trying `CALL` support live** (§2/§6) — the
-   long-running process on port 8000 did not pick up these changes; a manual restart
-   should fix it (the pytest suite already fully verifies the code itself, so this is
-   only relevant for manual/browser-driven checking).
+1. **Commit the last two sessions' frontend work together** (Call Stack + Variable
+   Timeline, both uncommitted — see §3): `frontend/src/pages/DebuggerPage.jsx`,
+   `frontend/src/App.css`, `frontend/src/samples.js`, and the new
+   `frontend/src/VariableTimeline.jsx`. Both **Tier 1** (Breakpoints, Step controls,
+   `CALL` support, Call Stack) and three of the four **Innovation features** (Advisor,
+   Compare, Variable Timeline) are now fully complete — a good, natural commit boundary,
+   and overdue given two full phases have accumulated uncommitted.
+2. **Restart the local dev backend before trying `CALL`/Call Stack live** (§2/§6) — the
+   long-running process on port 8000 still hadn't picked up the `CALL` support changes as
+   of the Call Stack session (the unverifiable-PID quirk); this session found both dev
+   servers stopped entirely and started fresh ones purely for its own verification,
+   stopping them again afterward (§2) — so this is still open for whoever runs the app
+   next.
 3. **Small Help-tab follow-up, whenever a Help/Learn-scoped phase is convenient** (§6):
    update the control-reference list item that still says "Reset" to say "Restart," and
-   add a line describing breakpoints/Continue — neither was in scope for the phase that
-   caused the gap.
+   add a line describing breakpoints/Continue/the Call Stack panel/the Variable Timeline
+   panel — none were in scope for the phases that caused these gaps.
 4. Get the real student photo for the Developed By modal (the text content itself is
    already real and already committed — §3).
 5. Get a real educational video (swap `YOUR_VIDEO_ID_HERE` in `LearnPage.jsx`) and real,
    verified references (replacing every badge-marked placeholder entry) for the Learn
    tab (§2/§6) — and have the concept-explanation draft reviewed against the actual
    course rubric.
-6. Continue the Tier 1 push (§5) — **Call Stack** (needs scoping — §4) is now the only
-   remaining Tier 1 item, and can build directly on this phase's `call`/depth/stack
-   DebugStep field (§2) without touching the interpreter again. Also still unscoped: Quiz
-   page enhancements and Variable Timeline/sparklines. Live Parameter Tuning stays
-   dropped (§4) and shouldn't be picked up under that name without a fresh scoping
-   prompt. Whichever frontend-facing phase comes next should also consider teaching
-   `cfg.js`/the Anti-Pattern Advisor/Compare/Download about `ProgramNode`/`CallStatement`
-   (§6) if `CALL`-based procedures are meant to be user-facing rather than just an
-   interpreter capability.
+6. **Only Live Parameter Tuning remains from the original innovation-feature list, and
+   it's deliberately dropped** (§4) — don't pick it up under that name without a fresh
+   scoping prompt. Still unscoped: Quiz page enhancements. A future frontend-facing phase
+   should also consider the remaining `ProgramNode`/`CallStatement` gaps neither the Call
+   Stack nor Variable Timeline sessions closed (§6): `cfg.js` labeling `CALL` statements
+   generically, the Anti-Pattern Advisor not analyzing `ProgramNode` at all, and
+   Download/Compare never having been exercised against a `CALL`-based sample — only if
+   `CALL`-based procedures are meant to be fully first-class across every page, not just
+   the main Debugger.
