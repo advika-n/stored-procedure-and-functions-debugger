@@ -237,4 +237,44 @@ BEGIN
 END
 `,
   },
+  // Added specifically for the SQL Anti-Pattern Advisor phase -- unlike
+  // every sample above, this one is deliberately *bad*, so the six
+  // detectable anti-patterns (see backend/app/advisor.py) have a live,
+  // runnable demo to show up on the moment someone loads it and clicks
+  // Debug. It still executes successfully end to end (3 demo rows, a
+  // small fixed-count nested loop) -- the point is that its *structure*
+  // has real issues worth flagging, not that it crashes.
+  {
+    name: 'AntiPatternShowcase',
+    kind: 'PROCEDURE',
+    description: 'New for this phase -- deliberately bad on purpose: SELECT *, a cursor loop that only sums rows, nested loops, a hard-coded value repeated twice, an unhandled division, and a cursor left open. Load it and click Debug to see every anti-pattern the Advisor catches, flagged live below the editor.',
+    code: `CREATE PROCEDURE AntiPatternShowcase()
+BEGIN
+    DECLARE total NUMBER DEFAULT 0;
+    DECLARE count NUMBER DEFAULT 0;
+    DECLARE average NUMBER DEFAULT 0;
+    DECLARE item_name STRING DEFAULT '';
+    DECLARE item_price NUMBER DEFAULT 0;
+    DECLARE outer NUMBER DEFAULT 0;
+    DECLARE inner NUMBER DEFAULT 0;
+    DECLARE bonus NUMBER DEFAULT 0;
+    DECLARE all_cursor CURSOR FOR SELECT * FROM products;
+    OPEN all_cursor;
+    WHILE all_cursor%FOUND DO
+        FETCH all_cursor INTO item_name, item_price;
+        SET total = total + item_price;
+        SET count = count + 1;
+    END WHILE;
+    WHILE outer < 3 DO
+        WHILE inner < 3 DO
+            SET bonus = bonus + 100;
+            SET inner = inner + 1;
+        END WHILE;
+        SET outer = outer + 1;
+    END WHILE;
+    SET bonus = bonus + 100;
+    SET average = total / count;
+END
+`,
+  },
 ]

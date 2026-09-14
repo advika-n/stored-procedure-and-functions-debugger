@@ -3,6 +3,7 @@ import Layout from './Layout'
 import Theory from './Theory'
 import HomePage from './pages/HomePage'
 import DebuggerPage from './pages/DebuggerPage'
+import ComparePage from './pages/ComparePage'
 import HistoryPage from './pages/HistoryPage'
 import QuizPage from './pages/QuizPage'
 import AboutPage from './pages/AboutPage'
@@ -29,6 +30,7 @@ function App() {
           <Route element={<Layout />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/debugger" element={<DebuggerPage />} />
+            <Route path="/compare" element={<ComparePage />} />
             <Route path="/theory" element={<TheoryPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/quiz" element={<QuizPage />} />

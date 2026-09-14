@@ -29,6 +29,35 @@ Documentation (5), Innovation (5).
   template-based fallback whenever the API is unavailable/unconfigured. Client wiring
   lives once in `backend/app/explainer.py` (`_get_gemini_client()`, `_GEMINI_MODEL`) and
   is reused (not duplicated) by `backend/app/quiz.py`.
+- **SQL Anti-Pattern Advisor** (`backend/app/advisor.py`) — a static linter-style pass
+  over the AST alone (never the execution trace), reusing the exact AST
+  `app.parser.parse()` already produces. Not a separate endpoint: `POST /debug` computes
+  `analyze(ast)` right after a successful parse and returns the findings as an `issues`
+  array alongside `ast`/`steps`, so the check runs automatically on every Debug click at
+  no extra network round trip. Six anti-patterns detected (`select-star`,
+  `cursor-could-be-set-based`, `nested-loops`, `missing-error-handling`, `magic-number`,
+  `cursor-not-closed`) — see the module's own docstring for what's detectable from this
+  grammar's AST and, just as deliberately, what isn't (no dynamic-SQL/injection check:
+  this grammar has no EXECUTE/EXEC-IMMEDIATE construct at all).
+- **Side-by-Side Run Comparison** (`frontend/src/pages/ComparePage.jsx`, route
+  `/compare`) — two independent Monaco editor panes, each calling `POST /debug` on its
+  own; no backend changes at all, since that endpoint is already stateless per request.
+  Once both sides have a trace, one shared step control drives a `sharedStepIndex` both
+  panes read from (a shorter trace freezes on its last step once the index passes its own
+  length, rather than erroring). `frontend/src/compareTraces.js`'s `computeDivergence()`
+  is a pure, execution-free diff over the two `DebugStep` arrays: it walks them by shared
+  index and reports the first difference in line/error/branch/shared-variable-value, or a
+  `length` divergence if the traces match all the way through but end at different
+  lengths; `null` means fully identical. Deliberately doesn't touch the flowchart or the
+  Anti-Pattern Advisor's `issues` — only the step trace itself is compared.
+- **Report export** (`backend/app/report.py`, `/debug/report`): PDF via **reportlab**
+  (chosen over weasyprint — no native GTK/Pango/Cairo dependency to install on this
+  Windows dev environment), DOCX via **python-docx**, plain text via stdlib only. The
+  flowchart image is rasterized to PNG **client-side** (`frontend/src/svgToPng.js`, via
+  `<canvas>`) from the Mermaid SVG the Debugger has already rendered and sent to this
+  endpoint as-is — converting Mermaid's `<foreignObject>`-heavy SVG server-side has no
+  reliable lightweight option. Stateless: it formats whatever `DebugStep` trace the
+  frontend already has from its last `/debug` call, never re-parses/re-interprets.
 - **Core pipeline**: `backend/app/tokenizer.py` → `backend/app/parser.py` (hand-rolled
   recursive-descent — chosen deliberately over a parser-generator for documentation
   clarity/control, matching this project's Documentation grading criterion) → AST (plain
@@ -53,16 +82,19 @@ Documentation (5), Innovation (5).
 | `tokenizer.py` | Source text → token list |
 | `parser.py` | Tokens → AST (grammar documented in its module docstring) |
 | `interpreter.py` | AST → `DebugStep` list (tree-walking); also `DebugStep`/`render_expr`/`render_statement_header`/`render_definition_header` |
+| `advisor.py` | SQL Anti-Pattern Advisor — static `analyze(ast)` pass, six checks, rides along on every `/debug` response as `issues` |
 | `explainer.py` | Gemini client wiring + per-step explanation (`/explain`) + free-form Q&A (`/ask`) + template fallback |
 | `quiz.py` | Gemini-backed 5-question MCQ quiz generation (`/quiz/generate`), reuses `explainer.py`'s client |
 | `demo_db.py` | Ephemeral cursor demo dataset |
 | `history.py` | Persistent run history (SQLite) |
+| `report.py` | Multi-format (PDF/DOCX/TXT) report export (`/debug/report`) — builds one format-agnostic IR from a `DebugStep` trace, then renders it three ways (reportlab / python-docx / plain text) |
 | `main.py` | FastAPI app + all routes |
 | `tests/` | pytest suite, one `test_*.py` per module above plus `test_*_endpoint.py` per route |
 
 ### Endpoints (`backend/app/main.py`)
-`GET /health` · `POST /debug` · `POST /explain` · `POST /ask` · `POST /quiz/generate` ·
-`GET /history` · `GET /history/{id}` · `DELETE /history/{id}` · `DELETE /history`
+`GET /health` · `POST /debug` · `POST /debug/report` · `POST /explain` · `POST /ask` ·
+`POST /quiz/generate` · `GET /history` · `GET /history/{id}` · `DELETE /history/{id}` ·
+`DELETE /history`
 
 ### Frontend file map (`frontend/src/`)
 | File | Role |
@@ -76,13 +108,18 @@ Documentation (5), Innovation (5).
 | `index.css` | Reset only |
 | `mermaidColors.js` | Hand-mirrored dark/light hex palette for Mermaid (see §3 — it can't read CSS vars) |
 | `cfg.js` | AST → Mermaid flowchart graph + definition (`buildFlowchartGraph`, `renderMermaidDefinition`) |
+| `svgToPng.js` | Client-side `<canvas>` rasterization of a rendered Mermaid SVG to a PNG data URL, for the Download Report feature's PDF/Document exports |
+| `compareTraces.js` | Pure `computeDivergence(leftSteps, rightSteps)` — the Side-by-Side Run Comparison feature's step-by-step trace diff, no execution of its own |
 | `lastProcedure.js` | sessionStorage bridge: lets `/quiz`'s "This Procedure" option see the Debugger's current code without a global store |
 | `samples.js` | Built-in sample procedures/functions shown in the Debugger's library panel |
-| `pages/DebuggerPage.jsx` | The main debugger UI — editor, step navigator, variables, flowchart, Predict Mode, Ask AI, TTS |
+| `pages/DebuggerPage.jsx` | The main debugger UI — editor, step navigator, variables, flowchart, SQL Anti-Pattern Advisor panel, Predict Mode, Ask AI, TTS, Download Report |
+| `pages/ComparePage.jsx` | `/compare` page — two independent Monaco editor panes, each running its own `POST /debug`, stepped together and diffed via `compareTraces.js` |
 | `pages/QuizPage.jsx` | Standalone `/quiz` page (distinct from Predict Mode — see below) |
 | `pages/HistoryPage.jsx`, `History.jsx` | `/history` page |
 | `pages/HomePage.jsx`, `pages/AboutPage.jsx` | Landing + About |
-| `Theory.jsx`, `theoryContent.jsx`, `theoryTopics.js` | `/theory` page — concept write-ups with runnable examples (six topics). **Not** the same as the still-missing "Learn tab" mandatory section — see §5. |
+| `pages/HelpPage.jsx` | `/help` page — full user manual |
+| `pages/LearnPage.jsx` | `/learn` page — the mandatory Learn tab (concept explanation + video + references) |
+| `Theory.jsx`, `theoryContent.jsx`, `theoryTopics.js` | `/theory` page — concept write-ups with runnable examples (six topics). **Not** the same as the Learn tab above — no video, no references section, not top-right-positioned in nav; reusable content, but a separate page. |
 
 ### Known repo cruft
 `New/` at the project root is a stray, fully-duplicated snapshot of an earlier
@@ -171,12 +208,14 @@ JS for this reason; keep it in sync with `theme.css` by hand when either changes
   automated check that would fail if this regresses, so review this by hand.
 
 - **Non-functional requirement: `/debug` must stay under 2s.** Measured directly against
-  a live local server (all 10 built-in `samples.js` procedures, via a Python timing
-  script against `POST http://127.0.0.1:8000/debug`): **22.5–76.2ms per call, ~30ms
-  average** — comfortably under budget today. This has *not* been re-verified since;
-  re-time it (same approach: loop the sample list, hit `/debug`, measure wall time) if
-  the interpreter, cursor handling, or history-write path changes meaningfully, and note
-  the new numbers here as the deliverable.
+  a live local server (the original 10 built-in `samples.js` procedures, via a Python
+  timing script against `POST http://127.0.0.1:8000/debug`): **22.5–76.2ms per call,
+  ~30ms average** — comfortably under budget. Not re-verified since (`samples.js` now has
+  an 11th sample, `AntiPatternShowcase` — see `HANDOFF.md` — but it's a small, fast
+  procedure with no reason to behave differently); re-time it (same approach: loop the
+  sample list, hit `/debug`, measure wall time) if the interpreter, cursor handling, or
+  history-write path changes meaningfully, and note the new numbers here as the
+  deliverable.
 
 ---
 
@@ -187,8 +226,7 @@ tracked in `HANDOFF.md`, not here** — this section only defines what's require
 
 1. **Learn tab** — concept explanation + video + references, positioned top-right in nav.
    Not the same as the existing `/theory` page (six write-ups, no video, no references
-   section, not top-right) — that page may be reusable content, but the Learn tab itself
-   doesn't exist yet.
+   section, not top-right) — see `pages/LearnPage.jsx` in the frontend file map above.
 2. **Developed By** — photo, name, register number, "Guided By: Dr. Swaminathan A,
    Assistant Professor".
 3. **Help tab** — full user manual.
@@ -203,20 +241,22 @@ tracked in `HANDOFF.md`, not here** — this section only defines what's require
 - **Phased build**: one Claude Code prompt per phase, worked sequentially. Scope
   creep/gaps discovered mid-phase get fixed with additive, non-breaking patches rather
   than deferred silently.
-- **AI prompt log**: stated as a required deliverable, but **no dedicated log file
-  currently exists in this repo** (checked: no `PROMPT_LOG.md`, no `docs/` folder, no
-  equivalent anywhere under version control). This is a real gap, not just undocumented —
-  see `HANDOFF.md`'s known-issues list. If/when one is created, update this section with
-  its actual path.
+- **AI prompt log**: **`PROMPT_LOG.md`** at the project root — every phase's actual
+  prompt text, in chronological order (with the handful of pre-log phases backfilled as
+  clearly-marked reconstructions — see its own header). Keep appending to it at the end
+  of each phase; don't let it go stale.
 - **Testing**: backend has a thorough pytest suite (`backend/app/tests/`, one file per
   module/endpoint) — run via `cd backend && .venv/Scripts/python.exe -m pytest -q` (or
   activate the venv first). Frontend has no test suite, only `npm run lint` (oxlint) and
   `npm run build` as the correctness gate — treat both as required before considering a
   frontend phase done.
 - **Live-verification habit**: this project's sessions have consistently driven the
-  actual running app (via a headless-Chrome puppeteer-core script from the scratchpad,
-  not just unit tests) to confirm UI changes really work, and measured things (contrast
-  ratios, endpoint timing) rather than assuming — continue that standard.
+  actual running app (headless Chrome from the scratchpad — via puppeteer-core when
+  available, or a small dependency-free raw-CDP driver script over Node's native
+  `fetch`/`WebSocket` when it isn't, as in the Download-feature and SQL Anti-Pattern
+  Advisor sessions — not just unit tests) to confirm UI changes really work, and measured
+  things (contrast ratios, endpoint timing) rather than assuming — continue that
+  standard.
 
 ---
 

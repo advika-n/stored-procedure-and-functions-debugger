@@ -61,9 +61,9 @@ function DevelopedByModal({ onClose }) {
           </div>
 
           <h2 id="developed-by-name" className="developed-by-name">
-            [NAME]
+            N. Advika
           </h2>
-          <p className="developed-by-reg">Register Number: [REGISTER NUMBER]</p>
+          <p className="developed-by-reg">Register Number: 25BCE5669</p>
           <p className="developed-by-guide">Guided By: Dr. Swaminathan A, Assistant Professor</p>
         </div>
       </div>

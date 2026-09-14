@@ -1,8 +1,9 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from app import demo_db, history
+from app import demo_db, history, report
+from app.advisor import analyze as analyze_anti_patterns
 from app.explainer import answer_question, explain_step
 from app.interpreter import InterpreterError, run
 from app.parser import ParserError, parse
@@ -62,6 +63,16 @@ def debug(request: DebugRequest):
     except ParserError as exc:
         raise _error_response("parse", str(exc), exc.line) from exc
 
+    # SQL Anti-Pattern Advisor: a static pass over the AST alone (see
+    # app/advisor.py), computed here -- right after a successful parse,
+    # reusing the `ast` this handler already has to build for the
+    # frontend's flowchart -- rather than a separate "Analyze" endpoint.
+    # Deliberately does not depend on `steps` below in any way: it would
+    # be just as valid to compute even if interpretation then failed,
+    # though today it's only returned alongside a successful run (see
+    # HANDOFF.md for that scope note).
+    issues = analyze_anti_patterns(ast)
+
     # A fresh, small demo database (see app/demo_db.py) so cursor
     # statements have something to query without a schema-authoring
     # feature -- closed again once this run finishes either way.
@@ -88,7 +99,54 @@ def debug(request: DebugRequest):
 
     # `ast` is included so the frontend can render a control-flow diagram
     # from the procedure's structure, independent of the linear step trace.
-    return {"ast": ast, "steps": step_dicts}
+    # `issues` is the Anti-Pattern Advisor's findings for this same `ast`.
+    return {"ast": ast, "steps": step_dicts, "issues": issues}
+
+
+class ReportRequest(BaseModel):
+    format: str  # "pdf" | "docx" | "txt"
+    code: str
+    params: dict = Field(default_factory=dict)
+    name: str | None = None  # same meaning as DebugRequest.name -- sample name if loaded from one
+    steps: list[dict]  # the exact DebugStep trace a prior /debug call already returned
+    flowchartImage: str | None = None  # client-rasterized PNG of the Mermaid diagram (data URL or raw base64); PDF/DOCX only
+
+
+@app.post("/debug/report")
+def debug_report(request: ReportRequest):
+    """Generate a downloadable report (PDF/Document/Text) from a debug
+    run's data. Deliberately stateless and re-execution-free: the caller
+    (the Debugger page, right after a /debug call) already has the full
+    DebugStep trace in hand and sends it back here as-is -- this endpoint
+    never re-parses or re-interprets the source, it only formats data the
+    frontend already has. See app/report.py for the actual rendering."""
+    if request.format not in ("pdf", "docx", "txt"):
+        raise HTTPException(status_code=400, detail="format must be one of: pdf, docx, txt")
+    if not request.steps:
+        raise HTTPException(status_code=400, detail="steps must be a non-empty DebugStep list from a completed /debug run")
+
+    procedure_name = history.derive_procedure_name(request.code, request.name)
+    flowchart_png_bytes = report.decode_flowchart_image(request.flowchartImage)
+
+    try:
+        content, content_type, filename = report.generate_report(
+            fmt=request.format,
+            code=request.code,
+            params=request.params,
+            procedure_name=procedure_name,
+            steps=request.steps,
+            flowchart_png_bytes=flowchart_png_bytes,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Could not generate the {request.format} report: {exc}"
+        ) from exc
+
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 class ExplainRequest(BaseModel):

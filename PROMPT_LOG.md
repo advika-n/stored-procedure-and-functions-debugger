@@ -98,7 +98,8 @@ of this entry.
 
 ## 5. Help Tab — full step-by-step user manual
 
-**Date:** 2026-09-13 · **Not yet committed** (see `HANDOFF.md` §6)
+**Date:** 2026-09-13 · **Committed** (`49bcd98`, together with the Learn Tab phase below
+— accurate as of 2026-09-14; was uncommitted when this entry was first written)
 
 **Prompt (verbatim):**
 
@@ -151,7 +152,8 @@ themes not fully cross-checked — see `HANDOFF.md` §2 for the exact caveat).
 
 ## 6. Learn Tab — concept explanation, video slot, references
 
-**Date:** 2026-09-13 · **Not yet committed** (see `HANDOFF.md` §6)
+**Date:** 2026-09-13 · **Committed** (`49bcd98`, together with the Help Tab phase above
+— accurate as of 2026-09-14; was uncommitted when this entry was first written)
 
 **Prompt (verbatim):**
 
@@ -221,3 +223,331 @@ Learn tab entirely (adding an 8th nav item made an already-tight row overflow mo
 visibly, but did not introduce the underlying issue). Left alone since fixing shared
 header responsiveness wasn't part of either this phase's or the Help phase's scope; see
 `HANDOFF.md` §6.
+
+---
+
+## 7. Download Feature — Multi-Format Report Export
+
+**Date:** 2026-09-13 · **Not yet committed** (see `HANDOFF.md` §6)
+
+**Prompt (verbatim):**
+
+> PHASE: Download Feature — Multi-Format Report Export
+>
+> Context: Read CLAUDE.md and HANDOFF.md first for full project context before starting.
+> Download currently only produces JSON. This phase replaces/extends it to meet the actual
+> graded spec: full report content, exportable as PDF, Document, and Text.
+>
+> 1. Determine current Download implementation (frontend button + whatever backend endpoint
+>    it calls) and what data it currently has access to — likely the DebugStep trace, given
+>    that schema is the central data contract per CLAUDE.md.
+>
+> 2. Report content must include, pulled from the actual debug session:
+>    a. User Inputs — the SQL the user wrote/pasted, and any parameters (note: currently
+>       always {} per the Help tab's documented limitation — include this honestly, don't
+>       fabricate parameter values)
+>    b. Processing Steps — the step-by-step execution trace (each DebugStep: line, action,
+>       variable state, etc.)
+>    c. Intermediate Results — variable/cursor state at each step, where applicable
+>    d. Final Output — the end result of execution (return value, final state, or error if
+>       the procedure failed)
+>    e. Graphs/Tables/Figures — include the flowchart (export the Mermaid diagram as an
+>       embedded image/SVG) and any variable-state table, where applicable
+>
+> 3. Implement three export formats:
+>    - PDF: use a Python library on the FastAPI backend (reportlab or weasyprint — pick
+>      whichever is simpler to integrate with the existing project structure; weasyprint if
+>      HTML-to-PDF is easier here) to generate a formatted PDF with headings per section
+>      above.
+>    - Document: generate a .docx using python-docx, same structure/sections.
+>    - Text: generate a plain .txt with the same content, formatted with clear section
+>      headers (no markup, just readable plaintext).
+>
+> 4. Frontend: replace/extend the current Download button with a format picker (e.g. a
+>    small dropdown or three buttons: "Download PDF" / "Download Document" / "Download Text"),
+>    theme-aware, styled consistently with the existing design system.
+>
+> 5. Backend: add endpoint(s) to generate and return each format (e.g. GET/POST
+>    /debug/report?format=pdf|docx|txt), reusing the session's DebugStep data rather than
+>    requiring the user to re-run anything.
+>
+> 6. Test each format actually opens correctly and contains real data from an actual debug
+>    run (not placeholder/lorem ipsum) — verify with at least one of the 10 built-in sample
+>    procedures.
+>
+> 7. Verify via npm run lint / npm run build (frontend) and confirm the backend endpoint(s)
+>    respond correctly, similar to prior phases' verification approach.
+>
+> Don't touch interpreter/debugger logic, flowchart generation, Help tab, or Learn tab —
+> this phase is scoped to the Download feature only.
+>
+> After finishing: update HANDOFF.md to move Download from "Not started" to "Done", note
+> which PDF library was used and why, and log this phase in PROMPT_LOG.md.
+
+**What shipped:** `backend/app/report.py` (new) — one format-agnostic intermediate
+representation (`ReportSection`/`ReportBlock`) built once from a `DebugStep` trace, then
+rendered three ways: **reportlab** for PDF (chosen over weasyprint specifically because
+weasyprint needs the native GTK/Pango/Cairo libraries installed to do HTML-to-PDF, which
+aren't guaranteed present and are painful to install reliably on this project's Windows
+dev environment, whereas reportlab is pure Python and pip-installs cleanly anywhere —
+directly answering the prompt's "whichever is simpler to integrate" criterion),
+**python-docx** for DOCX, and stdlib-only for plain text. New endpoint `POST
+/debug/report` in `main.py`, deliberately stateless: it takes the exact
+`code`/`params`/`steps` the frontend already has from its last `/debug` call and only
+formats them, never re-parses/re-interprets (verified by a test that monkeypatches
+`interpreter.run` to explode if the endpoint ever calls it). The flowchart image is
+rasterized **client-side** (`frontend/src/svgToPng.js`, new, via an offscreen `<canvas>`)
+from the Mermaid SVG the Debugger page has already rendered — not attempted server-side,
+since Mermaid's SVG relies on `<foreignObject>` HTML labels no lightweight Python
+SVG-to-raster path handles reliably. The old single "⭳ Export Run" JSON button in
+`DebuggerPage.jsx` is fully replaced (not kept alongside) by a "⭳ Download Report"
+trigger opening a small anchored dropdown with three options, dismissible by outside
+click/Escape/picking an option — matching this app's existing modal-dismiss convention.
+Theme-aware, no hard-coded colors (`App.css`'s new `.report-download*` rules).
+
+23 new backend tests (`test_report.py`, `test_report_endpoint.py`), all built on real
+interpreter-produced `DebugStep` traces rather than hand-written fixtures — full suite:
+199 passing (176 before). Beyond the test suite: hit the live backend directly with two
+different real samples (`SafeAverageWithHandlers` — cursors, both handler types actually
+firing — and `ComputeTax` — an OUT param) and rendered the resulting PDFs to images to
+eyeball real layout/content; opened the DOCX output with python-docx to confirm real
+tables/an embedded image; and, since neither puppeteer-core, playwright, nor
+chromium-cli were available in this environment, drove the **actual running app**
+end-to-end with a small dependency-free driver script (Node 24's native
+`fetch`/`WebSocket` talking raw Chrome DevTools Protocol) — loaded `/debugger`, ran a
+sample, opened the dropdown, and clicked all three downloads for real: zero console
+errors, all three requests returned 200 with the correct content-type. Test-run entries
+this created in the real history DB were deleted afterward via the app's own history
+endpoint.
+
+---
+
+## 8. SQL Anti-Pattern Advisor (Innovation Feature)
+
+**Date:** 2026-09-14 · **Not yet committed** (see `HANDOFF.md` §6)
+
+**Prompt (verbatim):**
+
+> PHASE: SQL Anti-Pattern Advisor (Innovation Feature)
+>
+> Context: Read CLAUDE.md and HANDOFF.md first for full project context before starting.
+> This is one of the four "Innovation" features (5 marks) — the app should analyze the
+> user's SQL and surface common anti-patterns/bad practices, similar in spirit to a
+> linter.
+>
+> 1. IMPORTANT — before designing detection logic: inspect the existing parser/AST (the
+>    tokenizer → parser → AST pipeline) to see what's already available to analyze
+>    (statement types, cursor declarations, loop structures, etc.) rather than writing a
+>    second parallel parser. Reuse the existing AST wherever possible.
+>
+> 2. Implement detection for a reasonable, defensible set of anti-patterns given what the
+>    AST already exposes. Candidates (pick the ones actually detectable from the current
+>    AST — don't force ones that would need new parsing work):
+>    - SELECT * usage instead of explicit column lists
+>    - Cursor used where a set-based operation (single SELECT/UPDATE) would work instead
+>    - Nested cursors/loops (potential O(n²) row-by-row processing)
+>    - Missing exception/error handling around risky operations
+>    - Hard-coded literal values that should likely be parameters
+>    - Cursor opened but not explicitly closed (resource leak risk)
+>    - Dynamic SQL string concatenation (SQL injection risk pattern)
+>    Confirm the final list against what's actually detectable and list it explicitly in
+>    your implementation summary — don't claim to detect a pattern you didn't actually
+>    implement.
+>
+> 3. Design as a static analysis pass that runs on the parsed AST (not the interpreter/
+>    execution trace) — so it can flag issues even before running the procedure, ideally
+>    triggered automatically after parsing (e.g. on the same action as clicking Run/Debug,
+>    or on a live "Analyze" button — pick whichever fits the existing UI flow better and
+>    say which you chose).
+>
+> 4. Output format: a results panel (e.g. sidebar or below the editor) listing each
+>    detected issue with:
+>    - The anti-pattern name/category
+>    - The specific line/location in the user's SQL
+>    - A one- or two-sentence plain-language explanation of why it's a problem
+>    - A suggested fix or alternative approach
+>    Use severity styling (e.g. warning vs. suggestion) consistent with the existing
+>    amber/teal/coral accent system.
+>
+> 5. If a "no issues found" case occurs, show a clear positive confirmation rather than an
+>    empty panel.
+>
+> 6. Style theme-aware (existing ThemeContext/CSS variables), consistent with the rest of
+>    the app.
+>
+> 7. Verify with at least 2-3 of the 10 built-in sample procedures that intentionally
+>    contain some of these patterns — if none currently do, note that in your summary
+>    (don't fabricate a sample procedure without flagging it as new).
+>
+> Don't touch interpreter/debugger logic, flowchart generation, Help/Learn tabs, or
+> Download — this phase is scoped to the Anti-Pattern Advisor only.
+>
+> After finishing: update HANDOFF.md to move SQL Anti-Pattern Advisor from "Not started"
+> to "Done", list exactly which anti-patterns were implemented, and log this phase in
+> PROMPT_LOG.md.
+
+**What shipped:** `backend/app/advisor.py` (new) — `analyze(ast)`, a static pass that
+only reads the AST `app.parser.parse()` already produces (no second parser). Wired into
+the existing `POST /debug` handler (not a new endpoint): right after a successful parse,
+`main.py` now also computes `issues = analyze_anti_patterns(ast)` and returns it
+alongside `ast`/`steps`, so the check runs automatically the moment someone clicks Debug,
+at no extra network round trip — the trigger choice the prompt asked to be explicit
+about.
+
+**Six anti-patterns implemented** (confirmed against what the AST actually exposes,
+exactly as the prompt required): `select-star` (SELECT * in a cursor query),
+`cursor-could-be-set-based` (a cursor loop that only accumulates a running total/count),
+`nested-loops` (WHILE nested inside WHILE), `missing-error-handling` (two asymmetric
+sub-checks mirroring `interpreter.py`'s own documented NOT_FOUND/DIVISION_BY_ZERO
+asymmetry — division-without-a-handler is a warning since it genuinely aborts the run;
+an unguarded cursor FETCH is only a suggestion since NOT_FOUND is always non-fatal here,
+and a `cursor%FOUND` loop guard is correctly recognized as already-safe, not flagged),
+`magic-number` (a non-trivial numeric literal repeated more than once), and
+`cursor-not-closed` (OPEN with no matching CLOSE). **One candidate explicitly NOT
+implemented**, exactly as the prompt permitted: dynamic SQL string concatenation / SQL
+injection risk — this grammar has no EXECUTE/EXEC-IMMEDIATE construct and no way to
+build/run a SQL string from concatenated variables at all, so there's nothing of that
+shape to detect (documented in `advisor.py`'s own module docstring rather than silently
+dropped).
+
+**Output**: a new full-width panel in `DebuggerPage.jsx` (`.panel-advisor`, between Ask
+AI and Control Flow) — each finding is a card with a coral **Warning** or amber
+**Suggestion** severity badge (this app's existing two-tier accent language), a title, a
+line number, a plain-language explanation, and a suggested fix; a clean run shows a teal
+"✓ No anti-patterns detected" positive confirmation rather than an empty panel, per the
+prompt's requirement #5. Theme-aware, no hard-coded colors.
+
+**Verification**: 22 new `test_advisor.py` unit tests plus 2 new `/debug`-endpoint tests,
+all against real tokenizer/parser-produced ASTs — full suite: 223 passing (199 before).
+Ran all 10 real built-in samples through the live backend: 8 are clean, and
+`ProductPriceTotal`/`SafeAverageWithHandlers` both genuinely trigger
+`cursor-could-be-set-based` — the only one of the six patterns any pre-existing sample
+happens to contain. Rather than silently forcing or skipping coverage for the other five,
+this was **disclosed honestly** (per the prompt's explicit instruction) and a new,
+clearly-flagged-as-new sample was added to `samples.js` — `AntiPatternShowcase`, commented
+"Added specifically for the SQL Anti-Pattern Advisor phase" — deliberately containing all
+six patterns in one procedure that still runs to completion successfully. Live-verified
+via the same raw-CDP driver approach as the Download phase (loaded the sample, ran Debug,
+confirmed all 7 findings render correctly with zero console errors, in both dark and
+light theme). Test-run entries this created in the real history DB were deleted
+afterward, matching the established cleanup habit from the Download-feature session.
+
+**Also found and corrected this session** (not part of the original prompt, but material
+enough to note here): `HANDOFF.md` had been repeating a stale claim across three sessions
+that Day/Night Mode + Developed By and, later, Help Tab + Learn Tab were all uncommitted.
+`git log` showed the first was committed in `a80392c` from the very session that wrote
+that claim, and the latter two were committed together in `49bcd98` sometime after the
+Download-feature session (most likely by the user, outside a Claude Code session, since
+no corresponding prompt exists in this log). `HANDOFF.md` §1/§3/§4/§5/§6/§7 were rewritten
+this session to match `git log`/`git status` instead of repeating the previous session's
+notes.
+
+---
+
+## 9. Side-by-Side Run Comparison (Innovation Feature)
+
+**Date:** 2026-09-14 · **Not yet committed** (see `HANDOFF.md` §6)
+
+**Prompt (verbatim):**
+
+> Goal: let the user run two procedures (or the same procedure edited differently) and
+> see both execution traces side-by-side, with divergence points visually highlighted.
+>
+> 1. IMPORTANT — before building: inspect the existing DebugStep schema and the /debug
+>    endpoint (used by the Anti-Pattern Advisor phase too) to confirm you're reusing the
+>    same data contract for both runs, not inventing a second one.
+>
+> 2. UI/UX:
+>    - Add a "Compare" mode/tab (or a toggle on the existing Debugger page) that presents
+>      two independent SQL editor panes side-by-side (left/right), each with its own
+>      Run/Debug control, reusing the existing Monaco editor component.
+>    - Each side runs independently against the existing /debug endpoint — don't build a
+>      new backend endpoint for this if the existing one already returns everything needed
+>      (steps, ast, issues); if a small backend addition is needed to support two concurrent
+>      sessions cleanly, keep it minimal and say what you added and why.
+>    - Display both step-traces side-by-side, synchronized by step index where possible
+>      (e.g. stepping forward advances both columns together, with a shared step counter/
+>      Next-Step control) — if the two traces have different lengths, handle the shorter one
+>      reaching its end gracefully (freeze/gray out rather than error).
+>
+> 3. Divergence highlighting:
+>    - Compare the two traces step-by-step and visually flag (e.g. amber/coral highlight)
+>      the first step where they diverge — different line executed, different variable
+>      value, or one erroring while the other doesn't.
+>    - Show a brief summary at the point of divergence: what differed (e.g. "Left took
+>      branch X, right took branch Y" or "Variable `total` differs: 15 vs 20").
+>
+> 4. Handle the case where both runs are identical (no divergence) — clear positive
+>    confirmation, not a blank/confusing state.
+>
+> 5. Style theme-aware (existing ThemeContext/CSS variables), consistent with the rest of
+>    the app. Two side-by-side panes need careful layout — check it doesn't break at the
+>    ~400px width where the nav already has a known pre-existing overflow bug (don't fix
+>    that bug, just don't make it worse).
+>
+> 6. Verify with two real cases: (a) two of the 10 built-in samples that behave differently,
+>    confirming divergence is detected and shown correctly, (b) the same sample run against
+>    itself unchanged, confirming the "no divergence" state works.
+>
+> Don't touch interpreter/debugger logic, the Anti-Pattern Advisor, flowchart generation,
+> Help/Learn tabs, or Download — this phase is scoped to the Comparison feature only.
+>
+> After finishing: update HANDOFF.md to move Side-by-Side Run Comparison from "Not started"
+> to "Done", remove Live Parameter Tuning from any remaining "Not started" lists (mark as
+> "Dropped — out of scope"), and log this phase in PROMPT_LOG.md.
+
+**What shipped:** No backend changes at all. Inspecting `backend/app/main.py`'s `POST
+/debug` confirmed it already returns everything needed (`ast`, `steps`, `issues`) and is
+fully stateless per request (a fresh `demo_db` connection each call, nothing shared
+server-side) — so two independent calls, one per Compare pane, need nothing extra from
+FastAPI. `frontend/src/pages/ComparePage.jsx` (new, route `/compare`, new "Compare" nav
+tab in `Layout.jsx`) presents two independent panes ("RUN A"/"RUN B"), each with a sample
+picker, its own Monaco editor, and its own Debug button/error — exactly the "each side
+runs independently" structure the prompt asked for. Both default to the same first sample
+so simply clicking both Debug buttons demonstrates the no-divergence case immediately.
+
+Once both sides have a completed trace, one shared "SYNCHRONIZED STEPPING" control
+(Previous/Next/Reset/scrubber, reusing the main Debugger page's own `.step-navigator`/
+`.step-scrubber` styling) drives a single `sharedStepIndex` both panes read from. A side
+whose trace is shorter freezes on its last real step, grayed with an explicit "finished
+after N steps" note, once the shared index runs past it — the prompt's "handle the
+shorter one reaching its end gracefully" requirement.
+
+**Divergence detection** (`frontend/src/compareTraces.js`, new — pure functions, no
+execution of its own): walks both `DebugStep` traces by shared index and reports the
+*first* respect in which a pair of steps differs, checked in this order: which source
+line ran, whether one side hit an error the other didn't (or a different error
+condition), which `IfStatement` branch was taken, then any variable name the two traces
+happen to share whose value differs. If every shared step matches but the traces end at
+different lengths, that itself is reported as a distinct divergence ("Left run finished
+after N steps; right kept executing beyond that point") rather than silently ignored.
+Returns `null` when the traces are identical as far as compared.
+
+**Output**: a persistent divergence banner — teal "✓ No divergence detected" when `null`,
+or a coral-accented card naming the step number, the divergence kind, and a
+plain-language summary (e.g. `Variable total differs: 15 (left) vs 20 (right).`), with a
+"Jump to this step" button. Below it, both panes' current-step view (line + statement
+text, error banner if any, full variable table) render side by side; the exact diverged
+step gets a coral outline on both panes, and for a variable-kind divergence the one
+differing row gets its own coral highlight — reusing the existing amber/teal/coral accent
+language, no new colors introduced.
+
+**Verification**: `npm run lint` (only the same 2 pre-existing warnings) and `npm run
+build` both clean; `cd backend && pytest -q` still 223/223 (untouched by this phase).
+Live-verified via the same raw-CDP driver approach as the two prior phases: (a)
+`CalculateTotal` vs `GradeClassifier` (two real, differently-behaving samples) correctly
+reports a `branch` divergence at step 4 with the right summary text, and "Jump to this
+step" correctly outlines both panes there; (b) `CalculateTotal` run against itself
+unchanged correctly shows the "no divergence" confirmation across its full 8-step trace.
+Both scenarios re-checked in light theme, plus a genuine 400px-wide check confirming
+`.compare-grid` collapses to one column and this page's own content adds no horizontal
+scroll (the only overflow present at that width is the pre-existing top-nav bug, not
+worsened beyond the same one-extra-word growth the Learn-tab phase already established as
+acceptable precedent). Zero console errors throughout. Test-run history rows created
+during verification (ids 119-127 — 119 turned out to be a leftover row from the *previous*
+session's own sign-off pass that had escaped that session's cleanup) were all deleted via
+`DELETE /history/{id}` afterward.
+
+**Live Parameter Tuning dropped**, per this prompt's explicit instruction — `HANDOFF.md`
+§4/§5 updated to mark it "Dropped — out of scope" rather than "not started"; it was never
+begun, so no code needed removing.

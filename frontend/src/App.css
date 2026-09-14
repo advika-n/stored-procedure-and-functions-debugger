@@ -894,6 +894,54 @@ h2 {
   background: var(--accent-amber-bg);
 }
 
+/* -- Download Report format picker --------------------------------------
+   A small anchored dropdown off the topbar's trigger button, rather than
+   three separate buttons crowding the topbar -- flat surface, hairline
+   border, no shadow, same as every other floating surface in this design
+   system (compare .developed-by-modal). */
+.report-download {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.report-download-error {
+  max-width: 40ch;
+}
+
+.report-download-caret {
+  font-size: 0.75rem;
+}
+
+.report-download-menu {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  padding: 0.35rem;
+  gap: 0.15rem;
+}
+
+.report-download-menu button {
+  justify-content: flex-start;
+  text-align: left;
+  border-color: transparent;
+  color: var(--text-primary);
+  padding: 0.5rem 0.6rem;
+}
+
+.report-download-menu button:hover {
+  background: var(--accent-amber-bg);
+  color: var(--accent-amber);
+}
+
 .debugger-grid {
   position: relative;
   display: grid;
@@ -1472,6 +1520,105 @@ h2 {
   background: var(--accent-coral-bg);
   border-color: var(--accent-coral);
   color: var(--accent-coral);
+}
+
+/* -- SQL Anti-Pattern Advisor ---------------------------------------------
+   A static-analysis results list, not a live/execution panel -- styled
+   as flat hairline-bordered cards with a colored left-edge accent bar
+   plus a small severity badge (same "badge signals severity, body text
+   stays legible" pattern as .changed-badge/.sample-kind-tag elsewhere,
+   rather than tinting the whole card's text the way the single-line
+   error banner above does -- these cards carry full paragraphs, which
+   would be harder to read solid-amber/coral). */
+
+.panel-advisor {
+  padding-top: 1.25rem;
+}
+
+.advisor-clean {
+  color: var(--accent-teal);
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.advisor-issue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.advisor-issue {
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--border-hairline);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  padding: 0.75rem 0.9rem;
+}
+
+.advisor-issue-warning {
+  border-left-color: var(--accent-coral);
+}
+
+.advisor-issue-suggestion {
+  border-left-color: var(--accent-amber);
+}
+
+.advisor-issue-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-bottom: 0.4rem;
+}
+
+.advisor-severity-badge {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius);
+  border: 1px solid;
+}
+
+.advisor-severity-badge-warning {
+  color: var(--accent-coral);
+  background: var(--accent-coral-bg);
+  border-color: var(--accent-coral);
+}
+
+.advisor-severity-badge-suggestion {
+  color: var(--accent-amber);
+  background: var(--accent-amber-bg);
+  border-color: var(--accent-amber);
+}
+
+.advisor-issue-title {
+  color: var(--text-primary);
+  font-size: 0.92rem;
+}
+
+.advisor-issue-line {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.advisor-issue-message,
+.advisor-issue-suggestion {
+  margin: 0.3rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+
+.advisor-issue-suggestion {
+  color: var(--text-muted);
 }
 
 /* -- Ask AI panel (collapsible) -------------------------------------------- */
@@ -2115,4 +2262,139 @@ h2 {
   font-size: 0.85rem;
   line-height: 1.55;
   margin: 0;
+}
+
+/* -- Side-by-Side Run Comparison ------------------------------------
+   Two independent panes (editor + Debug button each) laid out with the
+   same collapsing-grid pattern .debugger-grid already uses, then a
+   shared stepping bar, then a second two-column row showing each side's
+   current step. Reuses .variable-table/.error-banner/.step-navigator/
+   .step-scrubber as-is (identical shape to the main Debugger page) so
+   nothing here re-invents already-themed components. */
+
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.1rem;
+  margin-top: 0.9rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .compare-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.compare-pane,
+.compare-step-pane {
+  margin-top: 0;
+}
+
+.compare-sample-select {
+  display: block;
+  width: 100%;
+  margin-bottom: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  font-family: var(--font-mono);
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+}
+
+.compare-controls {
+  margin-top: 1.1rem;
+}
+
+.compare-controls .step-navigator {
+  margin-bottom: 0.9rem;
+}
+
+.compare-divergence {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-hairline);
+  font-size: 0.88rem;
+}
+
+.compare-divergence p {
+  margin: 0.35rem 0 0.6rem;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.compare-divergence-none {
+  color: var(--accent-teal);
+  font-weight: 600;
+  border-color: var(--accent-teal);
+  background: var(--accent-teal-bg);
+  padding: 0.6rem 0.9rem;
+}
+
+.compare-divergence-flagged {
+  border-left-width: 4px;
+  border-left-color: var(--accent-coral);
+}
+
+.compare-divergence-headline {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.compare-divergence-headline strong {
+  color: var(--text-primary);
+}
+
+.compare-divergence-kind {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.compare-step-pane-diverged {
+  border-color: var(--accent-coral);
+  box-shadow: inset 0 0 0 1px var(--accent-coral);
+}
+
+.compare-var-diverged {
+  background: var(--accent-coral-bg);
+  outline: 1px solid var(--accent-coral);
+}
+
+.compare-finished-note {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.85rem;
+  margin: 0 0 0.7rem;
+}
+
+.compare-step-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0 0 0.8rem;
+  flex-wrap: wrap;
+}
+
+.compare-step-line-number {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  padding: 0.1rem 0.45rem;
+  white-space: nowrap;
+}
+
+.compare-step-line code {
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  color: var(--text-primary);
 }

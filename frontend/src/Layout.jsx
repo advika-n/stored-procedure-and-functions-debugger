@@ -6,6 +6,7 @@ import DevelopedByModal from './DevelopedByModal'
 const NAV_ITEMS = [
   { to: '/', label: 'Home', end: true },
   { to: '/debugger', label: 'Debugger' },
+  { to: '/compare', label: 'Compare' },
   { to: '/theory', label: 'Theory' },
   { to: '/history', label: 'History' },
   { to: '/quiz', label: 'Quiz' },

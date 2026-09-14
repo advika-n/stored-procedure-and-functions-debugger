@@ -7,6 +7,13 @@ import { SAMPLES } from '../samples'
 import { writeLastProcedure } from '../lastProcedure'
 import { useTheme } from '../ThemeContext'
 import { getMermaidPalette } from '../mermaidColors'
+import { rasterizeSvgToPng } from '../svgToPng'
+
+const REPORT_FORMATS = [
+  { format: 'pdf', label: 'Download PDF' },
+  { format: 'docx', label: 'Download Document' },
+  { format: 'txt', label: 'Download Text' },
+]
 
 function formatValue(entry) {
   if (entry.value === null || entry.value === undefined) return null // caller shows a placeholder
@@ -43,6 +50,12 @@ function DebuggerPage() {
   const [selectedSampleName, setSelectedSampleName] = useState(SAMPLES[0].name)
   const [ast, setAst] = useState(null)
   const [steps, setSteps] = useState(null)
+  // SQL Anti-Pattern Advisor findings for the current `ast` -- see
+  // backend/app/advisor.py. null = no live Debug run yet (a history
+  // replay leaves this null too: old saved runs predate this feature
+  // and never had issues computed/stored for them); [] = a run
+  // completed and the advisor found nothing to flag.
+  const [issues, setIssues] = useState(null)
   const [debugError, setDebugError] = useState(null)
   const [isRunning, setIsRunning] = useState(false)
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
@@ -160,6 +173,7 @@ function DebuggerPage() {
     setDebugError(null)
     setSteps(null)
     setAst(null)
+    setIssues(null)
     setDiagramSvg(null)
     setCurrentStepIndex(0)
     explanationCacheRef.current = {}
@@ -249,6 +263,7 @@ function DebuggerPage() {
 
       setSteps(body.steps)
       setAst(body.ast)
+      setIssues(body.issues ?? [])
     } catch (err) {
       setDebugError(err.message)
     } finally {
@@ -256,26 +271,92 @@ function DebuggerPage() {
     }
   }
 
-  // Client-side only -- bundles the current run's code + AST + step
-  // trace into a downloadable JSON file. No backend involved.
-  function handleExport() {
-    if (!hasSteps) return
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      procedureName: selectedSampleName ?? 'Custom procedure',
-      code,
-      ast,
-      steps,
+  // -- Download Report (PDF / Document / Text) --------------------------
+  // Mandatory course requirement (see CLAUDE.md §5): a full report --
+  // inputs, step trace, intermediate variable state, final output, and
+  // the flowchart -- exportable in three formats. Deliberately reuses
+  // the *current* run's already-fetched `steps`/`code` rather than
+  // re-running anything: the backend's /debug/report is stateless and
+  // just formats whatever DebugStep trace this page already has (see
+  // backend/app/report.py). The flowchart is rasterized to a PNG
+  // client-side (see svgToPng.js) from the Mermaid SVG this page has
+  // already rendered, since that SVG can't be handed to the backend
+  // directly and re-rendering it server-side isn't a reliable option.
+  const [isReportMenuOpen, setIsReportMenuOpen] = useState(false)
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false)
+  const [reportError, setReportError] = useState(null)
+  const reportMenuRef = useRef(null)
+
+  // Dismiss the format picker the same three ways the Developed By modal
+  // already establishes as this app's convention: outside click, Escape,
+  // or (here) actually picking an option.
+  useEffect(() => {
+    if (!isReportMenuOpen) return undefined
+    function handleOutsideClick(event) {
+      if (reportMenuRef.current && !reportMenuRef.current.contains(event.target)) {
+        setIsReportMenuOpen(false)
+      }
     }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `debug-run-${Date.now()}.json`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') setIsReportMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isReportMenuOpen])
+
+  async function handleDownloadReport(format) {
+    if (!hasSteps) return
+    setIsReportMenuOpen(false)
+    setIsGeneratingReport(true)
+    setReportError(null)
+
+    try {
+      // Only PDF/Document can embed an image at all -- skip the
+      // rasterization entirely for a Text download.
+      const flowchartImage =
+        (format === 'pdf' || format === 'docx') && diagramSvg ? await rasterizeSvgToPng(diagramSvg) : null
+
+      const res = await fetch('/debug/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          format,
+          code,
+          params: {},
+          name: selectedSampleName,
+          steps,
+          flowchartImage,
+        }),
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        const detail = typeof body?.detail === 'string' ? body.detail : null
+        throw new Error(detail ?? `Request failed: ${res.status}`)
+      }
+
+      const blob = await res.blob()
+      const disposition = res.headers.get('Content-Disposition') ?? ''
+      const filenameMatch = disposition.match(/filename="?([^"]+)"?/)
+      const filename = filenameMatch ? filenameMatch[1] : `debug-report.${format}`
+
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setReportError(err.message)
+    } finally {
+      setIsGeneratingReport(false)
+    }
   }
 
   const goToNextStep = useCallback(() => {
@@ -665,9 +746,37 @@ function DebuggerPage() {
           {!healthError && !health && <span className="status">backend: checking…</span>}
           {health && <span className="status status-ok">backend: ok</span>}
         </div>
-        <button className="btn-export" onClick={handleExport} disabled={!hasSteps} title="Download this run's code and step trace as JSON">
-          ⭳ Export Run
-        </button>
+        <div className="report-download" ref={reportMenuRef}>
+          {reportError && <span className="status status-error report-download-error">Error: {reportError}</span>}
+          <button
+            type="button"
+            className="btn-export"
+            onClick={() => setIsReportMenuOpen((prev) => !prev)}
+            disabled={!hasSteps || isGeneratingReport}
+            aria-haspopup="true"
+            aria-expanded={isReportMenuOpen}
+            title="Download a full report of this run -- inputs, steps, results, and the flowchart -- as PDF, Document, or Text"
+          >
+            {isGeneratingReport ? 'Preparing…' : '⭳ Download Report'}{' '}
+            <span className="report-download-caret" aria-hidden="true">
+              {isReportMenuOpen ? '▴' : '▾'}
+            </span>
+          </button>
+          {isReportMenuOpen && (
+            <div className="report-download-menu" role="menu">
+              {REPORT_FORMATS.map(({ format, label }) => (
+                <button
+                  key={format}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => handleDownloadReport(format)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="debugger-grid" ref={gridRef}>
@@ -1035,6 +1144,37 @@ function DebuggerPage() {
               </>
             )}
           </div>
+        )}
+      </div>
+
+      <div className="panel panel-advisor">
+        <span className="panel-tab">SQL ANTI-PATTERN ADVISOR</span>
+        <p className="page-subtitle">
+          A static check of the parsed procedure's structure -- runs automatically every time you click
+          Debug, before (and independent of) whether it actually executes cleanly.
+        </p>
+        {issues === null && <p className="placeholder">Run Debug to see anti-pattern analysis here.</p>}
+        {issues !== null && issues.length === 0 && (
+          <p className="advisor-clean">✓ No anti-patterns detected — this procedure's structure looks clean.</p>
+        )}
+        {issues !== null && issues.length > 0 && (
+          <ul className="advisor-issue-list">
+            {issues.map((issue, index) => (
+              <li key={`${issue.category}-${issue.line}-${index}`} className={`advisor-issue advisor-issue-${issue.severity}`}>
+                <div className="advisor-issue-header">
+                  <span className={`advisor-severity-badge advisor-severity-badge-${issue.severity}`}>
+                    {issue.severity === 'warning' ? 'Warning' : 'Suggestion'}
+                  </span>
+                  <strong className="advisor-issue-title">{issue.title}</strong>
+                  {issue.line != null && <span className="advisor-issue-line">Line {issue.line}</span>}
+                </div>
+                <p className="advisor-issue-message">{issue.message}</p>
+                <p className="advisor-issue-suggestion">
+                  <strong>Suggested fix:</strong> {issue.suggestion}
+                </p>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
 

@@ -48,6 +48,33 @@ def test_debug_endpoint_defaults_params_to_empty_dict():
     assert response.json()["steps"][0]["variables"]["x"]["value"] == 1
 
 
+def test_debug_endpoint_includes_anti_pattern_advisor_issues():
+    # See app/advisor.py -- issues are computed from the same `ast` this
+    # endpoint already builds, so they ride along on every successful
+    # /debug response rather than needing a separate endpoint/request.
+    # CALCULATE_DISCOUNT itself is clean (no anti-patterns), so this
+    # only proves the key is always present, empty or not.
+    response = client.post(
+        "/debug",
+        json={"code": CALCULATE_DISCOUNT, "params": {"price": 20, "quantity": 6}},
+    )
+    assert response.status_code == 200
+    assert response.json()["issues"] == []
+
+
+def test_debug_endpoint_flags_a_real_anti_pattern():
+    code = """\
+DECLARE cur CURSOR FOR SELECT * FROM products;
+OPEN cur;
+"""
+    response = client.post("/debug", json={"code": code, "params": {}})
+    assert response.status_code == 200
+    issues = response.json()["issues"]
+    categories = {issue["category"] for issue in issues}
+    assert "select-star" in categories
+    assert "cursor-not-closed" in categories
+
+
 def test_debug_endpoint_reports_tokenizer_error_with_line():
     response = client.post("/debug", json={"code": "SET x = @1;", "params": {}})
 
