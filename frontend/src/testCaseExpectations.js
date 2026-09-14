@@ -31,6 +31,18 @@
 //     in that same snapshot.
 //   - FUNCTION samples: `kind: 'return'`, `returnValue` checked against
 //     the final step's `returnValue.value`.
+//   - Either kind may ALSO carry an optional `tables: { tableName: [row,
+//     ...] }` -- final row state for a user-created table (see
+//     backend/app/interpreter.py's "User-created tables" section),
+//     checked against the LAST step in the whole trace whose own
+//     `table.name` matches that table (i.e. the state right after that
+//     table's own final CREATE/INSERT/UPDATE/DELETE -- see
+//     TestCaseRunner.jsx's `findFinalTableState`), NOT just the very
+//     last step overall (which may belong to a different, unrelated
+//     table, or to no table mutation at all). `variables`/`returnValue`
+//     alone were never enough to express "the final CONTENTS of a
+//     table" -- checking table state needed this separate, additive
+//     field rather than force-fitting rows into `variables`.
 //
 // Numeric comparisons in TestCaseRunner.jsx use a small epsilon (not
 // strict ===) since this language's arithmetic is floating point (e.g.
@@ -201,5 +213,29 @@ export const TEST_CASE_EXPECTATIONS = {
   FindPairSum: {
     kind: 'variables',
     variables: { target: 7, i: 2, j: 5, foundI: 2, foundJ: 5 },
+  },
+
+  // Added for the user-created tables phase (CREATE TABLE / INSERT /
+  // UPDATE / DELETE) -- see samples.js's own comment for the full
+  // narrative. Three rows INSERTed: (1,'Widget',8,10), (2,'Gadget',0,25),
+  // (3,'Gizmo',15,15). First UPDATE (qty = qty+5 WHERE qty<10) matches
+  // Widget (8<10) and Gadget (0<10), NOT Gizmo (15<10 is false): Widget's
+  // qty -> 13, Gadget's qty -> 5. Second UPDATE (price = price-2 WHERE
+  // price>12) matches Gadget (25>12) and Gizmo (15>12), NOT Widget
+  // (10>12 is false): Gadget's price -> 23, Gizmo's price -> 13. DELETE
+  // WHERE id=2 then removes Gadget outright (by id, regardless of its
+  // now-restocked qty/discounted price), leaving exactly Widget
+  // (13, 10) and Gizmo (15, 13) -- cross-checked against a real
+  // interpreter run (this module has no variable checks: ManageInventory
+  // declares none -- every value lives in the table itself).
+  ManageInventory: {
+    kind: 'variables',
+    variables: {},
+    tables: {
+      inventory: [
+        { id: 1, item: 'Widget', qty: 13, price: 10 },
+        { id: 3, item: 'Gizmo', qty: 15, price: 13 },
+      ],
+    },
   },
 }

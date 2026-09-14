@@ -1333,3 +1333,71 @@ END
     issues = advisor.analyze(ast)
     lines = [i["line"] for i in issues if i["line"] is not None]
     assert lines == sorted(lines)
+
+
+# -- missing-where-clause (user-created tables) --------------------------------
+
+
+def test_update_with_no_where_is_flagged():
+    ast = _ast(
+        """CREATE PROCEDURE Demo()
+BEGIN
+    CREATE TABLE t (a NUMBER);
+    UPDATE t SET a = 1;
+END
+"""
+    )
+    issues = advisor.analyze(ast)
+    assert "missing-where-clause" in _categories(issues)
+    issue = next(i for i in issues if i["category"] == "missing-where-clause")
+    assert "UPDATE" in issue["title"]
+
+
+def test_delete_with_no_where_is_flagged():
+    ast = _ast(
+        """CREATE PROCEDURE Demo()
+BEGIN
+    CREATE TABLE t (a NUMBER);
+    DELETE FROM t;
+END
+"""
+    )
+    issues = advisor.analyze(ast)
+    assert "missing-where-clause" in _categories(issues)
+    issue = next(i for i in issues if i["category"] == "missing-where-clause")
+    assert "DELETE" in issue["title"]
+
+
+def test_update_and_delete_with_where_are_not_flagged():
+    ast = _ast(
+        """CREATE PROCEDURE Demo()
+BEGIN
+    CREATE TABLE t (a NUMBER);
+    UPDATE t SET a = 1 WHERE a = 0;
+    DELETE FROM t WHERE a = 1;
+END
+"""
+    )
+    assert "missing-where-clause" not in _categories(advisor.analyze(ast))
+
+
+def test_magic_number_and_unused_variable_checks_see_inside_insert_update_delete():
+    # `_statement_exprs`'s new InsertStatement/UpdateStatement/
+    # DeleteStatement cases feed every shared check built on top of it,
+    # not just missing-where-clause -- verified directly rather than
+    # assumed, per this project's own testing convention.
+    ast = _ast(
+        """CREATE PROCEDURE Demo()
+BEGIN
+    DECLARE threshold NUMBER DEFAULT 42;
+    CREATE TABLE t (a NUMBER);
+    INSERT INTO t VALUES (42);
+    UPDATE t SET a = 42 WHERE a > threshold;
+END
+"""
+    )
+    issues = advisor.analyze(ast)
+    assert "magic-number" in _categories(issues)
+    # `threshold` is read inside UPDATE's own WHERE clause -- must NOT be
+    # flagged as unused.
+    assert "unused-variable" not in _categories(issues)

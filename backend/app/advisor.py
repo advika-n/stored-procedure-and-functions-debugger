@@ -133,6 +133,20 @@ computed the input for.
      all"). Severity "warning" (much likelier to be an actual forgotten
      read than ordinary unused cleanup).
 
+-- User-created tables check (one more, added alongside CREATE TABLE /
+   INSERT / UPDATE / DELETE support) ---------------------------------------
+
+  10. missing-where-clause    -- an UPDATE or DELETE with no WHERE clause
+      at all, so it unconditionally touches EVERY row currently in the
+      table -- a classic footgun (a forgotten WHERE turning a one-row
+      fix into a table-wide rewrite/wipe). Severity "warning", same
+      tier as `missing-error-handling`'s DIVISION_BY_ZERO case: this is
+      a real correctness risk, not just a style nit, though (like every
+      other check here) it's a static AST check, not a runtime guess --
+      an UPDATE/DELETE with no WHERE is sometimes genuinely intentional
+      (e.g. clearing a staging table), so this always fires on the
+      *shape* of the statement, with no attempt to infer intent.
+
 -- Explicitly NOT implemented ---------------------------------------------
 
 "Dynamic SQL string concatenation (SQL injection risk pattern)" was one
@@ -272,6 +286,23 @@ def _statement_exprs(stmt: dict) -> Iterator[dict]:
             yield from _iter_exprs(clause["when"])
     elif kind == "ReturnNode":
         yield from _iter_exprs(stmt["value"])
+    elif kind == "InsertStatement":
+        # User-created tables (see app.parser's section of the same
+        # name -- added in a later phase than the checks above): every
+        # VALUES expression counts as this statement's own expressions,
+        # same as a SetStatement's `value` does, so magic-number/unused-
+        # variable/never-read-variable/missing-error-handling all see a
+        # variable or division literal used only inside an INSERT.
+        for value in stmt["values"]:
+            yield from _iter_exprs(value)
+    elif kind == "UpdateStatement":
+        for assignment in stmt["assignments"]:
+            yield from _iter_exprs(assignment["value"])
+        if stmt["where"] is not None:
+            yield from _iter_exprs(stmt["where"])
+    elif kind == "DeleteStatement":
+        if stmt["where"] is not None:
+            yield from _iter_exprs(stmt["where"])
 
 
 def _iter_statement_lists(statements: list[dict]) -> Iterator[list[dict]]:
@@ -991,6 +1022,34 @@ def _check_never_read_variables(statements: list[dict], issues: list[dict]) -> N
                     pending.pop(name, None)
 
 
+# -- 10. UPDATE/DELETE with no WHERE clause -------------------------------------
+
+
+def _check_missing_where_clause(statements: list[dict], issues: list[dict]) -> None:
+    for stmt in _iter_statements(statements):
+        if stmt["type"] not in ("UpdateStatement", "DeleteStatement"):
+            continue
+        if stmt["where"] is not None:
+            continue
+        verb = "UPDATE" if stmt["type"] == "UpdateStatement" else "DELETE"
+        issues.append(
+            _issue(
+                category="missing-where-clause",
+                severity="warning",
+                title=f"{verb} with no WHERE clause",
+                line=stmt["line"],
+                message=(
+                    f"This {verb} on table '{stmt['table']}' has no WHERE clause, so it "
+                    "touches every row currently in the table."
+                ),
+                suggestion=(
+                    f"Add a WHERE clause that narrows this {verb} to only the row(s) it's "
+                    "meant to affect, or confirm that touching every row is really intended."
+                ),
+            )
+        )
+
+
 # -- entry point ---------------------------------------------------------------
 
 _CHECKS = (
@@ -1003,6 +1062,7 @@ _CHECKS = (
     _check_unreachable_code,
     _check_unused_variables,
     _check_never_read_variables,
+    _check_missing_where_clause,
 )
 
 

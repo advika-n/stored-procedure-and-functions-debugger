@@ -40,9 +40,17 @@
 // The cursor-based samples run their queries against a small, fixed,
 // auto-seeded demo table -- products(name, price), 3 rows -- that
 // every /debug request gets for free (see backend/app/demo_db.py);
-// there's no schema-editing feature, so cursor-based procedures you
-// write yourself must query that same `products` table (or `WHERE`
-// filters over it) to have any rows to work with.
+// there's no schema-editing feature FOR CURSORS, so a cursor-based
+// procedure you write yourself must query that same `products` table
+// (or `WHERE` filters over it) to have any rows to work with.
+//
+// Separately, CREATE TABLE / INSERT / UPDATE / DELETE (see
+// backend/app/interpreter.py's "User-created tables" section) let a
+// procedure define and mutate its OWN table entirely in-memory, for
+// the life of one run -- ManageInventory below is the sample for that.
+// The two systems don't talk to each other: a cursor's embedded SELECT
+// still only ever sees the fixed `products` table, never a table a
+// procedure creates for itself with CREATE TABLE.
 
 export const SAMPLES = [
   {
@@ -498,6 +506,34 @@ BEGIN
         END LOOP inner;
         SET i = i + 1;
     END LOOP outer;
+END
+`,
+  },
+  // Added for the user-created tables phase (CREATE TABLE / INSERT /
+  // UPDATE / DELETE) -- exercises all four together against one table,
+  // not just one in isolation. Hand-traced (and cross-checked against a
+  // real interpreter run -- see testCaseExpectations.js): three rows are
+  // INSERTed (Widget/8/10, Gadget/0/25, Gizmo/15/15); the first UPDATE
+  // restocks every item with qty < 10 by +5 (Widget: 8->13; Gadget: 0->5;
+  // Gizmo's 15 is untouched); the second UPDATE discounts price by 2 on
+  // every item priced over 12 (Gadget: 25->23; Gizmo: 15->13; Widget's 10
+  // is untouched); the DELETE then discontinues Gadget (id 2) outright,
+  // by id rather than by its now-stale qty/price -- leaving exactly
+  // Widget(13, 10) and Gizmo(15, 13).
+  {
+    name: 'ManageInventory',
+    kind: 'PROCEDURE',
+    description:
+      'CREATE TABLE + INSERT + UPDATE + DELETE together against one user-created table -- restocks low-quantity items, discounts high-priced ones, then discontinues a product by id. Step through to watch the Tables panel show the row set change after each statement.',
+    code: `CREATE PROCEDURE ManageInventory()
+BEGIN
+    CREATE TABLE inventory (id NUMBER PRIMARY KEY, item TEXT NOT NULL, qty NUMBER, price NUMBER);
+    INSERT INTO inventory VALUES (1, 'Widget', 8, 10);
+    INSERT INTO inventory VALUES (2, 'Gadget', 0, 25);
+    INSERT INTO inventory VALUES (3, 'Gizmo', 15, 15);
+    UPDATE inventory SET qty = qty + 5 WHERE qty < 10;
+    UPDATE inventory SET price = price - 2 WHERE price > 12;
+    DELETE FROM inventory WHERE id = 2;
 END
 `,
   },

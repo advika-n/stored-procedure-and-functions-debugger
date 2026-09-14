@@ -337,9 +337,28 @@ def test_create_procedure_wrapper_now_parses_to_a_procedure_node():
     assert ast["name"] == "Foo"
 
 
+def test_bare_create_table_is_not_a_definition_chain_error_it_is_a_valid_statement():
+    # Superseded by CREATE TABLE support (see test_table_crud.py for the
+    # dedicated coverage): a solitary leading `CREATE TABLE ...;` used to
+    # be the go-to example of "CREATE followed by neither FUNCTION nor
+    # PROCEDURE" and raised a ParserError -- it's now a genuinely valid
+    # bare-form statement instead (see parser.py's module docstring's
+    # "User-created tables" section, "Top-level dispatch note").
+    ast = parse(tokenize("CREATE TABLE Foo (x NUMBER);"))
+    assert ast["type"] == "Procedure"
+    assert ast["body"][0]["type"] == "CreateTableStatement"
+
+
 def test_create_with_neither_function_nor_procedure_raises_a_clear_error():
+    # The "Expected FUNCTION or PROCEDURE after CREATE" error is now only
+    # reachable for a CREATE that isn't PROCEDURE/FUNCTION/TABLE-shaped,
+    # and only once a definition chain has already genuinely started (a
+    # bare leading CREATE TABLE, or any other non-chain-starting CREATE,
+    # falls through to the ordinary statement grammar instead -- see
+    # `_is_definition_start` above).
+    code = "CREATE PROCEDURE A() BEGIN END\nCREATE TABLE t (x NUMBER);"
     with pytest.raises(ParserError, match="Expected FUNCTION or PROCEDURE"):
-        parse(tokenize("CREATE TABLE Foo (x NUMBER);"))
+        parse(tokenize(code))
 
 
 def test_return_is_parseable_inside_a_while_loop_too():

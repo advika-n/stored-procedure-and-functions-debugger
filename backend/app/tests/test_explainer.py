@@ -424,3 +424,91 @@ def test_build_prompt_still_includes_loop_for_while_steps():
 
     assert "count < 3" in prompt
     assert "iteration 2" in prompt
+
+
+# -- template generator: user-created tables ---------------------------------
+
+
+def test_create_table_explanation_names_the_columns():
+    step = {
+        "line": 1,
+        "nodeType": "CreateTableStatement",
+        "statementText": "CREATE TABLE emp (id NUMBER, name TEXT);",
+        "variables": {},
+        "table": {"name": "emp", "operation": "CREATE", "columns": ["id", "name"], "rowsAffected": 0, "row": None, "rows": []},
+    }
+    text = generate_template_explanation(step, None)
+    assert "emp" in text
+    assert "id" in text and "name" in text
+
+
+def test_insert_explanation_describes_the_new_row():
+    step = {
+        "line": 1,
+        "nodeType": "InsertStatement",
+        "statementText": "INSERT INTO emp (id, name) VALUES (1, 'Alice');",
+        "variables": {},
+        "table": {
+            "name": "emp",
+            "operation": "INSERT",
+            "columns": ["id", "name"],
+            "rowsAffected": 1,
+            "row": {"id": 1, "name": "Alice"},
+            "rows": [{"id": 1, "name": "Alice"}],
+        },
+    }
+    text = generate_template_explanation(step, None)
+    assert "emp" in text
+    assert "Alice" in text
+
+
+def test_update_explanation_mentions_rows_affected():
+    step = {
+        "line": 1,
+        "nodeType": "UpdateStatement",
+        "statementText": "UPDATE emp SET name = 'Bob' WHERE id = 1;",
+        "variables": {},
+        "table": {"name": "emp", "operation": "UPDATE", "columns": ["id", "name"], "rowsAffected": 1, "row": None, "rows": []},
+    }
+    text = generate_template_explanation(step, None)
+    assert "emp" in text
+    assert "1" in text
+
+
+def test_delete_explanation_mentions_rows_affected():
+    step = {
+        "line": 1,
+        "nodeType": "DeleteStatement",
+        "statementText": "DELETE FROM emp WHERE id = 1;",
+        "variables": {},
+        "table": {"name": "emp", "operation": "DELETE", "columns": ["id", "name"], "rowsAffected": 1, "row": None, "rows": []},
+    }
+    text = generate_template_explanation(step, None)
+    assert "emp" in text
+    assert "Deleted 1" in text
+
+
+def test_build_prompt_includes_table_state_for_a_mutating_step():
+    step = {
+        "line": 1,
+        "nodeType": "InsertStatement",
+        "statementText": "INSERT INTO emp VALUES (1);",
+        "variables": {},
+        "table": {"name": "emp", "operation": "INSERT", "columns": ["id"], "rowsAffected": 1, "row": {"id": 1}, "rows": [{"id": 1}]},
+    }
+    prompt = explainer._build_prompt(step, None)
+    assert "emp" in prompt
+    assert "INSERT" in prompt
+
+
+def test_build_ask_prompt_includes_table_state():
+    step = {
+        "line": 1,
+        "nodeType": "DeleteStatement",
+        "statementText": "DELETE FROM emp;",
+        "variables": {},
+        "table": {"name": "emp", "operation": "DELETE", "columns": ["id"], "rowsAffected": 2, "row": None, "rows": []},
+    }
+    prompt = explainer._build_ask_prompt("DELETE FROM emp;", step, "why did this remove rows?")
+    assert "emp" in prompt
+    assert "DELETE" in prompt

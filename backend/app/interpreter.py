@@ -16,6 +16,11 @@ Each DebugStep captures:
     statementText   -- the statement rendered back to readable source
     variables       -- {name: {value, type, changed}} for every
                        variable currently in scope
+    table           -- for CreateTableStatement/InsertStatement/
+                       UpdateStatement/DeleteStatement steps only: the
+                       affected table's name/operation/rowsAffected plus
+                       a full current row snapshot -- see "User-created
+                       tables" below
     branch          -- for IfStatement AND CaseStatement steps:
                        {condition, result, path} describing which way
                        the branch went; None for every other step (see
@@ -158,6 +163,126 @@ label that happens to still be sitting on the caller's own
 `_loop_stack` from an enclosing loop the callee's source has no lexical
 relationship to at all -- clearly wrong, and now impossible by
 construction.
+
+-- User-created tables (CREATE TABLE / INSERT / UPDATE / DELETE) ----------
+
+CreateTableStatement / InsertStatement / UpdateStatement / DeleteStatement
+(see app.parser's own section of the same name) are executed against
+``Interpreter.tables`` -- a plain Python dict, kept entirely separate
+from both ``self.scope`` (these aren't SQL variables) and ``self._db``
+(the real ``sqlite3.Connection`` cursor statements query -- see
+"Cursors" below). **This is a deliberate simulation, not a second real
+database**: per this phase's own "execution is simulated, not a real DB
+engine" project convention, a table's rows are just a list of plain
+dicts (`{"columns": [...], "rows": [{col: value, ...}, ...]}`), and a
+WHERE clause is evaluated by `_evaluate_with_row` -- a thin wrapper that
+temporarily layers a row's own column values on top of the current
+scope and calls the *exact same* `_evaluate` every IF/WHILE condition
+already uses, not a second expression-evaluation path. This is also why
+a user-created table's rows are NOT queryable from a cursor's embedded
+SELECT (that still only ever sees `self._db`'s fixed `products` demo
+table -- see "Cursors" below): a real SQL engine round-trip was
+deliberately not built for this feature, matching every other
+"simulated, not real" construct in this interpreter.
+
+**Scope: global for the whole run, never isolated per CALL/function-call
+frame** -- unlike `cursors`/`handlers`/`_loop_stack` (all reset to a
+fresh, empty per-invocation state around a callee -- see "Procedure
+calls (CALL)" below), `self.tables` is treated exactly like `self._db`
+already is: never saved/swapped in `_exec_call`/`_evaluate_function_call`
+at all, so a table CREATEd or mutated by one procedure in a CALL chain is
+immediately visible to every other procedure in that same chain, and
+persists for the rest of the run. This is not a new convention invented
+for this feature -- it's the exact same "global for the run, reset fresh
+at the start of the next one" behavior `products`/`self._db` already
+had (see app.demo_db's own module docstring), just followed rather than
+reinvented, per this phase's own instruction to check that convention
+first.
+
+A column definition carries `name`/`col_type`/`not_null`/`primary_key`
+(see app.parser). `col_type` is never validated against a fixed set (the
+same "advisory, not enforced" treatment a DECLARE's own `var_type` or a
+parameter's `type` already gets); `not_null`/`primary_key` ARE enforced,
+by `_validate_row_constraints`, called from both INSERT and UPDATE:
+
+  - A NULL value (the literal `NullLiteral`/Python `None`, or simply an
+    omitted INSERT column) for a NOT NULL or PRIMARY KEY column is a
+    clear InterpreterError -- PRIMARY KEY always implies NOT NULL, since
+    a NULL primary key could never uniquely identify anything.
+  - A PRIMARY KEY column's value must be unique across every OTHER row
+    already in the table -- checked by linear scan (this grammar's
+    tables are small course-project-scale data, not something needing
+    an index), comparing by value, not row identity. UPDATE's own check
+    excludes the row currently being updated from that scan (via
+    `ignore_row`), so `UPDATE t SET id = id;` (a no-op rewrite of a
+    PRIMARY KEY column back to its own existing value) is correctly
+    NOT flagged as a duplicate of itself.
+
+INSERT's column list is optional (see app.parser); when omitted,
+`_exec_insert` binds `values` positionally against `self.tables[name]`'s
+own CREATE-TABLE-declared column order -- the parser has no schema to
+resolve that against, only the interpreter does, at the moment the
+table actually exists. Every column not named by an explicit INSERT
+column list (or by name, when the list IS given but omits some columns)
+starts that row at `None`, exactly like an unsupplied DECLARE default --
+subject to the same NOT NULL/PRIMARY KEY check immediately after.
+
+UPDATE evaluates every matched row's SET assignments against that row's
+ORIGINAL values -- standard SQL UPDATE semantics, not this interpreter's
+own invention: `UPDATE t SET a = b, b = a;` swaps `a`/`b` rather than
+letting the first assignment's new value leak into the second's
+evaluation. All matched rows' new values are computed (and constraint-
+checked) BEFORE any of them are actually written, so a constraint
+violation partway through leaves every row completely unmodified. DELETE
+removes matched rows by object identity (`id(row)`), never by structural
+equality -- two rows that happen to hold identical values are still two
+distinct rows, and a WHERE matching one of them must not also silently
+remove the other.
+
+Both UPDATE and DELETE support an optional WHERE clause (omitted means
+"every row"); evaluating it via `_evaluate_with_row` is what actually
+reuses the IF/WHILE condition-evaluation path per this phase's own
+instruction (see above) -- a WHERE can reference the row's own columns
+(`WHERE price > 100`) and/or any scalar variable already in scope
+(`WHERE price > minPrice`) in the same expression, since the row's
+values are layered ON TOP OF (and shadow, by name, same-named) the
+current scope rather than replacing it. A DIVISION_BY_ZERO while
+evaluating a WHERE, or any UPDATE assignment's own value expression,
+follows the exact same statement-boundary handling every other statement
+already uses (`_handle_division_by_zero`) -- non-fatal only if a handler
+is registered, and if so, the statement's own step still records `error`
+but zero rows end up affected, mirroring `_exec_set`'s "the assignment
+simply didn't happen."
+
+**Step-trace: a new `table` DebugStep field was genuinely needed, not
+force-fit into an existing one** -- checked directly against every
+existing field first: `variables` is `self.scope` only (a table's rows
+aren't scope variables, and stuffing them in there would also break
+Variable Timeline/report export, which assume every `variables` entry is
+a single scalar); `cursor` describes a *read-only* SELECT cursor's
+position, a different concept (reading vs. writing) with an incompatible
+shape (one buffered row at a time, not a whole table's row list). The
+new field, present only on a CREATE TABLE/INSERT/UPDATE/DELETE step
+(omitted otherwise, exactly like `cursor`/`branch`/`loop` already are):
+
+    table: {
+        "name": str,
+        "operation": "CREATE" | "INSERT" | "UPDATE" | "DELETE",
+        "columns": [str, ...],       # column names, in CREATE TABLE order
+        "rowsAffected": int,          # 0 for CREATE; 1 for a successful INSERT; the
+                                      # matched-row count for UPDATE/DELETE (0 if
+                                      # DIVISION_BY_ZERO made the statement a no-op)
+        "row": {col: value, ...} | None,   # the just-inserted row (INSERT only)
+        "rows": [{col: value, ...}, ...],  # the table's FULL current row snapshot,
+    }                                       # right after this operation
+
+`rows` is a full snapshot (not a diff) on purpose, mirroring how
+`variables` itself always shows every variable's current value rather
+than just the one that changed -- "table mutations visible in DebugStep
+the same way variable mutations already are," per this phase's own
+instruction, means the table's current state is always fully visible on
+the step that touched it, not left for a client to reconstruct by
+replaying every prior INSERT/UPDATE/DELETE itself.
 
 -- Cursors ------------------------------------------------------------
 
@@ -548,6 +673,7 @@ class DebugStep:
     error: dict | None = None
     return_value: dict | None = None
     call: dict | None = None
+    table: dict | None = None
 
     def to_dict(self) -> dict:
         """Serialize using the camelCase keys the frontend expects."""
@@ -570,6 +696,8 @@ class DebugStep:
             step["returnValue"] = self.return_value
         if self.call is not None:
             step["call"] = self.call
+        if self.table is not None:
+            step["table"] = self.table
         return step
 
 
@@ -585,6 +713,8 @@ def render_expr(node: dict) -> str:
         return str(node["value"])
     if kind == "StringLiteral":
         return f"'{node['value']}'"
+    if kind == "NullLiteral":
+        return "NULL"
     if kind == "Identifier":
         return node["name"]
     if kind == "UnaryExpr":
@@ -641,7 +771,33 @@ def render_statement_header(node: dict) -> str:
     if kind == "CallStatement":
         args = ", ".join(render_expr(arg) for arg in node["args"])
         return f"CALL {node['name']}({args});"
+    if kind == "CreateTableStatement":
+        columns = ", ".join(_render_column_def(c) for c in node["columns"])
+        return f"CREATE TABLE {node['name']} ({columns});"
+    if kind == "InsertStatement":
+        columns = f" ({', '.join(node['columns'])})" if node["columns"] is not None else ""
+        values = ", ".join(render_expr(v) for v in node["values"])
+        return f"INSERT INTO {node['table']}{columns} VALUES ({values});"
+    if kind == "UpdateStatement":
+        assignments = ", ".join(f"{a['column']} = {render_expr(a['value'])}" for a in node["assignments"])
+        where = f" WHERE {render_expr(node['where'])}" if node["where"] is not None else ""
+        return f"UPDATE {node['table']} SET {assignments}{where};"
+    if kind == "DeleteStatement":
+        where = f" WHERE {render_expr(node['where'])}" if node["where"] is not None else ""
+        return f"DELETE FROM {node['table']}{where};"
     raise InterpreterError(f"Cannot render unknown statement node {kind!r}")
+
+
+def _render_column_def(column: dict) -> str:
+    """Render one CREATE TABLE column definition back to source text --
+    used only by render_statement_header's own CreateTableStatement case
+    above."""
+    text = f"{column['name']} {column['col_type']}"
+    if column.get("not_null"):
+        text += " NOT NULL"
+    if column.get("primary_key"):
+        text += " PRIMARY KEY"
+    return text
 
 
 def render_definition_header(ast: dict) -> str:
@@ -707,6 +863,18 @@ class Interpreter:
         # "DIVISION_BY_ZERO") -> that handler's action statement AST.
         # See module docstring's "Exception handlers" section.
         self.handlers: dict[str, dict] = {}
+
+        # User-created tables (see module docstring's "User-created
+        # tables" section), keyed by name -- {"columns": [...], "rows":
+        # [{col: value, ...}, ...]}. Deliberately GLOBAL for the whole
+        # run, never saved/swapped around a CALL/function-call frame
+        # (unlike cursors/handlers/_loop_stack above) -- follows the
+        # exact same "shared across the whole call chain, reset fresh
+        # next run" convention `self._db` (below) already established
+        # for the fixed `products` demo table, per this phase's own
+        # instruction to check that convention first rather than invent
+        # a new one.
+        self.tables: dict[str, dict] = {}
 
         # Own a private in-memory connection unless the caller supplies
         # one (e.g. a test that pre-seeded a table) -- closed again in
@@ -817,6 +985,14 @@ class Interpreter:
             self._exec_loop(node)
         elif kind == "LeaveStatement":
             self._exec_leave(node)
+        elif kind == "CreateTableStatement":
+            self._exec_create_table(node)
+        elif kind == "InsertStatement":
+            self._exec_insert(node)
+        elif kind == "UpdateStatement":
+            self._exec_update(node)
+        elif kind == "DeleteStatement":
+            self._exec_delete(node)
         else:
             raise InterpreterError(
                 f"Don't know how to execute node type {kind!r}", node.get("line")
@@ -1013,6 +1189,217 @@ class Interpreter:
 
         self._record_step(node, render_statement_header(node))
         raise _LeaveSignal(label)
+
+    # -- user-created tables (CREATE TABLE / INSERT / UPDATE / DELETE) ------
+    # See the module docstring's own section of the same name for the full
+    # design (scope, constraint enforcement, WHERE evaluation, the `table`
+    # DebugStep field).
+
+    def _require_table(self, name: str, line: int | None) -> dict:
+        table = self.tables.get(name)
+        if table is None:
+            raise InterpreterError(f"Table '{name}' is not declared", line)
+        return table
+
+    def _table_step_info(
+        self, name: str, operation: str, rows_affected: int, row: dict | None = None
+    ) -> dict:
+        table = self.tables[name]
+        return {
+            "name": name,
+            "operation": operation,
+            "columns": [c["name"] for c in table["columns"]],
+            "rowsAffected": rows_affected,
+            "row": dict(row) if row is not None else None,
+            "rows": [dict(r) for r in table["rows"]],
+        }
+
+    def _validate_row_constraints(
+        self, table_name: str, table: dict, row: dict, line: int | None, ignore_row: dict | None
+    ) -> None:
+        """Enforce NOT NULL/PRIMARY KEY for one candidate row (already
+        merged with its own new values -- the caller decides what `row`
+        actually contains). Called from both INSERT (a brand-new row,
+        `ignore_row=None`) and UPDATE (a row's prospective new values,
+        `ignore_row` set to that same row object so it isn't compared
+        against itself in the PRIMARY KEY uniqueness scan)."""
+        for column in table["columns"]:
+            name = column["name"]
+            value = row.get(name)
+            if value is None and (column.get("not_null") or column.get("primary_key")):
+                raise InterpreterError(
+                    f"Column '{name}' of table '{table_name}' is NOT NULL and cannot be NULL",
+                    line,
+                )
+            if column.get("primary_key"):
+                for existing in table["rows"]:
+                    if existing is ignore_row:
+                        continue
+                    if existing.get(name) == value:
+                        raise InterpreterError(
+                            f"Duplicate value {value!r} for PRIMARY KEY column '{name}' of "
+                            f"table '{table_name}'",
+                            line,
+                        )
+
+    def _evaluate_with_row(self, node: dict, row: dict):
+        """Evaluate an ordinary expression (see app.parser's `expr`
+        grammar) with `row`'s own column values additionally available
+        by name, layered on top of (and shadowing, by name) the current
+        scope -- reuses `_evaluate` verbatim rather than a second
+        expression-evaluation path, per this phase's own "reuse whatever
+        conditions/IF already use" instruction. Backs UPDATE/DELETE's
+        WHERE clause and UPDATE's own SET value expressions, both of
+        which need a row's column values visible alongside whatever
+        scalar variables the enclosing procedure already has in scope
+        (e.g. `WHERE price > minPrice`, `SET price = price * 1.1`)."""
+        saved_scope = self.scope
+        self.scope = {**self.scope, **row}
+        try:
+            return self._evaluate(node)
+        finally:
+            self.scope = saved_scope
+
+    def _exec_create_table(self, node: dict) -> None:
+        name = node["name"]
+        if name in self.tables:
+            raise InterpreterError(f"Table '{name}' is already declared", node["line"])
+
+        seen_names: set[str] = set()
+        for column in node["columns"]:
+            if column["name"] in seen_names:
+                raise InterpreterError(
+                    f"Table '{name}' has a duplicate column '{column['name']}'", node["line"]
+                )
+            seen_names.add(column["name"])
+
+        self.tables[name] = {"columns": [dict(c) for c in node["columns"]], "rows": []}
+        table_info = self._table_step_info(name, "CREATE", rows_affected=0)
+        self._record_step(node, render_statement_header(node), table=table_info)
+
+    def _exec_insert(self, node: dict) -> None:
+        name = node["table"]
+        table = self._require_table(name, node["line"])
+        column_names = [c["name"] for c in table["columns"]]
+
+        if node["columns"] is not None:
+            target_columns = node["columns"]
+            for column in target_columns:
+                if column not in column_names:
+                    raise InterpreterError(f"Table '{name}' has no column '{column}'", node["line"])
+        else:
+            # No explicit column list -- bind positionally to the
+            # table's own CREATE-TABLE-declared order (see app.parser's
+            # "User-created tables" section).
+            target_columns = column_names
+
+        if len(node["values"]) != len(target_columns):
+            raise InterpreterError(
+                f"INSERT INTO '{name}' supplies {len(node['values'])} value(s) for "
+                f"{len(target_columns)} column(s)",
+                node["line"],
+            )
+
+        error_info = None
+        values: list = []
+        try:
+            values = [self._evaluate(value_node) for value_node in node["values"]]
+        except _DivisionByZeroSignal as signal:
+            error_info = self._handle_division_by_zero(signal)
+
+        if error_info is not None:
+            # Mirrors _exec_set's "the assignment simply didn't happen" --
+            # the statement's own step still records the error, but no
+            # row is ever inserted.
+            table_info = self._table_step_info(name, "INSERT", rows_affected=0)
+            self._record_step(node, render_statement_header(node), table=table_info, error=error_info)
+            self._run_handler_if_triggered(error_info)
+            return
+
+        row = {column: None for column in column_names}
+        for column, value in zip(target_columns, values):
+            row[column] = value
+        self._validate_row_constraints(name, table, row, node["line"], ignore_row=None)
+
+        table["rows"].append(row)
+        table_info = self._table_step_info(name, "INSERT", rows_affected=1, row=row)
+        self._record_step(node, render_statement_header(node), table=table_info)
+
+    def _match_where(self, node: dict, table: dict) -> tuple[list[dict], dict | None]:
+        """Every row currently in `table` whose WHERE clause (or, if
+        `node["where"] is None`, every row unconditionally) evaluates
+        truthy -- shared by UPDATE and DELETE. Returns `(matched_rows,
+        error_info)`; a DIVISION_BY_ZERO while evaluating WHERE stops
+        evaluation immediately and reports zero matched rows, mirroring
+        `_exec_if`'s own "the condition couldn't be evaluated -- don't
+        guess" handling generalized across a whole row set."""
+        if node["where"] is None:
+            return list(table["rows"]), None
+        matched: list[dict] = []
+        try:
+            for row in table["rows"]:
+                if bool(self._evaluate_with_row(node["where"], row)):
+                    matched.append(row)
+        except _DivisionByZeroSignal as signal:
+            return [], self._handle_division_by_zero(signal)
+        return matched, None
+
+    def _exec_update(self, node: dict) -> None:
+        name = node["table"]
+        table = self._require_table(name, node["line"])
+        column_names = {c["name"] for c in table["columns"]}
+        for assignment in node["assignments"]:
+            if assignment["column"] not in column_names:
+                raise InterpreterError(
+                    f"Table '{name}' has no column '{assignment['column']}'", node["line"]
+                )
+
+        matched_rows, error_info = self._match_where(node, table)
+
+        if error_info is None:
+            try:
+                # Every assignment is evaluated against each matched
+                # row's ORIGINAL values (standard SQL UPDATE semantics --
+                # see module docstring), and every row's new values are
+                # constraint-checked BEFORE any of them are written, so a
+                # violation partway through leaves the table untouched.
+                planned: list[tuple[dict, dict]] = []
+                for row in matched_rows:
+                    new_values = {
+                        a["column"]: self._evaluate_with_row(a["value"], row) for a in node["assignments"]
+                    }
+                    planned.append((row, new_values))
+                for row, new_values in planned:
+                    candidate = {**row, **new_values}
+                    self._validate_row_constraints(name, table, candidate, node["line"], ignore_row=row)
+                for row, new_values in planned:
+                    row.update(new_values)
+            except _DivisionByZeroSignal as signal:
+                error_info = self._handle_division_by_zero(signal)
+                matched_rows = []
+
+        rows_affected = len(matched_rows) if error_info is None else 0
+        table_info = self._table_step_info(name, "UPDATE", rows_affected=rows_affected)
+        self._record_step(node, render_statement_header(node), table=table_info, error=error_info)
+        self._run_handler_if_triggered(error_info)
+
+    def _exec_delete(self, node: dict) -> None:
+        name = node["table"]
+        table = self._require_table(name, node["line"])
+
+        matched_rows, error_info = self._match_where(node, table)
+
+        if error_info is None:
+            # By object identity (id()), never structural equality -- two
+            # rows holding identical values are still two distinct rows;
+            # a WHERE matching one of them must not remove the other.
+            matched_ids = {id(row) for row in matched_rows}
+            table["rows"] = [row for row in table["rows"] if id(row) not in matched_ids]
+
+        rows_affected = len(matched_rows) if error_info is None else 0
+        table_info = self._table_step_info(name, "DELETE", rows_affected=rows_affected)
+        self._record_step(node, render_statement_header(node), table=table_info, error=error_info)
+        self._run_handler_if_triggered(error_info)
 
     def _exec_return(self, node: dict) -> None:
         error_info = None
@@ -1422,6 +1809,8 @@ class Interpreter:
             return node["value"]
         if kind == "StringLiteral":
             return node["value"]
+        if kind == "NullLiteral":
+            return None
         if kind == "Identifier":
             name = node["name"]
             if name not in self.scope:
@@ -1517,6 +1906,7 @@ class Interpreter:
         cursor: dict | None = None,
         error: dict | None = None,
         return_value: dict | None = None,
+        table: dict | None = None,
     ) -> DebugStep:
         self._step_number += 1
         step = DebugStep(
@@ -1531,6 +1921,7 @@ class Interpreter:
             error=error,
             return_value=return_value,
             call=self._current_call_info(),
+            table=table,
         )
         self.steps.append(step)
         return step

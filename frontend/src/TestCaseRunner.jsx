@@ -1,10 +1,12 @@
 // Test-Case Runner -- runs every built-in sample procedure/function
 // through the exact same execution pipeline the Debugger page already
 // uses (POST /debug, unmodified) and checks the resulting final
-// variable state / return value against a hand-verified expected
-// outcome per sample (see testCaseExpectations.js for how those were
-// derived -- NOT invented). Reports a pass/fail summary plus, for any
-// failure, exactly which field(s) diverged and by how much.
+// variable state / return value -- and, optionally, a user-created
+// table's final row state (see testCaseExpectations.js's own contract
+// comment) -- against a hand-verified expected outcome per sample (see
+// testCaseExpectations.js for how those were derived -- NOT invented).
+// Reports a pass/fail summary plus, for any failure, exactly which
+// field(s) diverged and by how much.
 //
 // Deliberately self-contained, same reasoning as VariableTimeline.jsx:
 // this component takes no required props -- it owns its own sample
@@ -37,6 +39,31 @@ function formatValue(value) {
   if (typeof value === 'string') return `"${value}"`
   if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')
   return String(value)
+}
+
+// A user-created table's rows (see backend/app/interpreter.py's "User-
+// created tables" section) are checked against the LAST step in the
+// whole trace whose OWN `table.name` matches -- i.e. the state right
+// after that table's own final CREATE/INSERT/UPDATE/DELETE -- not just
+// whatever the very last step overall happens to be (which may belong
+// to an entirely different table, or to no table mutation at all).
+function findFinalTableState(steps, tableName) {
+  for (let i = steps.length - 1; i >= 0; i -= 1) {
+    if (steps[i].table?.name === tableName) return steps[i].table
+  }
+  return null
+}
+
+function rowsMatch(actualRows, expectedRows) {
+  if (actualRows.length !== expectedRows.length) return false
+  return expectedRows.every((expectedRow, index) => {
+    const actualRow = actualRows[index] ?? {}
+    return Object.entries(expectedRow).every(([column, expectedValue]) => valuesMatch(actualRow[column], expectedValue))
+  })
+}
+
+function formatRows(rows) {
+  return JSON.stringify(rows ?? null)
 }
 
 // Runs one sample through POST /debug (the same call the Debugger page
@@ -92,6 +119,17 @@ async function runOneCase(sample, expectation) {
     }
   }
 
+  // Optional, additive to either `kind` (see testCaseExpectations.js's
+  // own contract comment) -- a user-created table's FINAL row state,
+  // not just scalar variables/a return value.
+  for (const [tableName, expectedRows] of Object.entries(expectation.tables ?? {})) {
+    const finalState = findFinalTableState(steps, tableName)
+    const actualRows = finalState?.rows ?? null
+    if (actualRows === null || !rowsMatch(actualRows, expectedRows)) {
+      diffs.push({ field: `table:${tableName}`, expected: formatRows(expectedRows), actual: formatRows(actualRows), raw: true })
+    }
+  }
+
   return { ...base, status: diffs.length === 0 ? 'pass' : 'fail', diffs, numSteps: steps.length }
 }
 
@@ -140,8 +178,8 @@ function CaseCard({ result }) {
             {result.diffs.map((diff) => (
               <tr key={diff.field}>
                 <td className="testrunner-diff-field">{diff.field}</td>
-                <td className="testrunner-diff-expected">{formatValue(diff.expected)}</td>
-                <td className="testrunner-diff-actual">{formatValue(diff.actual)}</td>
+                <td className="testrunner-diff-expected">{diff.raw ? diff.expected : formatValue(diff.expected)}</td>
+                <td className="testrunner-diff-actual">{diff.raw ? diff.actual : formatValue(diff.actual)}</td>
               </tr>
             ))}
           </tbody>
@@ -207,7 +245,8 @@ export default function TestCaseRunner({ samples = SAMPLES, expectations = TEST_
       {results === null && !running && (
         <p className="placeholder">
           Runs all {samples.length} built-in sample procedures/functions through the real /debug pipeline and
-          checks each one's final variable state (or return value) against a known-correct expected outcome.
+          checks each one's final variable state (or return value), and any user-created table's final row
+          state, against a known-correct expected outcome.
         </p>
       )}
 

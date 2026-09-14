@@ -124,19 +124,34 @@ Supported:
   non-fatal, handled or not; `DIVISION_BY_ZERO` only becomes non-fatal
   once a handler is actually registered for it — unhandled, it still
   aborts the run exactly as it always did.
+- **User-created tables**: `CREATE TABLE name (col TYPE [NOT NULL]
+  [PRIMARY KEY], ...);`, `INSERT INTO name [(col, ...)] VALUES (expr,
+  ...);`, `UPDATE name SET col = expr [, col = expr]* [WHERE expr];`,
+  `DELETE FROM name [WHERE expr];`. `TYPE` is unvalidated, same as a
+  `DECLARE`'s own type; `NOT NULL`/`PRIMARY KEY` ARE enforced at
+  runtime. A table's rows are simulated entirely in memory for the life
+  of one run (never real SQLite, and never queryable from a cursor's
+  `SELECT` — see "Cursors" below, which still only ever sees the fixed
+  `products` table). `WHERE` is one ordinary expression (no `AND`/`OR`
+  chaining, same limit an `IF`/`WHILE` condition already has) that can
+  reference both a row's own columns and any variable already in
+  scope. `NULL` is also a new expression literal, most useful as an
+  explicit `INSERT` value.
 
 Not supported at all: `ELSEIF` chaining (nest another `IF` inside the
-`ELSE` instead), `>=`/`<=`, cursor parameters, transactions, table
-statements (`UPDATE`/`INSERT`/...), and anything not listed above. The
-in-app **Theory** tab documents each supported piece with a runnable
-example; the sample library's **ComputeTax** procedure demonstrates a
-declared `OUT` param, and **ProductPriceTotal** /
+`ELSE` instead), `>=`/`<=`, cursor parameters, transactions, `AND`/`OR`
+in an expression (including a table's own `WHERE`), and anything not
+listed above. The in-app **Theory** tab documents each supported piece
+with a runnable example; the sample library's **ComputeTax** procedure
+demonstrates a declared `OUT` param, **ProductPriceTotal** /
 **SafeAverageWithHandlers** are runnable demonstrations of cursors and
-exception handling respectively. All eight samples use the full
-`CREATE PROCEDURE(...) BEGIN...END` wrapper — a deliberate choice for
-consistency with the syntax the Theory tab teaches, made once `CREATE
-PROCEDURE` support existed and migrating was a pure find-and-replace;
-see `frontend/src/samples.js`'s header comment for the full rationale.
-The bare, wrapper-less form isn't gone — it's simply no longer what any
+exception handling respectively, and **ManageInventory** demonstrates
+`CREATE TABLE`/`INSERT`/`UPDATE`/`DELETE` together against one
+user-created table. All samples use the full `CREATE PROCEDURE(...)
+BEGIN...END` wrapper — a deliberate choice for consistency with the
+syntax the Theory tab teaches, made once `CREATE PROCEDURE` support
+existed and migrating was a pure find-and-replace; see
+`frontend/src/samples.js`'s header comment for the full rationale. The
+bare, wrapper-less form isn't gone — it's simply no longer what any
 *sample* demonstrates, since it's the backward-compatibility path, not
 the recommended way to write a new one.

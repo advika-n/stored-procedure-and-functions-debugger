@@ -1891,3 +1891,137 @@ carry that). `CLAUDE.md` went from 3973 words to ~1220 (file maps/endpoints kept
 navigability, everything narrative moved out); `HANDOFF.md` went to ~440 words. Both new
 docs files, and this restructuring itself, are part of this session's own uncommitted
 work.
+
+## 20. User-created tables: CREATE TABLE / INSERT / UPDATE / DELETE
+
+**Date:** 2026-09-14 · **Not yet committed** (see `HANDOFF.md`)
+
+**Prompt (verbatim):**
+
+> Read CLAUDE.md and HANDOFF.md for context
+>
+> This is the SQL Stored Procedure & Function Debugger project. The tree should be clean. This is the final backend/interpreter phase before the redesign — it's deliberately the biggest one, since it changes the scope of the project (currently only a fixed products demo table exists).
+>
+> Implement user-created tables + CRUD (INSERT/UPDATE/DELETE).
+>
+> Scope:
+>
+> Parser: CREATE TABLE name (col type [constraints], ...), INSERT INTO name (...) VALUES (...), UPDATE name SET ... [WHERE ...], DELETE FROM name [WHERE ...]. Check README.md/Theory.jsx first for exactly which column types and constraints this grammar already commits to elsewhere (don't invent new ones) — match the existing products table's type system if one is documented.
+> Interpreter: maintain in-memory table state per debug session (scoped correctly — check whether products is currently global/shared across calls or reset per run, and follow that same convention for user tables rather than inventing new semantics). WHERE clause evaluation should reuse whatever expression-evaluation path conditions/IF already use, not a new one.
+> Step-trace: table mutations (a row inserted/updated/deleted) need to be visible in DebugStep the same way variable mutations already are — check whether this needs a new field or can reuse an existing pattern, and flag if a schema change is genuinely required rather than force-fitting.
+> Cross-cutting checks — same discipline as every prior phase, and expect more surface area than usual since this touches data, not just control flow:
+> cfg.js flowchart — CREATE TABLE/INSERT/UPDATE/DELETE as flowchart nodes.
+> advisor.py — do any existing checks (unreachable-code, unused-variable, never-read-variable, constant-condition) need a case for these new statement types? Consider whether a new check (e.g., INSERT/UPDATE with no WHERE on UPDATE/DELETE — a classic footgun) is worth adding, and note it as a suggestion rather than assuming scope.
+> explainer.py template fallback cases.
+> Predict Mode — does this fit, or is it another documented scope-exclusion like CASE/LOOP got?
+> Variable Timeline — table state isn't a scalar variable; confirm it correctly excludes tables rather than crashing or rendering garbage for them.
+>
+> Add at least one new sample procedure exercising CREATE TABLE + INSERT + UPDATE + DELETE together, with hand-derived expected output (final table state, not just variables) cross-checked against a real interpreter run, documented inline in testCaseExpectations.js.
+>
+> Full verification: backend pytest suite, lint/build, the in-process sweep across all samples (Python pipeline + Node cfg.js, per last phase), and live check both themes with zero console errors — Call Stack, Variable Timeline, Advisor, Test-Case Runner, flowchart all confirmed against the new sample. Check port usage before binding, leave pre-existing processes alone, kill only what you launch by exact PID.
+
+**Design decisions made before implementing**: README.md/`app.parser`'s own docstring
+confirmed this grammar has never validated a `DECLARE`/parameter's `TYPE` against a
+fixed set at all (it's a bare, unchecked identifier throughout) — so a column's `TYPE`
+gets the exact same "advisory, unenforced" treatment, rather than inventing a new type
+system just for tables. `products` (`demo_db.py`) was checked directly, not assumed: its
+underlying SQLite connection is a fresh `:memory:` DB every run (reset per run) but is
+NEVER saved/swapped around a `CALL`/function-call frame (global for the whole call
+chain) — `Interpreter.tables` follows that exact convention. WHERE evaluation reuses
+`_evaluate` verbatim via a new `_evaluate_with_row` helper (temporarily layers a row's
+columns on top of `self.scope`, restored in a `finally`) rather than a second
+expression-evaluator, per the phase's own explicit instruction. Constraints were scoped
+to `NOT NULL`/`PRIMARY KEY` only (not `UNIQUE`/`FOREIGN KEY`/`CHECK`, and no `AND`/`OR` in
+WHERE) — enough to demonstrate real constraint enforcement without inventing grammar the
+task never asked for.
+
+**Parser**: `_is_definition_start` replaces a bare `_check("KEYWORD", "CREATE")` at the
+top-level `parse()` dispatch, since a leading `CREATE` is no longer unambiguously "start
+of a CREATE PROCEDURE/FUNCTION definition chain" now that `CREATE TABLE` exists as an
+ordinary statement — only `CREATE PROCEDURE`/`CREATE FUNCTION` specifically still routes
+there; a bare `CREATE TABLE` falls through to the ordinary statement grammar. A stray
+`CREATE TABLE` immediately after an already-started definition chain is still a clear
+`ParserError` (not silently dropped) — caught by keeping the *continuation* check inside
+that loop unconditional, exactly as it always was. This forced one test-expectation
+update (`test_parser.py`'s "CREATE with neither FUNCTION nor PROCEDURE" example used a
+bare `CREATE TABLE ...;`, which is now genuinely valid syntax — rewritten to demonstrate
+both the new valid case and the real remaining error case). Four new statement types,
+plus a new `NullLiteral` expression (most useful as an explicit INSERT value).
+
+**Interpreter**: `_exec_insert`/`_exec_update`/`_exec_delete` all funnel constraint
+checking through one shared `_validate_row_constraints` (INSERT's brand-new row and
+UPDATE's prospective new row both go through it, UPDATE passing `ignore_row` so a
+PRIMARY KEY column rewritten to its own existing value isn't flagged as a duplicate of
+itself). UPDATE evaluates every matched row's SET expressions against that row's
+ORIGINAL values (standard SQL semantics — `SET a = b, b = a;` swaps rather than
+cascading), and constraint-checks every planned change BEFORE writing any of them, so a
+violation partway through leaves the table completely unmodified. DELETE removes rows by
+`id()` identity, never structural equality, so two rows with identical values don't
+cause a WHERE match on one to silently remove the other too.
+
+**Step-trace**: a genuine new `table` DebugStep field, added only after checking (and
+ruling out) every existing one first — see `docs/schema.md`/`docs/features.md` for the
+reasoning. Carries a FULL current row snapshot on every touched step (not a diff),
+mirroring `variables`' own always-current convention.
+
+**Cross-cutting**: `cfg.js` needed `renderStatementHeader`/`renderExpr` cases only — no
+`emitBlock` change, since none of the four statement types branch or loop, so they fall
+straight into the existing plain-rect-node path. `advisor.py` needed `_statement_exprs`
+cases (feeding every shared check — magic-number, unused-variable, never-read-variable,
+missing-error-handling — for free) plus one genuinely new check, `missing-where-clause`
+(an UPDATE/DELETE with no WHERE touches every row — flagged as a real, separate
+suggestion-worthy check, per the phase's own "note it as a suggestion rather than
+assuming scope" instruction, added as a full "warning"-severity check since it's a real
+footgun, not just a style nit). `explainer.py` got template-fallback cases plus `table`
+forwarded from both `_build_prompt` and `_build_ask_prompt`. Predict Mode: verified
+(not assumed) that none of the four statement types change a scope variable or carry a
+boolean branch, so they correctly, silently offer no prediction prompt — documented as
+the same kind of deliberate scope exclusion CASE/LOOP/LEAVE already are. Variable
+Timeline: verified live against the new sample (see below) that it needed zero changes —
+built purely from `variables`, a table's rows live in the separate `table` field, so a
+table-only procedure correctly renders its "This run never declared any variables" empty
+state.
+
+New sample **`ManageInventory`**: `CREATE TABLE inventory (id NUMBER PRIMARY KEY, item
+TEXT NOT NULL, qty NUMBER, price NUMBER)`, 3 `INSERT`s, two independent `UPDATE`s
+(restock qty<10, then discount price>12), one `DELETE ... WHERE id = 2` — hand-derived
+final state (`{id:1,item:'Widget',qty:13,price:10}`, `{id:3,item:'Gizmo',qty:15,
+price:13}`) cross-checked against a real interpreter run before being written into
+`testCaseExpectations.js`, which gained an additive, optional `tables: {name: [row,
+...]}` field (checked by a new `TestCaseRunner.jsx` helper, `findFinalTableState`,
+against the LAST step whose own `table.name` matches — not just whatever the very last
+step overall happens to be).
+
+**Verification**: backend suite 391 → **440 passing** (49 new tests: `test_table_crud.py`
+plus advisor/explainer regressions). `npm run lint`/`npm run build` clean (same 2
+pre-existing warnings). In-process sweep of all 18 samples (Python tokenize→parse→run,
+real `demo_db` connection) — zero failures, 0.155–0.927ms each. A second Node sweep
+(`cfg.js`'s `buildFlowchartGraph`/`computeDiagramState`/`renderMermaidDefinition` against
+every sample's real backend-produced AST/steps, both themes, every step index) — zero
+failures; confirmed `ManageInventory` produces exactly the 4 new node kinds
+(`CreateTableStatement`/`InsertStatement`/`UpdateStatement`/`DeleteStatement`) as plain
+rect nodes.
+
+**Live verification** hit a real, worth-recording snag: port 8000 showed `Bound` (not
+`Listen`) under a leftover, non-listening system-Python process this session didn't
+start — `curl` got connection refused. Per "leave pre-existing processes alone," did NOT
+kill it: ran the throwaway backend on 8010 instead, temporarily repointed
+`vite.config.js`'s proxy targets at 8010, and reverted that file byte-for-byte (`git
+diff` confirmed empty) once verification finished. A raw-CDP driver (`fetch`+`WebSocket`,
+no puppeteer-core/playwright available) drove headless Chrome: loaded `ManageInventory`,
+clicked Debug, stepped through all 8 steps — the Tables panel's summary
+(name/operation/rows-affected) and full row grid matched the hand-derivation EXACTLY at
+every single step (CREATE: 0 rows; 3×INSERT building up Widget/Gadget/Gizmo; first
+UPDATE: Widget→13, Gadget→5, Gizmo untouched, 2 rows affected; second UPDATE: Gadget
+price→23, Gizmo price→13, Widget untouched, 2 rows affected; DELETE: exactly Widget(13,
+10)/Gizmo(15,13) left, 1 row affected). Flowchart SVG rendered (`#flowchart-1`), Advisor
+panel showed the expected magic-number findings, Variable Timeline showed its correct
+empty state, and toggling Day/Night produced zero new console errors in either theme.
+**Zero console errors across the entire session.**
+
+**Cleanup**: 5 test rows this session's own live verification wrote to
+`backend/data/debug_history.db` were deleted by id afterward, restored to the
+established baseline (max id 94, 12 rows). Every process this session launched
+(throwaway backend on 8010, Vite on 5173, headless Chrome with `--remote-debugging-port
+9333`) was tracked and killed individually by its own exact PID; the pre-existing,
+non-listening process holding port 8000 was left completely untouched, as instructed.

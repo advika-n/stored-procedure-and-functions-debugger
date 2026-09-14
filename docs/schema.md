@@ -24,8 +24,9 @@ Shape (camelCase, as sent over the wire):
   cursor?:   { name, rowIndex, currentRow, hasMore },
   error?:    { condition, message, handler },
   returnValue?: { value, type },                   // FunctionNode final RETURN only
-  call?:     { procedureName, depth, stack }        // only for steps INSIDE a called procedure/function
-}
+  call?:     { procedureName, depth, stack },       // only for steps INSIDE a called procedure/function
+  table?:    { name, operation, columns, rowsAffected, row, rows }  // CreateTableStatement/
+}                                                    // InsertStatement/UpdateStatement/DeleteStatement only
 ```
 (`variables` entry shape is built by `_snapshot_variables()`.)
 
@@ -37,6 +38,17 @@ first (`stack[-1] == procedureName`, `len(stack) == depth`). `procedureName` kee
 name (chosen when only procedures could be invoked this way) even though it may now hold
 a function's name — a deliberate non-rename, not an oversight; see `docs/features.md`'s
 "Function calls in expressions" section for why.
+
+`table` is present only on a `CreateTableStatement`/`InsertStatement`/`UpdateStatement`/
+`DeleteStatement` step (a genuinely new field, added for user-created tables — see
+`docs/features.md`'s section of the same name for why no existing field fit):
+`operation` is `"CREATE" | "INSERT" | "UPDATE" | "DELETE"`; `columns` is the table's
+column names in CREATE-TABLE-declared order; `rowsAffected` is 0 for CREATE, 1 for a
+successful INSERT, or the matched-row count for UPDATE/DELETE (0 if a handled
+DIVISION_BY_ZERO made the statement a no-op); `row` is the just-inserted row (INSERT
+only, else `null`); `rows` is the table's FULL current row snapshot right after this
+operation (not a diff — mirrors `variables`' own "always current, not just what
+changed" convention).
 
 ## Performance: `/debug` must stay under 2s
 
@@ -51,6 +63,7 @@ phase since that has touched the interpreter has re-measured in-process
 | Function calls in expressions | `CheckoutTotal`; 5-level self-recursive `Fact` | 0.607ms; 0.478ms |
 | CASE statement | `ClassifyOrder` (both CASE forms) | 0.407ms |
 | LOOP/LEAVE | `FindPairSum` (58 steps, nested labeled loops) | 0.532ms (200-run avg) |
+| User-created tables (CREATE TABLE/INSERT/UPDATE/DELETE) | `ManageInventory` (8 steps, 1 table, 3 rows, 2 UPDATEs, 1 DELETE); all 18 samples | 0.462ms; 8.3ms combined |
 
 No measurable overhead from any of these phases. Re-time via the live-server approach
 (loop the sample list, hit `/debug`, measure wall time) if the interpreter, cursor

@@ -22,6 +22,7 @@ Supported grammar (informal, keywords in CAPS are literal tokens):
                     | set_stmt | if_stmt | while_stmt | case_stmt | return_stmt
                     | open_cursor_stmt | fetch_cursor_stmt | close_cursor_stmt
                     | call_stmt | loop_stmt | leave_stmt
+                    | create_table_stmt | insert_stmt | update_stmt | delete_stmt
 
     declare_stmt        := DECLARE IDENT IDENT (DEFAULT expr)? ';'
     declare_cursor_stmt := DECLARE IDENT CURSOR FOR <raw tokens up to ';'> ';'
@@ -43,12 +44,20 @@ Supported grammar (informal, keywords in CAPS are literal tokens):
     loop_stmt         := (IDENT ':')? LOOP statement* END LOOP IDENT? ';'
     leave_stmt        := LEAVE IDENT? ';'
 
+    create_table_stmt := CREATE TABLE IDENT '(' column_def (',' column_def)* ')' ';'
+    column_def         := IDENT IDENT (NOT NULL | PRIMARY KEY)*
+    insert_stmt        := INSERT INTO IDENT ('(' IDENT (',' IDENT)* ')')?
+                            VALUES '(' expr (',' expr)* ')' ';'
+    update_stmt        := UPDATE IDENT SET IDENT '=' expr (',' IDENT '=' expr)*
+                            (WHERE expr)? ';'
+    delete_stmt        := DELETE FROM IDENT (WHERE expr)? ';'
+
     expr         := comparison
     comparison   := term (('>' | '<' | '=' | '!=') term)*
     term         := factor (('+' | '-') factor)*
     factor       := unary (('*' | '/') unary)*
     unary        := '-' unary | primary
-    primary      := NUMBER | STRING | function_call_expr
+    primary      := NUMBER | STRING | NULL | function_call_expr
                      | IDENT ('%' (FOUND | NOTFOUND))?
                      | '(' expr ')'
     function_call_expr := IDENT '(' (expr (',' expr)*)? ')'
@@ -302,6 +311,73 @@ how a LEAVE actually unwinds to the correct enclosing LOOP (including
 across nested loops), how loop-label scope is isolated across a CALL/
 function-call boundary, and the step-trace shape this reuses from WHILE.
 
+-- User-created tables (CREATE TABLE / INSERT / UPDATE / DELETE) ----------
+
+Four new statement types, all parseable anywhere any other statement is
+(inside IF/WHILE/CASE/LOOP bodies, a handler's action, ...), exactly like
+every other statement type in this grammar:
+
+  ``CREATE TABLE name (col TYPE [constraint]*, ...);``
+  ``INSERT INTO name [(col, ...)] VALUES (expr, ...);``
+  ``UPDATE name SET col = expr [, col = expr]* [WHERE expr];``
+  ``DELETE FROM name [WHERE expr];``
+
+A column definition is `IDENT IDENT` -- name then TYPE -- exactly the same
+shape a DECLARE's `name TYPE` or a procedure/function parameter's `name
+TYPE` already is: TYPE is a bare identifier this grammar never validates
+against a fixed set (see "Variables" above and app.interpreter's module
+docstring's "value <-> debugger type name" section) -- it's advisory
+documentation, not enforced. Zero or more constraints follow, in either
+order, each spelled as two keywords: `NOT NULL` and `PRIMARY KEY`.
+app.interpreter is what actually enforces them (a NULL value for a
+NOT NULL/PRIMARY KEY column, or a duplicate value in a PRIMARY KEY
+column, is a clear InterpreterError raised at INSERT/UPDATE time -- see
+its own "User-created tables" section) -- the parser only records which
+constraints a column was given.
+
+INSERT's column list is optional; when omitted, `values` are bound
+positionally to every column of the table **in the order CREATE TABLE
+declared them** (app.interpreter is what actually knows that order, by
+looking the table up at INSERT time -- the parser has no schema to
+consult and doesn't need one). `NULL` is a new primary-expression literal
+(`primary` above), usable anywhere any other literal is -- most usefully
+as an explicit INSERT value for a column with no CREATE TABLE-level
+default -- evaluating to the same Python `None` a DECLAREd-but-unset
+variable already does (see `NullLiteral` in app.interpreter's `_evaluate`/
+`render_expr`).
+
+UPDATE's `SET col = expr, ...` is a **different grammar from the existing
+top-level `SET` statement** (`set_stmt` above, a single bare-variable
+assignment) despite reusing the same SET keyword -- parsed by a dedicated
+method (`_parse_update`), not `_parse_set`, since UPDATE's list can have
+several comma-separated column assignments and is always prefixed by a
+table name. WHERE (already a reserved keyword, previously only ever
+captured verbatim inside a cursor's raw embedded SELECT text -- see
+"Cursors" below) is genuinely parsed here as an ordinary `expr` -- the
+exact same expression grammar an IF/WHILE condition already uses, no new
+expression syntax (no AND/OR chaining; a WHERE here is one comparison,
+same limit an IF/WHILE condition already has). See app.interpreter's own
+section for how a WHERE's column references are resolved against the
+matching row.
+
+**Top-level dispatch note**: `CREATE` was, before this, only ever the
+first token of a `CREATE FUNCTION`/`CREATE PROCEDURE` definition (see
+"Procedures: two forms" and "CALL and multi-procedure sources" above),
+so `parse()`'s own top-level dispatch used to treat ANY leading `CREATE`
+as the start of a chained-definitions source. `CREATE TABLE` breaks that
+assumption -- it's an ordinary *statement*, not a top-level definition,
+and can legally be the very first line of a bare/legacy procedure body
+with no wrapper at all. `parse()` now peeks a second token ahead before
+committing to the definition-chain path: only `CREATE PROCEDURE`/`CREATE
+FUNCTION` specifically routes there; a leading `CREATE TABLE` (or any
+other `CREATE ...`) falls through to the ordinary bare statement-list
+grammar, where `_parse_statement`'s own `CREATE TABLE` lookahead handles
+it as a normal statement. `CREATE TABLE` is NOT itself a chainable
+top-level definition (there's no "CALL a table" concept) -- it only ever
+appears as a statement inside a procedure/function body or a bare
+statement list, never as a sibling of a `CREATE PROCEDURE`/`CREATE
+FUNCTION` definition chain.
+
 -- Cursors -----------------------------------------------------------------
 
 A cursor declaration's embedded SELECT is *not* parsed into its own AST:
@@ -398,14 +474,17 @@ class Parser:
 
     def _peek_ahead_is(self, type_: str, value: str | None = None) -> bool:
         """Like `_check`, but looks one token past the current position
-        without consuming anything -- used only to tell a loop label
-        (`IDENT ':'`) apart from every other statement, which all start
-        with a plain KEYWORD (see the module docstring's "LOOP / LEAVE"
-        section)."""
+        without consuming anything -- used to tell a loop label (`IDENT
+        ':'`) apart from every other statement (see the module
+        docstring's "LOOP / LEAVE" section), and to tell a `CREATE
+        TABLE` statement apart from a `CREATE PROCEDURE`/`CREATE
+        FUNCTION` definition (see "User-created tables" below). `value`
+        is compared case-insensitively, same as `_check`, since a
+        KEYWORD's own case never matters in this grammar."""
         token = self.tokens[self.pos + 1] if self.pos + 1 < len(self.tokens) else None
         if token is None or token["type"] != type_:
             return False
-        if value is not None and token["value"] != value:
+        if value is not None and token["value"].upper() != value:
             return False
         return True
 
@@ -553,6 +632,14 @@ class Parser:
             return self._parse_loop(label=None)
         if self._check("KEYWORD", "LEAVE"):
             return self._parse_leave()
+        if self._check("KEYWORD", "CREATE") and self._peek_ahead_is("KEYWORD", "TABLE"):
+            return self._parse_create_table()
+        if self._check("KEYWORD", "INSERT"):
+            return self._parse_insert()
+        if self._check("KEYWORD", "UPDATE"):
+            return self._parse_update()
+        if self._check("KEYWORD", "DELETE"):
+            return self._parse_delete()
         if self._check("IDENTIFIER") and self._peek_ahead_is("PUNCTUATION", ":"):
             # `label: LOOP ...` -- see the module docstring's "LOOP /
             # LEAVE" section for why an IDENTIFIER immediately followed
@@ -565,7 +652,7 @@ class Parser:
 
         raise self._error(
             "Expected DECLARE, SET, IF, WHILE, CASE, RETURN, OPEN, FETCH, CLOSE, CALL, LOOP, "
-            "or LEAVE",
+            "LEAVE, CREATE TABLE, INSERT, UPDATE, or DELETE",
             token,
         )
 
@@ -858,6 +945,143 @@ class Parser:
         self._expect("PUNCTUATION", ";")
         return {"type": "LeaveStatement", "label": label, "line": start["line"]}
 
+    # -- user-created tables (CREATE TABLE / INSERT / UPDATE / DELETE) ------
+    # See the module docstring's "User-created tables" section for the full
+    # grammar/design; app.interpreter's own section of the same name for
+    # how each of these actually executes (constraint enforcement, WHERE
+    # evaluation, the DebugStep `table` field).
+
+    def _parse_create_table(self) -> dict:
+        start = self._keyword("CREATE")
+        self._keyword("TABLE")
+        name_token = self._expect("IDENTIFIER")
+
+        self._expect("PUNCTUATION", "(")
+        columns = [self._parse_column_def()]
+        while self._match("PUNCTUATION", ","):
+            columns.append(self._parse_column_def())
+        self._expect("PUNCTUATION", ")")
+        self._expect("PUNCTUATION", ";")
+
+        return {
+            "type": "CreateTableStatement",
+            "name": name_token["value"],
+            "columns": columns,
+            "line": start["line"],
+        }
+
+    def _parse_column_def(self) -> dict:
+        """`IDENT IDENT (NOT NULL | PRIMARY KEY)*` -- name then TYPE (an
+        unvalidated bare identifier, exactly like a DECLARE's own `name
+        TYPE` -- see the module docstring), followed by zero or more
+        constraints in either order. Each constraint is two keywords, not
+        one -- `NOT` alone or `PRIMARY` alone is a ParserError, matching
+        this grammar's "structural problems raise immediately" convention
+        used everywhere else (e.g. `_parse_declare_handler`'s NOT_FOUND/
+        DIVISION_BY_ZERO check)."""
+        name_token = self._expect("IDENTIFIER")
+        type_token = self._expect("IDENTIFIER")
+        not_null = False
+        primary_key = False
+        while True:
+            if self._match("KEYWORD", "NOT"):
+                self._keyword("NULL")
+                not_null = True
+                continue
+            if self._match("KEYWORD", "PRIMARY"):
+                self._keyword("KEY")
+                primary_key = True
+                continue
+            break
+        return {
+            "name": name_token["value"],
+            "col_type": type_token["value"],
+            "not_null": not_null,
+            "primary_key": primary_key,
+        }
+
+    def _parse_insert(self) -> dict:
+        start = self._keyword("INSERT")
+        self._keyword("INTO")
+        name_token = self._expect("IDENTIFIER")
+
+        # Optional column list -- None (rather than "every column") is
+        # what app.interpreter reads as "bind positionally to the
+        # table's own CREATE-TABLE-declared column order", since the
+        # parser has no schema to resolve that against itself.
+        columns: list[str] | None = None
+        if self._match("PUNCTUATION", "("):
+            columns = [self._expect("IDENTIFIER")["value"]]
+            while self._match("PUNCTUATION", ","):
+                columns.append(self._expect("IDENTIFIER")["value"])
+            self._expect("PUNCTUATION", ")")
+
+        self._keyword("VALUES")
+        self._expect("PUNCTUATION", "(")
+        values = [self._parse_expr()]
+        while self._match("PUNCTUATION", ","):
+            values.append(self._parse_expr())
+        self._expect("PUNCTUATION", ")")
+        self._expect("PUNCTUATION", ";")
+
+        return {
+            "type": "InsertStatement",
+            "table": name_token["value"],
+            "columns": columns,
+            "values": values,
+            "line": start["line"],
+        }
+
+    def _parse_update(self) -> dict:
+        """`UPDATE name SET col = expr (',' col = expr)* (WHERE expr)? ';'`
+        -- a DIFFERENT grammar from the existing top-level `set_stmt`
+        (a single bare-variable assignment) despite reusing the same SET
+        keyword; see the module docstring for why this needed its own
+        parsing method rather than reusing `_parse_set`."""
+        start = self._keyword("UPDATE")
+        name_token = self._expect("IDENTIFIER")
+        self._keyword("SET")
+
+        assignments = [self._parse_update_assignment()]
+        while self._match("PUNCTUATION", ","):
+            assignments.append(self._parse_update_assignment())
+
+        where = None
+        if self._match("KEYWORD", "WHERE"):
+            where = self._parse_expr()
+        self._expect("PUNCTUATION", ";")
+
+        return {
+            "type": "UpdateStatement",
+            "table": name_token["value"],
+            "assignments": assignments,
+            "where": where,
+            "line": start["line"],
+        }
+
+    def _parse_update_assignment(self) -> dict:
+        column_token = self._expect("IDENTIFIER")
+        self._expect("OPERATOR", "=")
+        value = self._parse_expr()
+        return {"column": column_token["value"], "value": value}
+
+    def _parse_delete(self) -> dict:
+        start = self._keyword("DELETE")
+        self._keyword("FROM")
+        name_token = self._expect("IDENTIFIER")
+
+        where = None
+        if self._match("KEYWORD", "WHERE"):
+            where = self._parse_expr()
+        self._expect("PUNCTUATION", ";")
+
+        return {
+            "type": "DeleteStatement",
+            "table": name_token["value"],
+            "where": where,
+            "line": start["line"],
+        }
+
     # -- expressions (precedence climbing) -----------------------------------
 
     def _parse_expr(self) -> dict:
@@ -944,6 +1168,15 @@ class Parser:
                 "line": token["line"],
             }
 
+        if token["type"] == "KEYWORD" and token["value"].upper() == "NULL":
+            # A new primary-expression literal (see the module
+            # docstring's "User-created tables" section) -- most useful
+            # as an explicit INSERT value, but valid anywhere any other
+            # literal is; evaluates to Python `None`, same as a
+            # DECLAREd-but-unset variable already does.
+            self._advance()
+            return {"type": "NullLiteral", "line": token["line"]}
+
         if token["type"] == "IDENTIFIER":
             self._advance()
             # name(...) -- a function call used as an expression (see
@@ -974,7 +1207,7 @@ class Parser:
             self._expect("PUNCTUATION", ")")
             return expr
 
-        raise self._error("Expected a number, string, identifier, or '('", token)
+        raise self._error("Expected a number, string, NULL, identifier, or '('", token)
 
     def _parse_function_call_expr(self, name_token: dict) -> dict:
         """`name(arg1, arg2, ...)` as an expression -- see the module
@@ -1020,6 +1253,23 @@ def _render_raw_query(tokens: list[dict]) -> str:
         else:
             parts.append(token["value"])
     return " ".join(parts)
+
+
+def _is_definition_start(parser: Parser) -> bool:
+    """Whether the parser is sitting on the start of a chainable
+    `CREATE PROCEDURE`/`CREATE FUNCTION` definition -- see the module
+    docstring's "User-created tables" section's "Top-level dispatch
+    note" for why this is no longer just "peek at a bare CREATE": a
+    `CREATE TABLE` statement (or any other `CREATE ...`) must fall
+    through to the ordinary bare statement-list grammar instead."""
+    if not parser._check("KEYWORD", "CREATE"):
+        return False
+    following = parser.tokens[parser.pos + 1] if parser.pos + 1 < len(parser.tokens) else None
+    return (
+        following is not None
+        and following["type"] == "KEYWORD"
+        and following["value"].upper() in ("PROCEDURE", "FUNCTION")
+    )
 
 
 def _parse_one_definition(parser: Parser) -> dict:
@@ -1081,7 +1331,19 @@ def parse(tokens: list[dict]) -> dict:
             ``PROCEDURE``.
     """
     parser = Parser(tokens)
-    if parser._check("KEYWORD", "CREATE"):
+    if _is_definition_start(parser):
+        # Only the FIRST token decides whether this source is a
+        # definition-chain at all (vs. falling through to the ordinary
+        # bare statement-list grammar below, where a `CREATE TABLE`
+        # dispatches as an ordinary statement instead -- see the module
+        # docstring's "User-created tables" section). Once we're
+        # genuinely inside a chain, every SUBSEQUENT leading `CREATE`
+        # still unconditionally means "another PROCEDURE/FUNCTION
+        # definition follows" -- `_parse_one_definition` itself raises a
+        # clear error otherwise (e.g. a stray `CREATE TABLE ...;` between
+        # two chained definitions, which is not supported syntax -- see
+        # that same docstring section) rather than silently stopping the
+        # chain and leaving unparsed tokens behind.
         definitions = [_parse_one_definition(parser)]
         while parser._check("KEYWORD", "CREATE"):
             definitions.append(_parse_one_definition(parser))

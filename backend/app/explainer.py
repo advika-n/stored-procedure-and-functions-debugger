@@ -113,6 +113,13 @@ def _build_prompt(step: dict, previous_variables: dict | None) -> str:
             row_desc = "no current row yet"
         lines.append(f"Cursor `{cursor.get('name')}` state: {row_desc} (hasMore={cursor.get('hasMore')}).")
 
+    table = step.get("table")
+    if table:
+        lines.append(
+            f"Table `{table.get('name')}` operation: {table.get('operation')}, "
+            f"{table.get('rowsAffected')} row(s) affected. Current rows: {table.get('rows')!r}."
+        )
+
     error = step.get("error")
     if error:
         handler = error.get("handler")
@@ -211,6 +218,13 @@ def _build_ask_prompt(code: str, step: dict, question: str) -> str:
     lines.append("Current variable state:")
     for name, entry in (step.get("variables") or {}).items():
         lines.append(f"  {name} = {entry.get('value')!r} ({entry.get('type')})")
+
+    table = step.get("table")
+    if table:
+        lines.append(
+            f"Table `{table.get('name')}` operation: {table.get('operation')}, "
+            f"{table.get('rowsAffected')} row(s) affected. Current rows: {table.get('rows')!r}."
+        )
 
     lines.append("")
     lines.append(f"Question: {question}")
@@ -340,6 +354,25 @@ def generate_template_explanation(step: dict, previous_variables: dict | None) -
         if path == "else":
             return f"Evaluated {condition_text} against each WHEN in order; none matched, so the ELSE branch ran."
         return f"Evaluated {condition_text} against each WHEN in order; none matched, and there was no ELSE branch to run."
+
+    if node_type == "CreateTableStatement":
+        table = step.get("table") or {}
+        columns = ", ".join(table.get("columns") or [])
+        return f"Created table `{table.get('name')}` with columns {columns}."
+
+    if node_type == "InsertStatement":
+        table = step.get("table") or {}
+        row = table.get("row") or {}
+        row_desc = ", ".join(f"{k}={v!r}" for k, v in row.items())
+        return f"Inserted a new row into `{table.get('name')}` ({row_desc})."
+
+    if node_type == "UpdateStatement":
+        table = step.get("table") or {}
+        return f"Updated {table.get('rowsAffected', 0)} row(s) in `{table.get('name')}`."
+
+    if node_type == "DeleteStatement":
+        table = step.get("table") or {}
+        return f"Deleted {table.get('rowsAffected', 0)} row(s) from `{table.get('name')}`."
 
     return f"Executed line {step.get('line')}: `{step.get('statementText', '')}`."
 

@@ -32,20 +32,24 @@ Documentation (5), Innovation (5).
   (plain dicts) → `interpreter.py` (tree-walking) → a `DebugStep` trace — the central
   wire contract every frontend feature reads; full shape in `docs/schema.md`.
 - **Execution is simulated, not a real DB engine** — the interpreter evaluates
-  DECLARE/SET/IF/WHILE/CASE/LOOP/cursors/handlers itself; only cursor `SELECT` queries
-  hit real SQLite, against a small fixed auto-seeded dataset (`demo_db.py`:
-  `products(name, price)`, 3 rows) — no schema-authoring feature.
+  DECLARE/SET/IF/WHILE/CASE/LOOP/cursors/handlers/CREATE TABLE/INSERT/UPDATE/DELETE
+  itself, entirely in Python; only cursor `SELECT` queries hit real SQLite, against a
+  small fixed auto-seeded dataset (`demo_db.py`: `products(name, price)`, 3 rows). A
+  procedure's own user-created tables (`Interpreter.tables`) are a separate, simulated-
+  only mechanism — never real SQLite, and never queryable from a cursor's SELECT.
 - **SQLite has two unrelated jobs**: `history.py` (on-disk, persists the 50 most recent
   successful `/debug` runs) vs. `demo_db.py` (ephemeral `:memory:` per request, cursor
   queries only).
 
 **Shipped features** (full rationale in `docs/features.md`): Breakpoints +
-Continue/Restart · SQL Anti-Pattern Advisor (`advisor.py`, nine AST checks, rides on
+Continue/Restart · SQL Anti-Pattern Advisor (`advisor.py`, ten AST checks, rides on
 `/debug` as `issues`) · Side-by-Side Run Comparison (`/compare`) · Report export
 (`/debug/report`, PDF/DOCX/TXT) · `CALL` support (procedure-calling-procedure) ·
 Function calls in expressions (`FunctionCallExpr`, reuses `CALL`'s scope isolation) ·
 CASE statement (reuses IF's `branch` field) · LOOP / LEAVE (optionally labeled, reuses
-WHILE's iteration guard + `loop` field).
+WHILE's iteration guard + `loop` field) · User-created tables (CREATE TABLE / INSERT /
+UPDATE / DELETE, simulated in-memory per run, global across a CALL chain like the
+`products` demo table; new `table` DebugStep field, new Tables UI panel).
 
 ### Backend file map (`backend/app/`)
 `tokenizer.py` text→tokens · `parser.py` tokens→AST · `interpreter.py` AST→`DebugStep`s

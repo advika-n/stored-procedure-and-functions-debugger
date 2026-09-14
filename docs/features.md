@@ -194,3 +194,89 @@ New sample **`FindPairSum`** (a labeled LOOP nested inside another labeled LOOP)
 exercises both an unlabeled `LEAVE;` (breaks only the innermost loop) and a labeled
 `LEAVE outer;` fired from inside the inner loop (jumps straight past both loops at once)
 — see `backend/app/tests/test_loop_statement.py`.
+
+## User-created tables (CREATE TABLE / INSERT / UPDATE / DELETE)
+
+Added in a later phase than LOOP/LEAVE — the biggest single-phase change to the
+project's scope, since before this the app had exactly one table (`products`, fixed,
+read-only, cursor-only). Four new statement types (`CreateTableStatement`,
+`InsertStatement`, `UpdateStatement`, `DeleteStatement`), all parseable anywhere any
+other statement is. A column definition is `name TYPE [NOT NULL] [PRIMARY KEY]` — `TYPE`
+is never validated against a fixed set, matching the exact same "advisory, unenforced"
+treatment a DECLARE's own `var_type` already gets, so no new type system was invented
+for this. `NOT NULL`/`PRIMARY KEY` ARE enforced at runtime (`Interpreter.
+_validate_row_constraints`): a NULL value for either is a clear InterpreterError, and a
+PRIMARY KEY value must stay unique across the table (checked by linear scan — this
+grammar's tables are course-project-scale, not something needing an index).
+
+**Deliberately simulated, not a second real database** — per this project's own
+"execution is simulated" convention (see CLAUDE.md §2), a table's rows are a plain
+Python `{"columns": [...], "rows": [{col: value, ...}, ...]}`, kept in `Interpreter.
+tables`, entirely separate from both `self.scope` (not SQL variables) and the real
+`sqlite3.Connection` cursors query (`self._db` — still only ever the fixed `products`
+demo table; a user-created table is never queryable from a cursor's embedded SELECT,
+and vice versa — the two mechanisms don't talk to each other at all). A WHERE clause
+(UPDATE/DELETE, both optional — omitted means "every row") is evaluated by
+`_evaluate_with_row`, a thin wrapper that layers a row's own column values on top of the
+current scope and calls the *exact same* `_evaluate` an IF/WHILE condition already uses
+— reused, not reimplemented, per this phase's own instruction. This is also what lets a
+WHERE/SET expression reference a scope variable and a column in the same expression
+(`WHERE price > minPrice`).
+
+**Scope: global for the whole run, never isolated per CALL/function-call frame** —
+checked against the existing `products`/`self._db` convention first (never swapped
+around a callee) rather than inventing new semantics: `self.tables` follows the exact
+same rule, so a table one procedure in a CALL chain creates is immediately visible to
+every other procedure in that chain, and (like every other run-scoped state in this
+interpreter) resets to empty at the start of the next run.
+
+**Step-trace: a genuine new DebugStep field, not force-fit into an existing one** — every
+existing field was checked and ruled out first (see `docs/schema.md` for the `table`
+field's own shape and why `variables`/`cursor` don't fit): `variables` is scope-only
+(stuffing table rows in there would also break Variable Timeline/report export, which
+assume every entry is one scalar), and `cursor` describes a read-only SELECT cursor's
+single buffered row, an incompatible shape for a whole table's row list. `table` is
+present only on a CREATE TABLE/INSERT/UPDATE/DELETE step, carrying a FULL current row
+snapshot (not a diff) — "table mutations visible the same way variable mutations already
+are" means the table's current state is always fully visible on the step that touched
+it, mirroring how `variables` itself always shows every variable's current value.
+
+**Cross-cutting fixes needed, same shape every prior phase's found**: `frontend/src/
+cfg.js` needed `renderStatementHeader`/`renderExpr` cases (a `NullLiteral` — the new INSERT-
+value literal, evaluating to Python `None` — and the four new statement types); no
+`emitBlock` change was needed since none of the four branch or loop, so they fall
+straight through to the existing plain-rect-node case every non-branching statement
+already uses. `backend/app/advisor.py` needed `_statement_exprs` cases (InsertStatement's
+`values`, UpdateStatement's `assignments`/`where`, DeleteStatement's `where`) so every
+check built on top of it (magic-number, unused-variable, never-read-variable,
+missing-error-handling's division check) sees inside these statements too, plus one
+genuinely new check: **`missing-where-clause`** (severity "warning") — an UPDATE/DELETE
+with no WHERE touches every row in the table, a classic footgun. `backend/app/
+explainer.py`'s template fallback got new CreateTableStatement/InsertStatement/
+UpdateStatement/DeleteStatement cases, and `_build_prompt`/`_build_ask_prompt` both now
+forward a step's `table` field so Gemini (or its template fallback) describes a table
+mutation specifically rather than generically, matching how `cursor`/`error` are already
+forwarded.
+
+**Predict Mode**: deliberately NOT extended, documented the same way CASE/LOOP/LEAVE
+already are — none of the four statement types change a scope variable (so the
+"predict the next changed variable" check never fires) and none carry a boolean branch
+to guess, so a step involving one simply offers no prediction prompt, exactly like a
+cursor FETCH already doesn't.
+
+**Variable Timeline**: needed zero changes, verified rather than assumed — it's built
+purely from each step's `variables` entries, and a table's rows live in the separate
+`table` field, so a table-only procedure (no DECLAREd scalars at all) correctly renders
+its own "This run never declared any variables" empty state rather than crashing or
+showing garbage (confirmed live against `ManageInventory`, not just read as obviously
+true).
+
+New sample **`ManageInventory`** exercises all four statement types together against
+one table — restocks low-quantity rows (UPDATE), discounts high-priced ones (a second,
+independent UPDATE), then discontinues one product by id (DELETE) — with the final row
+state hand-derived and cross-checked against a real interpreter run (see `backend/app/
+tests/test_table_crud.py` and `frontend/src/testCaseExpectations.js`, which gained an
+additive, optional `tables: { name: [row, ...] }` field alongside `variables`/
+`returnValue` for exactly this — checked by `TestCaseRunner.jsx`'s `findFinalTableState`
+against the LAST step whose own `table.name` matches, not just whatever the very last
+step overall happens to be).

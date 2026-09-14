@@ -17,7 +17,8 @@ Supported keywords (case-insensitive):
     CURSOR, FOR, OPEN, FETCH, INTO, CLOSE, SELECT, FROM, WHERE,
     FOUND, NOTFOUND, CONTINUE, HANDLER, NOT_FOUND, DIVISION_BY_ZERO,
     CREATE, FUNCTION, RETURNS, RETURN, PROCEDURE, INOUT, CALL, CASE, WHEN,
-    LOOP, LEAVE
+    LOOP, LEAVE, TABLE, INSERT, VALUES, UPDATE, DELETE, PRIMARY, KEY, NOT,
+    NULL
 
 Supported operators:
     +  -  *  /  >  <  =  !=
@@ -102,6 +103,24 @@ KEYWORDS = {
     # `label: LOOP ... END LOOP [label];` block, exited only via LEAVE.
     "LOOP",
     "LEAVE",
+    # -- user-created tables: CREATE TABLE / INSERT / UPDATE / DELETE
+    # (see app.parser / app.interpreter) -- TABLE (CREATE TABLE ...) is
+    # distinct from PROCEDURE/FUNCTION above; INTO/FROM/WHERE/SET are all
+    # already keywords from earlier phases and are reused as-is (SET's
+    # existing single-variable-assignment grammar is untouched -- UPDATE's
+    # own `SET col = expr, ...` list is parsed by a dedicated method, not
+    # `_parse_set`). NOT/NULL back a column's `NOT NULL` constraint (and a
+    # standalone NULL literal in an expression, e.g. an INSERT value left
+    # deliberately unset); PRIMARY/KEY back `PRIMARY KEY`.
+    "TABLE",
+    "INSERT",
+    "VALUES",
+    "UPDATE",
+    "DELETE",
+    "PRIMARY",
+    "KEY",
+    "NOT",
+    "NULL",
 }
 
 # Order matters: longer/more-specific patterns must come before shorter

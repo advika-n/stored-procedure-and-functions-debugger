@@ -513,6 +513,15 @@ function DebuggerPage() {
     // predict at all, so neither fits this Then/Else widget's own shape
     // any better than CASE does -- checked and excluded on purpose, not
     // silently missed, same as CASE.
+    //
+    // Same non-extension for CreateTableStatement/InsertStatement/
+    // UpdateStatement/DeleteStatement (see backend/app/interpreter.py's
+    // "User-created tables" section, added in a later phase still):
+    // none of these change a scope variable (so the `changedEntry`
+    // check above never fires for one) and none carry a boolean branch
+    // to guess -- their own mutation is instead visible in the Tables
+    // panel once the step is revealed, same as a cursor's FETCH already
+    // isn't Predict-Mode-quizzable either.
     return null
   }, [quizMode, hasSteps, isLastStep, steps, currentStepIndex])
 
@@ -1232,6 +1241,56 @@ function DebuggerPage() {
                   </tr>
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {hasSteps && currentStep?.table && (
+            <div className="table-state-panel">
+              <h2>Tables</h2>
+              <table className="cursor-table">
+                <thead>
+                  <tr>
+                    <th>Table</th>
+                    <th>Operation</th>
+                    <th>Rows affected</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="cursor-name">{currentStep.table.name}</td>
+                    <td>{currentStep.table.operation}</td>
+                    <td>{currentStep.table.rowsAffected}</td>
+                  </tr>
+                </tbody>
+              </table>
+              {currentStep.table.rows.length > 0 ? (
+                <table className="cursor-table table-state-rows">
+                  <thead>
+                    <tr>
+                      {currentStep.table.columns.map((column) => (
+                        <th key={column}>{column}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentStep.table.rows.map((row, rowIndex) => (
+                      <tr key={rowIndex}>
+                        {currentStep.table.columns.map((column) => (
+                          <td key={column}>
+                            {row[column] === null || row[column] === undefined ? (
+                              <em className="var-empty">—</em>
+                            ) : (
+                              String(row[column])
+                            )}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="placeholder table-state-empty">No rows.</p>
+              )}
             </div>
           )}
 
