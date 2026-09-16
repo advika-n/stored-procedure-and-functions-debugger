@@ -1,0 +1,393 @@
+[
+  {
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE SumUntilLimit()",
+    "stepNumber": 1,
+    "variables": {}
+  },
+  {
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE total NUMBER DEFAULT 0;",
+    "stepNumber": 2,
+    "variables": {
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 4,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE counter NUMBER DEFAULT 1;",
+    "stepNumber": 3,
+    "variables": {
+      "counter": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 5,
+    "loop": {
+      "condition": "total < 15",
+      "iteration": 1,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE total < 15 DO",
+    "stepNumber": 4,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 6,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total + counter;",
+    "stepNumber": 5,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "line": 7,
+    "nodeType": "SetStatement",
+    "statementText": "SET counter = counter + 1;",
+    "stepNumber": 6,
+    "variables": {
+      "counter": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "line": 5,
+    "loop": {
+      "condition": "total < 15",
+      "iteration": 2,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE total < 15 DO",
+    "stepNumber": 7,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "line": 6,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total + counter;",
+    "stepNumber": 8,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      }
+    }
+  },
+  {
+    "line": 7,
+    "nodeType": "SetStatement",
+    "statementText": "SET counter = counter + 1;",
+    "stepNumber": 9,
+    "variables": {
+      "counter": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      }
+    }
+  },
+  {
+    "line": 5,
+    "loop": {
+      "condition": "total < 15",
+      "iteration": 3,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE total < 15 DO",
+    "stepNumber": 10,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      }
+    }
+  },
+  {
+    "line": 6,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total + counter;",
+    "stepNumber": 11,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 7,
+    "nodeType": "SetStatement",
+    "statementText": "SET counter = counter + 1;",
+    "stepNumber": 12,
+    "variables": {
+      "counter": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 5,
+    "loop": {
+      "condition": "total < 15",
+      "iteration": 4,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE total < 15 DO",
+    "stepNumber": 13,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 6,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total + counter;",
+    "stepNumber": 14,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      }
+    }
+  },
+  {
+    "line": 7,
+    "nodeType": "SetStatement",
+    "statementText": "SET counter = counter + 1;",
+    "stepNumber": 15,
+    "variables": {
+      "counter": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      }
+    }
+  },
+  {
+    "line": 5,
+    "loop": {
+      "condition": "total < 15",
+      "iteration": 5,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE total < 15 DO",
+    "stepNumber": 16,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      }
+    }
+  },
+  {
+    "line": 6,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total + counter;",
+    "stepNumber": 17,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      }
+    }
+  },
+  {
+    "line": 7,
+    "nodeType": "SetStatement",
+    "statementText": "SET counter = counter + 1;",
+    "stepNumber": 18,
+    "variables": {
+      "counter": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      }
+    }
+  },
+  {
+    "line": 5,
+    "loop": {
+      "condition": "total < 15",
+      "iteration": 6,
+      "result": false
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE total < 15 DO",
+    "stepNumber": 19,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      }
+    }
+  }
+]

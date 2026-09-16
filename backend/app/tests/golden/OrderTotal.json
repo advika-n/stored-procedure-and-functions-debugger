@@ -1,0 +1,281 @@
+[
+  {
+    "line": 6,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE OrderTotal()",
+    "stepNumber": 1,
+    "variables": {}
+  },
+  {
+    "line": 8,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE price NUMBER DEFAULT 20;",
+    "stepNumber": 2,
+    "variables": {
+      "price": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      }
+    }
+  },
+  {
+    "line": 9,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE quantity NUMBER DEFAULT 6;",
+    "stepNumber": 3,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      },
+      "quantity": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 10,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE taxRate NUMBER DEFAULT 0.08;",
+    "stepNumber": 4,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "taxRate": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0.08
+      }
+    }
+  },
+  {
+    "line": 11,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE subtotal NUMBER DEFAULT 0;",
+    "stepNumber": 5,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "subtotal": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "taxRate": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0.08
+      }
+    }
+  },
+  {
+    "line": 12,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE grandTotal NUMBER DEFAULT 0;",
+    "stepNumber": 6,
+    "variables": {
+      "grandTotal": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "subtotal": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "taxRate": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0.08
+      }
+    }
+  },
+  {
+    "line": 13,
+    "nodeType": "CallStatement",
+    "statementText": "CALL ComputeSubtotal(price, quantity, subtotal);",
+    "stepNumber": 7,
+    "variables": {
+      "grandTotal": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "subtotal": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "taxRate": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0.08
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 1,
+      "procedureName": "ComputeSubtotal",
+      "stack": [
+        "ComputeSubtotal"
+      ]
+    },
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE ComputeSubtotal(IN price NUMBER, IN quantity NUMBER, OUT subtotal NUMBER)",
+    "stepNumber": 8,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "subtotal": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 1,
+      "procedureName": "ComputeSubtotal",
+      "stack": [
+        "ComputeSubtotal"
+      ]
+    },
+    "line": 3,
+    "nodeType": "SetStatement",
+    "statementText": "SET subtotal = price * quantity;",
+    "stepNumber": 9,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "subtotal": {
+        "changed": true,
+        "isOutput": true,
+        "type": "number",
+        "value": 120
+      }
+    }
+  },
+  {
+    "line": 14,
+    "nodeType": "SetStatement",
+    "statementText": "SET grandTotal = subtotal + subtotal * taxRate;",
+    "stepNumber": 10,
+    "variables": {
+      "grandTotal": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 129.6
+      },
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "subtotal": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 120
+      },
+      "taxRate": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0.08
+      }
+    }
+  }
+]

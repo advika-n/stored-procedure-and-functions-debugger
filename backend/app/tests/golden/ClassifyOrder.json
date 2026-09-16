@@ -1,0 +1,413 @@
+[
+  {
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE ClassifyOrder()",
+    "stepNumber": 1,
+    "variables": {}
+  },
+  {
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE quantity NUMBER DEFAULT 12;",
+    "stepNumber": 2,
+    "variables": {
+      "quantity": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 12
+      }
+    }
+  },
+  {
+    "line": 4,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE unitPrice NUMBER DEFAULT 15;",
+    "stepNumber": 3,
+    "variables": {
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 12
+      },
+      "unitPrice": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      }
+    }
+  },
+  {
+    "line": 5,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE tier NUMBER DEFAULT 2;",
+    "stepNumber": 4,
+    "variables": {
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 12
+      },
+      "tier": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      }
+    }
+  },
+  {
+    "line": 6,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE discountRate NUMBER DEFAULT 0;",
+    "stepNumber": 5,
+    "variables": {
+      "discountRate": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 12
+      },
+      "tier": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      }
+    }
+  },
+  {
+    "line": 7,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE total NUMBER DEFAULT 0;",
+    "stepNumber": 6,
+    "variables": {
+      "discountRate": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 12
+      },
+      "tier": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      }
+    }
+  },
+  {
+    "line": 8,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE sizeLabel NUMBER DEFAULT 0;",
+    "stepNumber": 7,
+    "variables": {
+      "discountRate": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 12
+      },
+      "sizeLabel": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "tier": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "tier",
+      "path": "when-1",
+      "result": true
+    },
+    "line": 9,
+    "nodeType": "CaseStatement",
+    "statementText": "CASE tier",
+    "stepNumber": 8,
+    "variables": {
+      "discountRate": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 12
+      },
+      "sizeLabel": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "tier": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      }
+    }
+  },
+  {
+    "line": 13,
+    "nodeType": "SetStatement",
+    "statementText": "SET discountRate = 0.1;",
+    "stepNumber": 9,
+    "variables": {
+      "discountRate": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0.1
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 12
+      },
+      "sizeLabel": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "tier": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      }
+    }
+  },
+  {
+    "line": 19,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = quantity * unitPrice * 1 - discountRate;",
+    "stepNumber": 10,
+    "variables": {
+      "discountRate": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0.1
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 12
+      },
+      "sizeLabel": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "tier": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 162.0
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "CASE",
+      "path": "when-1",
+      "result": true
+    },
+    "line": 20,
+    "nodeType": "CaseStatement",
+    "statementText": "CASE",
+    "stepNumber": 11,
+    "variables": {
+      "discountRate": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0.1
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 12
+      },
+      "sizeLabel": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "tier": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 162.0
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      }
+    }
+  },
+  {
+    "line": 24,
+    "nodeType": "SetStatement",
+    "statementText": "SET sizeLabel = 20;",
+    "stepNumber": 12,
+    "variables": {
+      "discountRate": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0.1
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 12
+      },
+      "sizeLabel": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      },
+      "tier": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 162.0
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      }
+    }
+  }
+]

@@ -1,0 +1,113 @@
+[
+  {
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE GradeClassifier()",
+    "stepNumber": 1,
+    "variables": {}
+  },
+  {
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE score NUMBER DEFAULT 82;",
+    "stepNumber": 2,
+    "variables": {
+      "score": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 82
+      }
+    }
+  },
+  {
+    "line": 4,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE grade NUMBER DEFAULT 0;",
+    "stepNumber": 3,
+    "variables": {
+      "grade": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "score": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 82
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "score > 59",
+      "path": "then",
+      "result": true
+    },
+    "line": 5,
+    "nodeType": "IfStatement",
+    "statementText": "IF score > 59 THEN",
+    "stepNumber": 4,
+    "variables": {
+      "grade": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "score": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 82
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "score > 89",
+      "path": "else",
+      "result": false
+    },
+    "line": 6,
+    "nodeType": "IfStatement",
+    "statementText": "IF score > 89 THEN",
+    "stepNumber": 5,
+    "variables": {
+      "grade": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "score": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 82
+      }
+    }
+  },
+  {
+    "line": 9,
+    "nodeType": "SetStatement",
+    "statementText": "SET grade = 3;",
+    "stepNumber": 6,
+    "variables": {
+      "grade": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "score": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 82
+      }
+    }
+  }
+]

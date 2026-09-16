@@ -1,0 +1,529 @@
+[
+  {
+    "line": 1,
+    "nodeType": "FunctionNode",
+    "statementText": "CREATE FUNCTION FindFirstOverLimit() RETURNS NUMBER",
+    "stepNumber": 1,
+    "variables": {}
+  },
+  {
+    "line": 4,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE limit NUMBER DEFAULT 50;",
+    "stepNumber": 2,
+    "variables": {
+      "limit": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 5,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE value NUMBER DEFAULT 5;",
+    "stepNumber": 3,
+    "variables": {
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      }
+    }
+  },
+  {
+    "line": 6,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE i NUMBER DEFAULT 1;",
+    "stepNumber": 4,
+    "variables": {
+      "i": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      }
+    }
+  },
+  {
+    "line": 7,
+    "loop": {
+      "condition": "i < 20",
+      "iteration": 1,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE i < 20 DO",
+    "stepNumber": 5,
+    "variables": {
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      }
+    }
+  },
+  {
+    "line": 8,
+    "nodeType": "SetStatement",
+    "statementText": "SET value = value * 2;",
+    "stepNumber": 6,
+    "variables": {
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "value > limit",
+      "path": "none",
+      "result": false
+    },
+    "line": 9,
+    "nodeType": "IfStatement",
+    "statementText": "IF value > limit THEN",
+    "stepNumber": 7,
+    "variables": {
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      }
+    }
+  },
+  {
+    "line": 12,
+    "nodeType": "SetStatement",
+    "statementText": "SET i = i + 1;",
+    "stepNumber": 8,
+    "variables": {
+      "i": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      }
+    }
+  },
+  {
+    "line": 7,
+    "loop": {
+      "condition": "i < 20",
+      "iteration": 2,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE i < 20 DO",
+    "stepNumber": 9,
+    "variables": {
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      }
+    }
+  },
+  {
+    "line": 8,
+    "nodeType": "SetStatement",
+    "statementText": "SET value = value * 2;",
+    "stepNumber": 10,
+    "variables": {
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "value > limit",
+      "path": "none",
+      "result": false
+    },
+    "line": 9,
+    "nodeType": "IfStatement",
+    "statementText": "IF value > limit THEN",
+    "stepNumber": 11,
+    "variables": {
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      }
+    }
+  },
+  {
+    "line": 12,
+    "nodeType": "SetStatement",
+    "statementText": "SET i = i + 1;",
+    "stepNumber": 12,
+    "variables": {
+      "i": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      }
+    }
+  },
+  {
+    "line": 7,
+    "loop": {
+      "condition": "i < 20",
+      "iteration": 3,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE i < 20 DO",
+    "stepNumber": 13,
+    "variables": {
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      }
+    }
+  },
+  {
+    "line": 8,
+    "nodeType": "SetStatement",
+    "statementText": "SET value = value * 2;",
+    "stepNumber": 14,
+    "variables": {
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 40
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "value > limit",
+      "path": "none",
+      "result": false
+    },
+    "line": 9,
+    "nodeType": "IfStatement",
+    "statementText": "IF value > limit THEN",
+    "stepNumber": 15,
+    "variables": {
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 40
+      }
+    }
+  },
+  {
+    "line": 12,
+    "nodeType": "SetStatement",
+    "statementText": "SET i = i + 1;",
+    "stepNumber": 16,
+    "variables": {
+      "i": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 40
+      }
+    }
+  },
+  {
+    "line": 7,
+    "loop": {
+      "condition": "i < 20",
+      "iteration": 4,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE i < 20 DO",
+    "stepNumber": 17,
+    "variables": {
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 40
+      }
+    }
+  },
+  {
+    "line": 8,
+    "nodeType": "SetStatement",
+    "statementText": "SET value = value * 2;",
+    "stepNumber": 18,
+    "variables": {
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 80
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "value > limit",
+      "path": "then",
+      "result": true
+    },
+    "line": 9,
+    "nodeType": "IfStatement",
+    "statementText": "IF value > limit THEN",
+    "stepNumber": 19,
+    "variables": {
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 80
+      }
+    }
+  },
+  {
+    "line": 10,
+    "nodeType": "ReturnNode",
+    "returnValue": {
+      "type": "number",
+      "value": 4
+    },
+    "statementText": "RETURN i;",
+    "stepNumber": 20,
+    "variables": {
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "limit": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      },
+      "value": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 80
+      }
+    }
+  }
+]

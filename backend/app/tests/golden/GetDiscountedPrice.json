@@ -1,0 +1,156 @@
+[
+  {
+    "line": 1,
+    "nodeType": "FunctionNode",
+    "statementText": "CREATE FUNCTION GetDiscountedPrice() RETURNS DECIMAL",
+    "stepNumber": 1,
+    "variables": {}
+  },
+  {
+    "line": 4,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE price DECIMAL DEFAULT 200;",
+    "stepNumber": 2,
+    "variables": {
+      "price": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 200
+      }
+    }
+  },
+  {
+    "line": 5,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE quantity INT DEFAULT 10;",
+    "stepNumber": 3,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 200
+      },
+      "quantity": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      }
+    }
+  },
+  {
+    "line": 6,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE total DECIMAL;",
+    "stepNumber": 4,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 200
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "null",
+        "value": null
+      }
+    }
+  },
+  {
+    "line": 7,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = price * quantity;",
+    "stepNumber": 5,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 200
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 2000
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "total > 1000",
+      "path": "then",
+      "result": true
+    },
+    "line": 8,
+    "nodeType": "IfStatement",
+    "statementText": "IF total > 1000 THEN",
+    "stepNumber": 6,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 200
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2000
+      }
+    }
+  },
+  {
+    "line": 9,
+    "nodeType": "ReturnNode",
+    "returnValue": {
+      "type": "number",
+      "value": 1800.0
+    },
+    "statementText": "RETURN total * 0.9;",
+    "stepNumber": 7,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 200
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2000
+      }
+    }
+  }
+]

@@ -1,0 +1,813 @@
+[
+  {
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE TieredPricingCalculator()",
+    "stepNumber": 1,
+    "variables": {}
+  },
+  {
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE units NUMBER DEFAULT 6;",
+    "stepNumber": 2,
+    "variables": {
+      "units": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 4,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE unitPrice NUMBER DEFAULT 0;",
+    "stepNumber": 3,
+    "variables": {
+      "unitPrice": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 5,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE total NUMBER DEFAULT 0;",
+    "stepNumber": 4,
+    "variables": {
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 6,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE counter NUMBER DEFAULT 0;",
+    "stepNumber": 5,
+    "variables": {
+      "counter": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "units > 5",
+      "path": "then",
+      "result": true
+    },
+    "line": 7,
+    "nodeType": "IfStatement",
+    "statementText": "IF units > 5 THEN",
+    "stepNumber": 6,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 8,
+    "nodeType": "SetStatement",
+    "statementText": "SET unitPrice = 8;",
+    "stepNumber": 7,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "unitPrice": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 12,
+    "loop": {
+      "condition": "counter < units",
+      "iteration": 1,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE counter < units DO",
+    "stepNumber": 8,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 13,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total + unitPrice;",
+    "stepNumber": 9,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 14,
+    "nodeType": "SetStatement",
+    "statementText": "SET counter = counter + 1;",
+    "stepNumber": 10,
+    "variables": {
+      "counter": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 12,
+    "loop": {
+      "condition": "counter < units",
+      "iteration": 2,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE counter < units DO",
+    "stepNumber": 11,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 13,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total + unitPrice;",
+    "stepNumber": 12,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 16
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 14,
+    "nodeType": "SetStatement",
+    "statementText": "SET counter = counter + 1;",
+    "stepNumber": 13,
+    "variables": {
+      "counter": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 16
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 12,
+    "loop": {
+      "condition": "counter < units",
+      "iteration": 3,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE counter < units DO",
+    "stepNumber": 14,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 16
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 13,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total + unitPrice;",
+    "stepNumber": 15,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 24
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 14,
+    "nodeType": "SetStatement",
+    "statementText": "SET counter = counter + 1;",
+    "stepNumber": 16,
+    "variables": {
+      "counter": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 24
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 12,
+    "loop": {
+      "condition": "counter < units",
+      "iteration": 4,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE counter < units DO",
+    "stepNumber": 17,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 24
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 13,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total + unitPrice;",
+    "stepNumber": 18,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 32
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 14,
+    "nodeType": "SetStatement",
+    "statementText": "SET counter = counter + 1;",
+    "stepNumber": 19,
+    "variables": {
+      "counter": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 32
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 12,
+    "loop": {
+      "condition": "counter < units",
+      "iteration": 5,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE counter < units DO",
+    "stepNumber": 20,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 32
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 13,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total + unitPrice;",
+    "stepNumber": 21,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 40
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 14,
+    "nodeType": "SetStatement",
+    "statementText": "SET counter = counter + 1;",
+    "stepNumber": 22,
+    "variables": {
+      "counter": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 40
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 12,
+    "loop": {
+      "condition": "counter < units",
+      "iteration": 6,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE counter < units DO",
+    "stepNumber": 23,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 40
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 13,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total + unitPrice;",
+    "stepNumber": 24,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 48
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 14,
+    "nodeType": "SetStatement",
+    "statementText": "SET counter = counter + 1;",
+    "stepNumber": 25,
+    "variables": {
+      "counter": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 48
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 12,
+    "loop": {
+      "condition": "counter < units",
+      "iteration": 7,
+      "result": false
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE counter < units DO",
+    "stepNumber": 26,
+    "variables": {
+      "counter": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 48
+      },
+      "unitPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 8
+      },
+      "units": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  }
+]

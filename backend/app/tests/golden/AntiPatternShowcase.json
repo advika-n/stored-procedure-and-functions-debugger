@@ -1,0 +1,2414 @@
+[
+  {
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE AntiPatternShowcase()",
+    "stepNumber": 1,
+    "variables": {}
+  },
+  {
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE total NUMBER DEFAULT 0;",
+    "stepNumber": 2,
+    "variables": {
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 4,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE count NUMBER DEFAULT 0;",
+    "stepNumber": 3,
+    "variables": {
+      "count": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 5,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE average NUMBER DEFAULT 0;",
+    "stepNumber": 4,
+    "variables": {
+      "average": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 6,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE item_name STRING DEFAULT '';",
+    "stepNumber": 5,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": true,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 7,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE item_price NUMBER DEFAULT 0;",
+    "stepNumber": 6,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 8,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE outer NUMBER DEFAULT 0;",
+    "stepNumber": 7,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "outer": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 9,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE inner NUMBER DEFAULT 0;",
+    "stepNumber": 8,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "inner": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 10,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE bonus NUMBER DEFAULT 0;",
+    "stepNumber": 9,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": null,
+      "hasMore": false,
+      "name": "all_cursor",
+      "rowIndex": 0
+    },
+    "line": 11,
+    "nodeType": "CursorDeclNode",
+    "statementText": "DECLARE all_cursor CURSOR FOR SELECT * FROM products;",
+    "stepNumber": 10,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": null,
+      "hasMore": true,
+      "name": "all_cursor",
+      "rowIndex": 0
+    },
+    "line": 12,
+    "nodeType": "OpenCursorNode",
+    "statementText": "OPEN all_cursor;",
+    "stepNumber": 11,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 13,
+    "loop": {
+      "condition": "all_cursor%FOUND",
+      "iteration": 1,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE all_cursor%FOUND DO",
+    "stepNumber": 12,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": {
+        "name": "Widget",
+        "price": 10
+      },
+      "hasMore": true,
+      "name": "all_cursor",
+      "rowIndex": 0
+    },
+    "line": 14,
+    "nodeType": "FetchCursorNode",
+    "statementText": "FETCH all_cursor INTO item_name, item_price;",
+    "stepNumber": 13,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": true,
+        "isOutput": false,
+        "type": "string",
+        "value": "Widget"
+      },
+      "item_price": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 15,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total + item_price;",
+    "stepNumber": 14,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Widget"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      }
+    }
+  },
+  {
+    "line": 16,
+    "nodeType": "SetStatement",
+    "statementText": "SET count = count + 1;",
+    "stepNumber": 15,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Widget"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      }
+    }
+  },
+  {
+    "line": 13,
+    "loop": {
+      "condition": "all_cursor%FOUND",
+      "iteration": 2,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE all_cursor%FOUND DO",
+    "stepNumber": 16,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Widget"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": {
+        "name": "Gadget",
+        "price": 25
+      },
+      "hasMore": true,
+      "name": "all_cursor",
+      "rowIndex": 1
+    },
+    "line": 14,
+    "nodeType": "FetchCursorNode",
+    "statementText": "FETCH all_cursor INTO item_name, item_price;",
+    "stepNumber": 17,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": true,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gadget"
+      },
+      "item_price": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 25
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      }
+    }
+  },
+  {
+    "line": 15,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total + item_price;",
+    "stepNumber": 18,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gadget"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 25
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 35
+      }
+    }
+  },
+  {
+    "line": 16,
+    "nodeType": "SetStatement",
+    "statementText": "SET count = count + 1;",
+    "stepNumber": 19,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gadget"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 25
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 35
+      }
+    }
+  },
+  {
+    "line": 13,
+    "loop": {
+      "condition": "all_cursor%FOUND",
+      "iteration": 3,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE all_cursor%FOUND DO",
+    "stepNumber": 20,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gadget"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 25
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 35
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": {
+        "name": "Gizmo",
+        "price": 15
+      },
+      "hasMore": false,
+      "name": "all_cursor",
+      "rowIndex": 2
+    },
+    "line": 14,
+    "nodeType": "FetchCursorNode",
+    "statementText": "FETCH all_cursor INTO item_name, item_price;",
+    "stepNumber": 21,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": true,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 35
+      }
+    }
+  },
+  {
+    "line": 15,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total + item_price;",
+    "stepNumber": 22,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 16,
+    "nodeType": "SetStatement",
+    "statementText": "SET count = count + 1;",
+    "stepNumber": 23,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 13,
+    "loop": {
+      "condition": "all_cursor%FOUND",
+      "iteration": 4,
+      "result": false
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE all_cursor%FOUND DO",
+    "stepNumber": 24,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 18,
+    "loop": {
+      "condition": "outer < 3",
+      "iteration": 1,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE outer < 3 DO",
+    "stepNumber": 25,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 19,
+    "loop": {
+      "condition": "inner < 3",
+      "iteration": 1,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE inner < 3 DO",
+    "stepNumber": 26,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 20,
+    "nodeType": "SetStatement",
+    "statementText": "SET bonus = bonus + 100;",
+    "stepNumber": 27,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 100
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 21,
+    "nodeType": "SetStatement",
+    "statementText": "SET inner = inner + 1;",
+    "stepNumber": 28,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 100
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 19,
+    "loop": {
+      "condition": "inner < 3",
+      "iteration": 2,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE inner < 3 DO",
+    "stepNumber": 29,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 100
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 20,
+    "nodeType": "SetStatement",
+    "statementText": "SET bonus = bonus + 100;",
+    "stepNumber": 30,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 200
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 21,
+    "nodeType": "SetStatement",
+    "statementText": "SET inner = inner + 1;",
+    "stepNumber": 31,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 200
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 19,
+    "loop": {
+      "condition": "inner < 3",
+      "iteration": 3,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE inner < 3 DO",
+    "stepNumber": 32,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 200
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 20,
+    "nodeType": "SetStatement",
+    "statementText": "SET bonus = bonus + 100;",
+    "stepNumber": 33,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 300
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 21,
+    "nodeType": "SetStatement",
+    "statementText": "SET inner = inner + 1;",
+    "stepNumber": 34,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 300
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 19,
+    "loop": {
+      "condition": "inner < 3",
+      "iteration": 4,
+      "result": false
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE inner < 3 DO",
+    "stepNumber": 35,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 300
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 23,
+    "nodeType": "SetStatement",
+    "statementText": "SET outer = outer + 1;",
+    "stepNumber": 36,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 300
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 18,
+    "loop": {
+      "condition": "outer < 3",
+      "iteration": 2,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE outer < 3 DO",
+    "stepNumber": 37,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 300
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 19,
+    "loop": {
+      "condition": "inner < 3",
+      "iteration": 1,
+      "result": false
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE inner < 3 DO",
+    "stepNumber": 38,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 300
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 23,
+    "nodeType": "SetStatement",
+    "statementText": "SET outer = outer + 1;",
+    "stepNumber": 39,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 300
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 18,
+    "loop": {
+      "condition": "outer < 3",
+      "iteration": 3,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE outer < 3 DO",
+    "stepNumber": 40,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 300
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 19,
+    "loop": {
+      "condition": "inner < 3",
+      "iteration": 1,
+      "result": false
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE inner < 3 DO",
+    "stepNumber": 41,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 300
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 23,
+    "nodeType": "SetStatement",
+    "statementText": "SET outer = outer + 1;",
+    "stepNumber": 42,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 300
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 18,
+    "loop": {
+      "condition": "outer < 3",
+      "iteration": 4,
+      "result": false
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE outer < 3 DO",
+    "stepNumber": 43,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 300
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 25,
+    "nodeType": "SetStatement",
+    "statementText": "SET bonus = bonus + 100;",
+    "stepNumber": 44,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "bonus": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 400
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 26,
+    "nodeType": "SetStatement",
+    "statementText": "SET average = total / count;",
+    "stepNumber": 45,
+    "variables": {
+      "average": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 16.666666666666668
+      },
+      "bonus": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 400
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "inner": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "outer": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  }
+]

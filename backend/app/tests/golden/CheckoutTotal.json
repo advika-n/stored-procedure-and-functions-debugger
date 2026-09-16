@@ -1,0 +1,318 @@
+[
+  {
+    "line": 6,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE CheckoutTotal()",
+    "stepNumber": 1,
+    "variables": {}
+  },
+  {
+    "line": 8,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE price NUMBER DEFAULT 250;",
+    "stepNumber": 2,
+    "variables": {
+      "price": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 250
+      }
+    }
+  },
+  {
+    "line": 9,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE quantity NUMBER DEFAULT 3;",
+    "stepNumber": 3,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 250
+      },
+      "quantity": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      }
+    }
+  },
+  {
+    "line": 10,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE subtotal NUMBER DEFAULT 0;",
+    "stepNumber": 4,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 250
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "subtotal": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 11,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE finalTotal NUMBER DEFAULT 0;",
+    "stepNumber": 5,
+    "variables": {
+      "finalTotal": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 250
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "subtotal": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 12,
+    "nodeType": "SetStatement",
+    "statementText": "SET subtotal = price * quantity;",
+    "stepNumber": 6,
+    "variables": {
+      "finalTotal": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 250
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "subtotal": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 750
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 1,
+      "procedureName": "ComputeDiscountedPrice",
+      "stack": [
+        "ComputeDiscountedPrice"
+      ]
+    },
+    "line": 1,
+    "nodeType": "FunctionNode",
+    "statementText": "CREATE FUNCTION ComputeDiscountedPrice(price NUMBER, rate NUMBER) RETURNS NUMBER",
+    "stepNumber": 7,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 750
+      },
+      "rate": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0.1
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 1,
+      "procedureName": "ComputeDiscountedPrice",
+      "stack": [
+        "ComputeDiscountedPrice"
+      ]
+    },
+    "line": 3,
+    "nodeType": "ReturnNode",
+    "returnValue": {
+      "type": "number",
+      "value": 675.0
+    },
+    "statementText": "RETURN price - price * rate;",
+    "stepNumber": 8,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 750
+      },
+      "rate": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0.1
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "ComputeDiscountedPrice(subtotal, 0.1) < 700",
+      "path": "then",
+      "result": true
+    },
+    "line": 13,
+    "nodeType": "IfStatement",
+    "statementText": "IF ComputeDiscountedPrice(subtotal, 0.1) < 700 THEN",
+    "stepNumber": 9,
+    "variables": {
+      "finalTotal": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 250
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "subtotal": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 750
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 1,
+      "procedureName": "ComputeDiscountedPrice",
+      "stack": [
+        "ComputeDiscountedPrice"
+      ]
+    },
+    "line": 1,
+    "nodeType": "FunctionNode",
+    "statementText": "CREATE FUNCTION ComputeDiscountedPrice(price NUMBER, rate NUMBER) RETURNS NUMBER",
+    "stepNumber": 10,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 750
+      },
+      "rate": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0.2
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 1,
+      "procedureName": "ComputeDiscountedPrice",
+      "stack": [
+        "ComputeDiscountedPrice"
+      ]
+    },
+    "line": 3,
+    "nodeType": "ReturnNode",
+    "returnValue": {
+      "type": "number",
+      "value": 600.0
+    },
+    "statementText": "RETURN price - price * rate;",
+    "stepNumber": 11,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 750
+      },
+      "rate": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0.2
+      }
+    }
+  },
+  {
+    "line": 14,
+    "nodeType": "SetStatement",
+    "statementText": "SET finalTotal = ComputeDiscountedPrice(subtotal, 0.2);",
+    "stepNumber": 12,
+    "variables": {
+      "finalTotal": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 600.0
+      },
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 250
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "subtotal": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 750
+      }
+    }
+  }
+]

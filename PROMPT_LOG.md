@@ -2025,3 +2025,149 @@ established baseline (max id 94, 12 rows). Every process this session launched
 (throwaway backend on 8010, Vite on 5173, headless Chrome with `--remote-debugging-port
 9333`) was tracked and killed individually by its own exact PID; the pre-existing,
 non-listening process holding port 8000 was left completely untouched, as instructed.
+
+## 21. Testing infrastructure: golden traces, Hypothesis, hand-written grammar edge cases
+
+**Date:** 2026-09-14 · **Not yet committed** (see `HANDOFF.md`)
+
+**Prompt (verbatim):**
+
+> This is the SQL Stored Procedure & Function Debugger project. Before starting, commit the current tree if there's uncommitted work, then work on a clean tree. This phase is testing infrastructure, not a feature — nothing here should change parser/interpreter/frontend behavior. If you find a real bug while writing these tests, stop, flag it clearly, and don't silently fix it as a side effect — report it separately from the testing work.
+>
+> Four things, in this order:
+>
+> 1. Golden-output regression harness (do this first — cheapest, highest immediate value)
+> Formalize the in-process sweep pattern already used in recent phases (Python pipeline + Node cfg.js) into a proper automated regression check: run every sample in samples.js through /debug, save the current step-trace output as a versioned "golden" fixture per sample, and add a test that fails loudly with a diff if any future change alters a sample's trace output. Wire it so it runs as part of the existing pytest suite, not a separate manual script. This is the safety net every future phase should run against.
+>
+> 2. Property-based testing with Hypothesis (Python)
+> Add Hypothesis-based tests targeting the parser/interpreter. Start with two invariants: (a) the interpreter never crashes with an uncaught exception on malformed input — it should always return a structured error, never a stack trace to the user; (b) step-trace length is always ≥ 1 for any successfully parsed procedure. Build this by mutating tokens/values in the existing 17+ sample procedures (swap keywords, corrupt literals, drop semicolons, unbalanced BEGIN/END) rather than generating SQL from scratch — much higher signal-to-effort ratio for this grammar. Report (don't fix) any crash Hypothesis finds; let me decide whether it's worth a follow-up phase.
+>
+> 3. Grammar edge cases by hand
+> Add explicit test cases for: nested cursors, deeply nested loops (check against the existing MAX_LOOP_ITERATIONS/MAX_CALL_DEPTH guards), empty procedure bodies, comments inside SQL string literals, missing semicolons, mismatched BEGIN/END, and a large-loop-count timing check against the 2s NFR (measure for real, like the /debug endpoint timing was measured before — don't assume).
+
+**Tree check**: `git status` was already clean (previous session's "Implemented
+User-created tables" was already committed as HEAD) — no commit was needed before
+starting.
+
+**1. Golden-trace harness.** `backend/app/tests/_frontend_samples.py` (new, not itself a
+test module) loads the real `SAMPLES` array out of `frontend/src/samples.js` via a
+precise regex extraction — deliberately not a full JS parse (no Node dependency at
+pytest time), safe specifically because `code:` is a stable one-per-entry anchor and
+this grammar's own tokenizer never produces a literal backtick, so the first backtick
+after `` code: ` `` is always that entry's own closing one regardless of backticks
+elsewhere in the same entry's `description` (verified: two real descriptions,
+`ProductPriceTotal`'s and `ComputeTax`'s, genuinely contain backticks, and both still
+extracted correctly). `test_golden_traces.py` posts each of the 18 real samples to the
+REAL `/debug` endpoint (`TestClient`, not a bare interpreter call) and diffs the
+resulting `steps` against a checked-in fixture at `backend/app/tests/golden/<name>.json`
+— a missing fixture is a hard failure by design (never silently auto-created, so a new
+future sample can't slip in without a reviewed baseline), and `UPDATE_GOLDENS=1` is the
+one explicit, opt-in path to write/regenerate one. A second test
+(`test_every_sample_has_exactly_one_golden_fixture`) catches the inverse staleness case
+(a fixture left behind for a renamed/removed sample). Verified the harness actually
+catches real divergences, not just trivially passing, by deliberately corrupting a
+fixture value (`CalculateTotal`'s final `total`) and confirming a specific, step-numbered
+failure message naming the exact expected/actual JSON — then restored it via
+`UPDATE_GOLDENS=1`. All 18 fixtures generated fresh against this project's current,
+unmodified pipeline (this phase changes no parser/interpreter/frontend behavior, so
+"current" and "correct" are the same baseline here).
+
+**2. Property-based testing (Hypothesis).** Added `hypothesis==6.168.0` to
+`requirements.txt` (pinned, matching this project's exact-pin convention) and
+`.hypothesis/` to `backend/.gitignore`. `test_property_based.py` mutates the same 18 real
+samples (not from-scratch SQL generation, per the prompt's own explicit "much higher
+signal-to-effort ratio" instruction) via seven pure, index-parameterized operators —
+drop a semicolon, swap a keyword, corrupt a numeric literal, unbalance a BEGIN/END,
+delete/duplicate a character, or truncate the source — each degrading gracefully to "no
+change" when there's nothing of the relevant shape to mutate, composed via one
+`@st.composite` strategy. Two invariants, `@given`+`@settings(max_examples=1000,
+deadline=None)` each (deadline disabled since a mutated WHILE/LOOP can legitimately spin
+up to the real `MAX_LOOP_ITERATIONS`): (a) tokenize→parse→run either succeeds or raises
+one of exactly the three structured error types `app/main.py`'s own `/debug` handler
+already catches (`TokenizerError`/`ParserError`/`InterpreterError`) -- anything else is
+flagged as a crash; (b) a successful run's step count is >= 1, with one EXPLICIT,
+hand-verified carve-out for a bare empty-body procedure (see finding #2 below and
+`test_grammar_edge_cases.py`), so the invariant isn't spuriously falsified by
+already-understood behavior on the very first truncated example.
+
+**Found a real, previously-unknown bug** (reported per the prompt's own explicit
+instruction, not fixed): an exploratory 20,000-iteration direct fuzz run (outside the
+checked-in `@given` budget, just to hunt harder before finalizing) surfaced one genuine
+crash out of 20,000 mutations — a `swap_keyword` mutation on `RecursiveFactorial` (`SET`
+-> `RETURN` inside the recursive branch) eventually propagated an unset `None` OUT
+parameter two call-levels up into an UNMUTATED `SET result = n * sub;`, raising Python's
+raw `TypeError: unsupported operand type(s) for *: 'NoneType' and 'int'`. Reduced BY
+HAND to a minimal, entirely un-mutated 2-line repro with no CALL/recursion/mutation
+needed at all (`DECLARE x NUMBER; SET x = x * 2;` — a DECLAREd variable with no DEFAULT
+starts at `None`, and `Interpreter._evaluate_binary`'s `+ - * /` never guard against
+that), then confirmed directly against the REAL `/debug` endpoint: a raw **500 Internal
+Server Error**, not this app's own `{"stage", "message", "line"}` structured error
+contract every other failure mode holds. Tracked as a minimal, `xfail(strict=True)`
+regression in the new `test_known_bugs.py` (so a future fix flips it loudly, not
+silently) rather than fixed here, and the general Hypothesis test narrowly excludes only
+this EXACT message shape (a regex on `"unsupported operand type(s) for [+-*/]: ...
+NoneType"`, not "every TypeError") so the broad fuzz test keeps doing its real job of
+surfacing genuinely NEW crashes instead of permanently re-reporting this one already-
+known root cause on every run. Full write-up in this phase's own report to the user and
+`HANDOFF.md`'s new "Bugs found this session, NOT fixed" section.
+
+**3. Hand-written grammar edge cases.** `test_grammar_edge_cases.py` (22 tests), every
+number/behavior confirmed by actually running it first, not assumed:
+- **Nested cursors**: an inner cursor's full OPEN/FETCH-loop/CLOSE cycle nested inside
+  each pass of an outer cursor's own loop (genuinely both open at once at points during
+  the run, not just declared in the same procedure) -- hand-derived against the fixed
+  `products` table (outer_total=50, inner_total=120 -- the inner WHERE price>10 subset
+  summed fresh on all 3 outer passes) and cross-checked against a real run; plus a
+  dedicated test confirming CLOSE-then-reOPEN genuinely resets FETCH position rather than
+  resuming.
+- **Deeply nested loops vs. the REAL guards** (not monkeypatched-small ones, unlike
+  `test_loop_statement.py`'s own guard tests): 50 levels of individually-labeled nested
+  LOOPs with one `LEAVE lvl0;` fired from the innermost, confirming the unwind-until-
+  caught mechanism scales past the 2-3 levels every other LOOP/LEAVE test uses; the real
+  `MAX_LOOP_ITERATIONS` (10,000, via a genuinely infinite `WHILE 1 = 1 DO` -- this grammar
+  has no `>=`) and the real `MAX_CALL_DEPTH` (50, via unbounded self-recursion) both
+  confirmed to raise a clean `InterpreterError`, never a Python `RecursionError`.
+- **Empty procedure bodies** -- a second real, hand-verified finding (not a crash,
+  flagged separately, not fixed): a bare/wrapper-less procedure with a genuinely empty
+  body (blank or whitespace-only source) parses and runs successfully with a
+  **zero-length** step trace, unlike a wrapped `CREATE PROCEDURE ... BEGIN END`'s empty
+  body, which still gets its own synthetic entry step (length 1) -- confirmed directly
+  against the real endpoint (`POST /debug` with `code: ""` returns `200 {"steps": []}`)
+  before being written down, and is exactly the carve-out invariant (b) above needed.
+  An empty FUNCTION body still correctly raises "completed without executing a RETURN".
+- **Comments inside SQL string literals** -- this grammar has no comment syntax at all,
+  so these confirm comment-LOOKING text inside an ordinary STRING literal is never
+  mistaken for a real one: both as a plain DECLARE value, and (the more interesting case)
+  inside a cursor's embedded SELECT's own WHERE clause, round-tripped through
+  `_render_raw_query` and handed to a REAL SQLite connection (which DOES understand `--`
+  as a genuine comment outside of a string) -- confirmed the FETCH still finds the
+  correct real row rather than SQLite silently truncating the query at the embedded `--`.
+- **Missing semicolons** / **mismatched BEGIN/END**: parametrized tests across DECLARE/
+  SET/IF/WHILE/CREATE TABLE/INSERT and missing-END/missing-BEGIN/END-WHILE-for-an-IF/
+  END-IF-for-a-WHILE/mismatched-LOOP-label -- all confirmed to raise a clean `ParserError`
+  (never a crash) before being asserted.
+- **Large-loop-count timing, measured for real** (not assumed): a 9,999-iteration WHILE
+  loop (one under the real `MAX_LOOP_ITERATIONS` cap) through the REAL `/debug` endpoint
+  -- HTTP + JSON serialization + `history.save_run` included, not just the bare
+  interpreter call -- produces a 20,001-step trace (1 entry + 1 DECLARE + 10,000
+  condition-checks + 9,999 SET-body-runs, confirmed by direct count, not guessed) and
+  measured at **~617ms** wall-clock, logged in `docs/schema.md`'s own performance table
+  per this project's "re-time and log" convention; the checked-in test asserts a looser
+  1.8s ceiling (not the exact number) so ordinary machine variance doesn't make it
+  flaky, while still meaningfully guarding the real 2s NFR at a scale (300-1000x) no
+  hand-written sample reaches on its own.
+
+**Verification**: backend suite 440 -> **483 passing + 1 xfailed** (+44 new tests across
+the four new test files: 19 golden-trace + 2 property-based + 1 known-bug + 22 grammar-
+edge-case). Full suite runtime ~18-19s (was ~10s before this session -- the added
+Hypothesis budget, 2000 total examples across both invariants, accounts for essentially
+all of the increase; still fast enough to run on every phase going forward). No parser/
+interpreter/frontend source file was touched this session, confirmed by `git status`
+listing only test files, `requirements.txt`, `.gitignore`, and docs (`CLAUDE.md`/
+`HANDOFF.md`/`docs/schema.md`/`PROMPT_LOG.md`) -- exactly this phase's own "nothing here
+should change parser/interpreter/frontend behavior" scope, honored literally, not just in
+spirit. `backend/data/debug_history.db` picked up a handful of stray rows from this
+session's own ad-hoc, outside-pytest hand-verification scripts (which aren't covered by
+`conftest.py`'s per-test DB isolation, since that only applies inside a pytest session)
+-- cleaned up back to the established baseline (max id 94, 12 rows) afterward. No live
+browser verification was needed or performed this session (no frontend changes at all).

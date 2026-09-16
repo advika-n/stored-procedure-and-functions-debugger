@@ -1,0 +1,2295 @@
+[
+  {
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE FindPairSum()",
+    "stepNumber": 1,
+    "variables": {}
+  },
+  {
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE target NUMBER DEFAULT 7;",
+    "stepNumber": 2,
+    "variables": {
+      "target": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 4,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE i NUMBER DEFAULT 1;",
+    "stepNumber": 3,
+    "variables": {
+      "i": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 5,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE j NUMBER DEFAULT 0;",
+    "stepNumber": 4,
+    "variables": {
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 6,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE foundI NUMBER DEFAULT 0;",
+    "stepNumber": 5,
+    "variables": {
+      "foundI": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 7,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE foundJ NUMBER DEFAULT 0;",
+    "stepNumber": 6,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 8,
+    "loop": {
+      "condition": "LOOP outer",
+      "iteration": 1,
+      "result": true
+    },
+    "nodeType": "LoopStatement",
+    "statementText": "outer: LOOP",
+    "stepNumber": 7,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "i > 5",
+      "path": "none",
+      "result": false
+    },
+    "line": 9,
+    "nodeType": "IfStatement",
+    "statementText": "IF i > 5 THEN",
+    "stepNumber": 8,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 12,
+    "nodeType": "SetStatement",
+    "statementText": "SET j = 1;",
+    "stepNumber": 9,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 13,
+    "loop": {
+      "condition": "LOOP inner",
+      "iteration": 1,
+      "result": true
+    },
+    "nodeType": "LoopStatement",
+    "statementText": "inner: LOOP",
+    "stepNumber": 10,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "j > 5",
+      "path": "none",
+      "result": false
+    },
+    "line": 14,
+    "nodeType": "IfStatement",
+    "statementText": "IF j > 5 THEN",
+    "stepNumber": 11,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "i + j = target",
+      "path": "none",
+      "result": false
+    },
+    "line": 17,
+    "nodeType": "IfStatement",
+    "statementText": "IF i + j = target THEN",
+    "stepNumber": 12,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 22,
+    "nodeType": "SetStatement",
+    "statementText": "SET j = j + 1;",
+    "stepNumber": 13,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 13,
+    "loop": {
+      "condition": "LOOP inner",
+      "iteration": 2,
+      "result": true
+    },
+    "nodeType": "LoopStatement",
+    "statementText": "inner: LOOP",
+    "stepNumber": 14,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "j > 5",
+      "path": "none",
+      "result": false
+    },
+    "line": 14,
+    "nodeType": "IfStatement",
+    "statementText": "IF j > 5 THEN",
+    "stepNumber": 15,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "i + j = target",
+      "path": "none",
+      "result": false
+    },
+    "line": 17,
+    "nodeType": "IfStatement",
+    "statementText": "IF i + j = target THEN",
+    "stepNumber": 16,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 22,
+    "nodeType": "SetStatement",
+    "statementText": "SET j = j + 1;",
+    "stepNumber": 17,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 13,
+    "loop": {
+      "condition": "LOOP inner",
+      "iteration": 3,
+      "result": true
+    },
+    "nodeType": "LoopStatement",
+    "statementText": "inner: LOOP",
+    "stepNumber": 18,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "j > 5",
+      "path": "none",
+      "result": false
+    },
+    "line": 14,
+    "nodeType": "IfStatement",
+    "statementText": "IF j > 5 THEN",
+    "stepNumber": 19,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "i + j = target",
+      "path": "none",
+      "result": false
+    },
+    "line": 17,
+    "nodeType": "IfStatement",
+    "statementText": "IF i + j = target THEN",
+    "stepNumber": 20,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 22,
+    "nodeType": "SetStatement",
+    "statementText": "SET j = j + 1;",
+    "stepNumber": 21,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 13,
+    "loop": {
+      "condition": "LOOP inner",
+      "iteration": 4,
+      "result": true
+    },
+    "nodeType": "LoopStatement",
+    "statementText": "inner: LOOP",
+    "stepNumber": 22,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "j > 5",
+      "path": "none",
+      "result": false
+    },
+    "line": 14,
+    "nodeType": "IfStatement",
+    "statementText": "IF j > 5 THEN",
+    "stepNumber": 23,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "i + j = target",
+      "path": "none",
+      "result": false
+    },
+    "line": 17,
+    "nodeType": "IfStatement",
+    "statementText": "IF i + j = target THEN",
+    "stepNumber": 24,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 22,
+    "nodeType": "SetStatement",
+    "statementText": "SET j = j + 1;",
+    "stepNumber": 25,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 13,
+    "loop": {
+      "condition": "LOOP inner",
+      "iteration": 5,
+      "result": true
+    },
+    "nodeType": "LoopStatement",
+    "statementText": "inner: LOOP",
+    "stepNumber": 26,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "j > 5",
+      "path": "none",
+      "result": false
+    },
+    "line": 14,
+    "nodeType": "IfStatement",
+    "statementText": "IF j > 5 THEN",
+    "stepNumber": 27,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "i + j = target",
+      "path": "none",
+      "result": false
+    },
+    "line": 17,
+    "nodeType": "IfStatement",
+    "statementText": "IF i + j = target THEN",
+    "stepNumber": 28,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 22,
+    "nodeType": "SetStatement",
+    "statementText": "SET j = j + 1;",
+    "stepNumber": 29,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 13,
+    "loop": {
+      "condition": "LOOP inner",
+      "iteration": 6,
+      "result": true
+    },
+    "nodeType": "LoopStatement",
+    "statementText": "inner: LOOP",
+    "stepNumber": 30,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "j > 5",
+      "path": "then",
+      "result": true
+    },
+    "line": 14,
+    "nodeType": "IfStatement",
+    "statementText": "IF j > 5 THEN",
+    "stepNumber": 31,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 15,
+    "nodeType": "LeaveStatement",
+    "statementText": "LEAVE;",
+    "stepNumber": 32,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 24,
+    "nodeType": "SetStatement",
+    "statementText": "SET i = i + 1;",
+    "stepNumber": 33,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 8,
+    "loop": {
+      "condition": "LOOP outer",
+      "iteration": 2,
+      "result": true
+    },
+    "nodeType": "LoopStatement",
+    "statementText": "outer: LOOP",
+    "stepNumber": 34,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "i > 5",
+      "path": "none",
+      "result": false
+    },
+    "line": 9,
+    "nodeType": "IfStatement",
+    "statementText": "IF i > 5 THEN",
+    "stepNumber": 35,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 12,
+    "nodeType": "SetStatement",
+    "statementText": "SET j = 1;",
+    "stepNumber": 36,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 13,
+    "loop": {
+      "condition": "LOOP inner",
+      "iteration": 1,
+      "result": true
+    },
+    "nodeType": "LoopStatement",
+    "statementText": "inner: LOOP",
+    "stepNumber": 37,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "j > 5",
+      "path": "none",
+      "result": false
+    },
+    "line": 14,
+    "nodeType": "IfStatement",
+    "statementText": "IF j > 5 THEN",
+    "stepNumber": 38,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "i + j = target",
+      "path": "none",
+      "result": false
+    },
+    "line": 17,
+    "nodeType": "IfStatement",
+    "statementText": "IF i + j = target THEN",
+    "stepNumber": 39,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 22,
+    "nodeType": "SetStatement",
+    "statementText": "SET j = j + 1;",
+    "stepNumber": 40,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 13,
+    "loop": {
+      "condition": "LOOP inner",
+      "iteration": 2,
+      "result": true
+    },
+    "nodeType": "LoopStatement",
+    "statementText": "inner: LOOP",
+    "stepNumber": 41,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "j > 5",
+      "path": "none",
+      "result": false
+    },
+    "line": 14,
+    "nodeType": "IfStatement",
+    "statementText": "IF j > 5 THEN",
+    "stepNumber": 42,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "i + j = target",
+      "path": "none",
+      "result": false
+    },
+    "line": 17,
+    "nodeType": "IfStatement",
+    "statementText": "IF i + j = target THEN",
+    "stepNumber": 43,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 22,
+    "nodeType": "SetStatement",
+    "statementText": "SET j = j + 1;",
+    "stepNumber": 44,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 13,
+    "loop": {
+      "condition": "LOOP inner",
+      "iteration": 3,
+      "result": true
+    },
+    "nodeType": "LoopStatement",
+    "statementText": "inner: LOOP",
+    "stepNumber": 45,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "j > 5",
+      "path": "none",
+      "result": false
+    },
+    "line": 14,
+    "nodeType": "IfStatement",
+    "statementText": "IF j > 5 THEN",
+    "stepNumber": 46,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "i + j = target",
+      "path": "none",
+      "result": false
+    },
+    "line": 17,
+    "nodeType": "IfStatement",
+    "statementText": "IF i + j = target THEN",
+    "stepNumber": 47,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 22,
+    "nodeType": "SetStatement",
+    "statementText": "SET j = j + 1;",
+    "stepNumber": 48,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 13,
+    "loop": {
+      "condition": "LOOP inner",
+      "iteration": 4,
+      "result": true
+    },
+    "nodeType": "LoopStatement",
+    "statementText": "inner: LOOP",
+    "stepNumber": 49,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "j > 5",
+      "path": "none",
+      "result": false
+    },
+    "line": 14,
+    "nodeType": "IfStatement",
+    "statementText": "IF j > 5 THEN",
+    "stepNumber": 50,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "i + j = target",
+      "path": "none",
+      "result": false
+    },
+    "line": 17,
+    "nodeType": "IfStatement",
+    "statementText": "IF i + j = target THEN",
+    "stepNumber": 51,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 22,
+    "nodeType": "SetStatement",
+    "statementText": "SET j = j + 1;",
+    "stepNumber": 52,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 13,
+    "loop": {
+      "condition": "LOOP inner",
+      "iteration": 5,
+      "result": true
+    },
+    "nodeType": "LoopStatement",
+    "statementText": "inner: LOOP",
+    "stepNumber": 53,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "j > 5",
+      "path": "none",
+      "result": false
+    },
+    "line": 14,
+    "nodeType": "IfStatement",
+    "statementText": "IF j > 5 THEN",
+    "stepNumber": 54,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "i + j = target",
+      "path": "then",
+      "result": true
+    },
+    "line": 17,
+    "nodeType": "IfStatement",
+    "statementText": "IF i + j = target THEN",
+    "stepNumber": 55,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 18,
+    "nodeType": "SetStatement",
+    "statementText": "SET foundI = i;",
+    "stepNumber": 56,
+    "variables": {
+      "foundI": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 19,
+    "nodeType": "SetStatement",
+    "statementText": "SET foundJ = j;",
+    "stepNumber": 57,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "foundJ": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  },
+  {
+    "line": 20,
+    "nodeType": "LeaveStatement",
+    "statementText": "LEAVE outer;",
+    "stepNumber": 58,
+    "variables": {
+      "foundI": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "foundJ": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "i": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "j": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "target": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 7
+      }
+    }
+  }
+]

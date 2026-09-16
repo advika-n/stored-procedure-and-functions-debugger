@@ -1,0 +1,88 @@
+[
+  {
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE ComputeTax(OUT taxAmount NUMBER)",
+    "stepNumber": 1,
+    "variables": {
+      "taxAmount": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      }
+    }
+  },
+  {
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE price NUMBER DEFAULT 150;",
+    "stepNumber": 2,
+    "variables": {
+      "price": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 150
+      },
+      "taxAmount": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      }
+    }
+  },
+  {
+    "line": 4,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE rate NUMBER DEFAULT 0.08;",
+    "stepNumber": 3,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 150
+      },
+      "rate": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0.08
+      },
+      "taxAmount": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      }
+    }
+  },
+  {
+    "line": 5,
+    "nodeType": "SetStatement",
+    "statementText": "SET taxAmount = price * rate;",
+    "stepNumber": 4,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 150
+      },
+      "rate": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0.08
+      },
+      "taxAmount": {
+        "changed": true,
+        "isOutput": true,
+        "type": "number",
+        "value": 12.0
+      }
+    }
+  }
+]

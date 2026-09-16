@@ -1,0 +1,234 @@
+[
+  {
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE CalculateDiscount()",
+    "stepNumber": 1,
+    "variables": {}
+  },
+  {
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE price NUMBER DEFAULT 20;",
+    "stepNumber": 2,
+    "variables": {
+      "price": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      }
+    }
+  },
+  {
+    "line": 4,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE quantity NUMBER DEFAULT 6;",
+    "stepNumber": 3,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      },
+      "quantity": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "line": 5,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE total NUMBER DEFAULT 0;",
+    "stepNumber": 4,
+    "variables": {
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 6,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE discount NUMBER DEFAULT 0;",
+    "stepNumber": 5,
+    "variables": {
+      "discount": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 7,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = price * quantity;",
+    "stepNumber": 6,
+    "variables": {
+      "discount": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 120
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "total > 100",
+      "path": "then",
+      "result": true
+    },
+    "line": 8,
+    "nodeType": "IfStatement",
+    "statementText": "IF total > 100 THEN",
+    "stepNumber": 7,
+    "variables": {
+      "discount": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 120
+      }
+    }
+  },
+  {
+    "line": 9,
+    "nodeType": "SetStatement",
+    "statementText": "SET discount = total * 0.1;",
+    "stepNumber": 8,
+    "variables": {
+      "discount": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 12.0
+      },
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 120
+      }
+    }
+  },
+  {
+    "line": 13,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total - discount;",
+    "stepNumber": 9,
+    "variables": {
+      "discount": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 12.0
+      },
+      "price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 20
+      },
+      "quantity": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 108.0
+      }
+    }
+  }
+]

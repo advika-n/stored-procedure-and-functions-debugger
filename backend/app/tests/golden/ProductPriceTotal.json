@@ -1,0 +1,472 @@
+[
+  {
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE ProductPriceTotal()",
+    "stepNumber": 1,
+    "variables": {}
+  },
+  {
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE total NUMBER DEFAULT 0;",
+    "stepNumber": 2,
+    "variables": {
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 4,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE item_name STRING DEFAULT '';",
+    "stepNumber": 3,
+    "variables": {
+      "item_name": {
+        "changed": true,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 5,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE item_price NUMBER DEFAULT 0;",
+    "stepNumber": 4,
+    "variables": {
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": null,
+      "hasMore": false,
+      "name": "prod_cursor",
+      "rowIndex": 0
+    },
+    "line": 6,
+    "nodeType": "CursorDeclNode",
+    "statementText": "DECLARE prod_cursor CURSOR FOR SELECT name, price FROM products;",
+    "stepNumber": 5,
+    "variables": {
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": null,
+      "hasMore": true,
+      "name": "prod_cursor",
+      "rowIndex": 0
+    },
+    "line": 7,
+    "nodeType": "OpenCursorNode",
+    "statementText": "OPEN prod_cursor;",
+    "stepNumber": 6,
+    "variables": {
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 8,
+    "loop": {
+      "condition": "prod_cursor%FOUND",
+      "iteration": 1,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE prod_cursor%FOUND DO",
+    "stepNumber": 7,
+    "variables": {
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": {
+        "name": "Widget",
+        "price": 10
+      },
+      "hasMore": true,
+      "name": "prod_cursor",
+      "rowIndex": 0
+    },
+    "line": 9,
+    "nodeType": "FetchCursorNode",
+    "statementText": "FETCH prod_cursor INTO item_name, item_price;",
+    "stepNumber": 8,
+    "variables": {
+      "item_name": {
+        "changed": true,
+        "isOutput": false,
+        "type": "string",
+        "value": "Widget"
+      },
+      "item_price": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 10,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total + item_price;",
+    "stepNumber": 9,
+    "variables": {
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Widget"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      }
+    }
+  },
+  {
+    "line": 8,
+    "loop": {
+      "condition": "prod_cursor%FOUND",
+      "iteration": 2,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE prod_cursor%FOUND DO",
+    "stepNumber": 10,
+    "variables": {
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Widget"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": {
+        "name": "Gadget",
+        "price": 25
+      },
+      "hasMore": true,
+      "name": "prod_cursor",
+      "rowIndex": 1
+    },
+    "line": 9,
+    "nodeType": "FetchCursorNode",
+    "statementText": "FETCH prod_cursor INTO item_name, item_price;",
+    "stepNumber": 11,
+    "variables": {
+      "item_name": {
+        "changed": true,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gadget"
+      },
+      "item_price": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 25
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      }
+    }
+  },
+  {
+    "line": 10,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total + item_price;",
+    "stepNumber": 12,
+    "variables": {
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gadget"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 25
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 35
+      }
+    }
+  },
+  {
+    "line": 8,
+    "loop": {
+      "condition": "prod_cursor%FOUND",
+      "iteration": 3,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE prod_cursor%FOUND DO",
+    "stepNumber": 13,
+    "variables": {
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gadget"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 25
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 35
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": {
+        "name": "Gizmo",
+        "price": 15
+      },
+      "hasMore": false,
+      "name": "prod_cursor",
+      "rowIndex": 2
+    },
+    "line": 9,
+    "nodeType": "FetchCursorNode",
+    "statementText": "FETCH prod_cursor INTO item_name, item_price;",
+    "stepNumber": 14,
+    "variables": {
+      "item_name": {
+        "changed": true,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 35
+      }
+    }
+  },
+  {
+    "line": 10,
+    "nodeType": "SetStatement",
+    "statementText": "SET total = total + item_price;",
+    "stepNumber": 15,
+    "variables": {
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "line": 8,
+    "loop": {
+      "condition": "prod_cursor%FOUND",
+      "iteration": 4,
+      "result": false
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE prod_cursor%FOUND DO",
+    "stepNumber": 16,
+    "variables": {
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": null,
+      "hasMore": false,
+      "name": "prod_cursor",
+      "rowIndex": 3
+    },
+    "line": 12,
+    "nodeType": "CloseCursorNode",
+    "statementText": "CLOSE prod_cursor;",
+    "stepNumber": 17,
+    "variables": {
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 50
+      }
+    }
+  }
+]

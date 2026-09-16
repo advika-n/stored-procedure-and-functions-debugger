@@ -1,0 +1,884 @@
+[
+  {
+    "line": 12,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE ComputeFactorial()",
+    "stepNumber": 1,
+    "variables": {}
+  },
+  {
+    "line": 14,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE result NUMBER DEFAULT 0;",
+    "stepNumber": 2,
+    "variables": {
+      "result": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 15,
+    "nodeType": "CallStatement",
+    "statementText": "CALL Fact(5, result);",
+    "stepNumber": 3,
+    "variables": {
+      "result": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 1,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact"
+      ]
+    },
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE Fact(IN n NUMBER, OUT result NUMBER)",
+    "stepNumber": 4,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 1,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact"
+      ]
+    },
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE sub NUMBER DEFAULT 1;",
+    "stepNumber": 5,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "sub": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "n > 1",
+      "path": "then",
+      "result": true
+    },
+    "call": {
+      "depth": 1,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact"
+      ]
+    },
+    "line": 4,
+    "nodeType": "IfStatement",
+    "statementText": "IF n > 1 THEN",
+    "stepNumber": 6,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "sub": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 1,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact"
+      ]
+    },
+    "line": 5,
+    "nodeType": "CallStatement",
+    "statementText": "CALL Fact(n - 1, sub);",
+    "stepNumber": 7,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "sub": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 2,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE Fact(IN n NUMBER, OUT result NUMBER)",
+    "stepNumber": 8,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 2,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE sub NUMBER DEFAULT 1;",
+    "stepNumber": 9,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "sub": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "n > 1",
+      "path": "then",
+      "result": true
+    },
+    "call": {
+      "depth": 2,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 4,
+    "nodeType": "IfStatement",
+    "statementText": "IF n > 1 THEN",
+    "stepNumber": 10,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "sub": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 2,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 5,
+    "nodeType": "CallStatement",
+    "statementText": "CALL Fact(n - 1, sub);",
+    "stepNumber": 11,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "sub": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 3,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE Fact(IN n NUMBER, OUT result NUMBER)",
+    "stepNumber": 12,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 3,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE sub NUMBER DEFAULT 1;",
+    "stepNumber": 13,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "sub": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "n > 1",
+      "path": "then",
+      "result": true
+    },
+    "call": {
+      "depth": 3,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 4,
+    "nodeType": "IfStatement",
+    "statementText": "IF n > 1 THEN",
+    "stepNumber": 14,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "sub": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 3,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 5,
+    "nodeType": "CallStatement",
+    "statementText": "CALL Fact(n - 1, sub);",
+    "stepNumber": 15,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "sub": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 4,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact",
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE Fact(IN n NUMBER, OUT result NUMBER)",
+    "stepNumber": 16,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 4,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact",
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE sub NUMBER DEFAULT 1;",
+    "stepNumber": 17,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "sub": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "n > 1",
+      "path": "then",
+      "result": true
+    },
+    "call": {
+      "depth": 4,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact",
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 4,
+    "nodeType": "IfStatement",
+    "statementText": "IF n > 1 THEN",
+    "stepNumber": 18,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "sub": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 4,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact",
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 5,
+    "nodeType": "CallStatement",
+    "statementText": "CALL Fact(n - 1, sub);",
+    "stepNumber": 19,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "sub": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 5,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact",
+        "Fact",
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE Fact(IN n NUMBER, OUT result NUMBER)",
+    "stepNumber": 20,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 5,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact",
+        "Fact",
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE sub NUMBER DEFAULT 1;",
+    "stepNumber": 21,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "sub": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "n > 1",
+      "path": "else",
+      "result": false
+    },
+    "call": {
+      "depth": 5,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact",
+        "Fact",
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 4,
+    "nodeType": "IfStatement",
+    "statementText": "IF n > 1 THEN",
+    "stepNumber": 22,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "result": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "sub": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 5,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact",
+        "Fact",
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 8,
+    "nodeType": "SetStatement",
+    "statementText": "SET result = 1;",
+    "stepNumber": 23,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "result": {
+        "changed": true,
+        "isOutput": true,
+        "type": "number",
+        "value": 1
+      },
+      "sub": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 4,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact",
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 6,
+    "nodeType": "SetStatement",
+    "statementText": "SET result = n * sub;",
+    "stepNumber": 24,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      },
+      "result": {
+        "changed": true,
+        "isOutput": true,
+        "type": "number",
+        "value": 2
+      },
+      "sub": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 3,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 6,
+    "nodeType": "SetStatement",
+    "statementText": "SET result = n * sub;",
+    "stepNumber": 25,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 3
+      },
+      "result": {
+        "changed": true,
+        "isOutput": true,
+        "type": "number",
+        "value": 6
+      },
+      "sub": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 2
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 2,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact",
+        "Fact"
+      ]
+    },
+    "line": 6,
+    "nodeType": "SetStatement",
+    "statementText": "SET result = n * sub;",
+    "stepNumber": 26,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 4
+      },
+      "result": {
+        "changed": true,
+        "isOutput": true,
+        "type": "number",
+        "value": 24
+      },
+      "sub": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      }
+    }
+  },
+  {
+    "call": {
+      "depth": 1,
+      "procedureName": "Fact",
+      "stack": [
+        "Fact"
+      ]
+    },
+    "line": 6,
+    "nodeType": "SetStatement",
+    "statementText": "SET result = n * sub;",
+    "stepNumber": 27,
+    "variables": {
+      "n": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 5
+      },
+      "result": {
+        "changed": true,
+        "isOutput": true,
+        "type": "number",
+        "value": 120
+      },
+      "sub": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 24
+      }
+    }
+  },
+  {
+    "line": 16,
+    "nodeType": "SetStatement",
+    "statementText": "SET result = result + 0;",
+    "stepNumber": 28,
+    "variables": {
+      "result": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 120
+      }
+    }
+  }
+]

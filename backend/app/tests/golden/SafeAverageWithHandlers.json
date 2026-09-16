@@ -1,0 +1,760 @@
+[
+  {
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE SafeAverageWithHandlers()",
+    "stepNumber": 1,
+    "variables": {}
+  },
+  {
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE total NUMBER DEFAULT 0;",
+    "stepNumber": 2,
+    "variables": {
+      "total": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 4,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE count NUMBER DEFAULT 0;",
+    "stepNumber": 3,
+    "variables": {
+      "count": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 5,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE average NUMBER DEFAULT -1;",
+    "stepNumber": 4,
+    "variables": {
+      "average": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": -1
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 6,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE done NUMBER DEFAULT 0;",
+    "stepNumber": 5,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": -1
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "done": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 7,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE item_name STRING DEFAULT '';",
+    "stepNumber": 6,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": -1
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "done": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": true,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 8,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE item_price NUMBER DEFAULT 0;",
+    "stepNumber": 7,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": -1
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "done": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 9,
+    "nodeType": "HandlerDeclNode",
+    "statementText": "DECLARE CONTINUE HANDLER FOR NOT_FOUND SET done = 1;",
+    "stepNumber": 8,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": -1
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "done": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 10,
+    "nodeType": "HandlerDeclNode",
+    "statementText": "DECLARE CONTINUE HANDLER FOR DIVISION_BY_ZERO SET average = 0;",
+    "stepNumber": 9,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": -1
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "done": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": null,
+      "hasMore": false,
+      "name": "premium_cursor",
+      "rowIndex": 0
+    },
+    "line": 11,
+    "nodeType": "CursorDeclNode",
+    "statementText": "DECLARE premium_cursor CURSOR FOR SELECT name, price FROM products WHERE price > 1000;",
+    "stepNumber": 10,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": -1
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "done": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": null,
+      "hasMore": false,
+      "name": "premium_cursor",
+      "rowIndex": 0
+    },
+    "line": 12,
+    "nodeType": "OpenCursorNode",
+    "statementText": "OPEN premium_cursor;",
+    "stepNumber": 11,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": -1
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "done": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 13,
+    "loop": {
+      "condition": "done = 0",
+      "iteration": 1,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE done = 0 DO",
+    "stepNumber": 12,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": -1
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "done": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": null,
+      "hasMore": false,
+      "name": "premium_cursor",
+      "rowIndex": 0
+    },
+    "error": {
+      "condition": "NOT_FOUND",
+      "handler": "NOT_FOUND handler",
+      "message": "Cursor 'premium_cursor' has no more rows to fetch"
+    },
+    "line": 14,
+    "nodeType": "FetchCursorNode",
+    "statementText": "FETCH premium_cursor INTO item_name, item_price;",
+    "stepNumber": 13,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": -1
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "done": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 9,
+    "nodeType": "SetStatement",
+    "statementText": "SET done = 1;",
+    "stepNumber": 14,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": -1
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "done": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "done = 0",
+      "path": "none",
+      "result": false
+    },
+    "line": 15,
+    "nodeType": "IfStatement",
+    "statementText": "IF done = 0 THEN",
+    "stepNumber": 15,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": -1
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "done": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 13,
+    "loop": {
+      "condition": "done = 0",
+      "iteration": 2,
+      "result": false
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE done = 0 DO",
+    "stepNumber": 16,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": -1
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "done": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": null,
+      "hasMore": false,
+      "name": "premium_cursor",
+      "rowIndex": 0
+    },
+    "line": 20,
+    "nodeType": "CloseCursorNode",
+    "statementText": "CLOSE premium_cursor;",
+    "stepNumber": 17,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": -1
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "done": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "error": {
+      "condition": "DIVISION_BY_ZERO",
+      "handler": "DIVISION_BY_ZERO handler",
+      "message": "Division by zero"
+    },
+    "line": 21,
+    "nodeType": "SetStatement",
+    "statementText": "SET average = total / count;",
+    "stepNumber": 18,
+    "variables": {
+      "average": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": -1
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "done": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 10,
+    "nodeType": "SetStatement",
+    "statementText": "SET average = 0;",
+    "stepNumber": 19,
+    "variables": {
+      "average": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "count": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "done": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      },
+      "item_name": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "item_price": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "total": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  }
+]

@@ -1,0 +1,254 @@
+[
+  {
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE ManageInventory()",
+    "stepNumber": 1,
+    "variables": {}
+  },
+  {
+    "line": 3,
+    "nodeType": "CreateTableStatement",
+    "statementText": "CREATE TABLE inventory (id NUMBER PRIMARY KEY, item TEXT NOT NULL, qty NUMBER, price NUMBER);",
+    "stepNumber": 2,
+    "table": {
+      "columns": [
+        "id",
+        "item",
+        "qty",
+        "price"
+      ],
+      "name": "inventory",
+      "operation": "CREATE",
+      "row": null,
+      "rows": [],
+      "rowsAffected": 0
+    },
+    "variables": {}
+  },
+  {
+    "line": 4,
+    "nodeType": "InsertStatement",
+    "statementText": "INSERT INTO inventory VALUES (1, 'Widget', 8, 10);",
+    "stepNumber": 3,
+    "table": {
+      "columns": [
+        "id",
+        "item",
+        "qty",
+        "price"
+      ],
+      "name": "inventory",
+      "operation": "INSERT",
+      "row": {
+        "id": 1,
+        "item": "Widget",
+        "price": 10,
+        "qty": 8
+      },
+      "rows": [
+        {
+          "id": 1,
+          "item": "Widget",
+          "price": 10,
+          "qty": 8
+        }
+      ],
+      "rowsAffected": 1
+    },
+    "variables": {}
+  },
+  {
+    "line": 5,
+    "nodeType": "InsertStatement",
+    "statementText": "INSERT INTO inventory VALUES (2, 'Gadget', 0, 25);",
+    "stepNumber": 4,
+    "table": {
+      "columns": [
+        "id",
+        "item",
+        "qty",
+        "price"
+      ],
+      "name": "inventory",
+      "operation": "INSERT",
+      "row": {
+        "id": 2,
+        "item": "Gadget",
+        "price": 25,
+        "qty": 0
+      },
+      "rows": [
+        {
+          "id": 1,
+          "item": "Widget",
+          "price": 10,
+          "qty": 8
+        },
+        {
+          "id": 2,
+          "item": "Gadget",
+          "price": 25,
+          "qty": 0
+        }
+      ],
+      "rowsAffected": 1
+    },
+    "variables": {}
+  },
+  {
+    "line": 6,
+    "nodeType": "InsertStatement",
+    "statementText": "INSERT INTO inventory VALUES (3, 'Gizmo', 15, 15);",
+    "stepNumber": 5,
+    "table": {
+      "columns": [
+        "id",
+        "item",
+        "qty",
+        "price"
+      ],
+      "name": "inventory",
+      "operation": "INSERT",
+      "row": {
+        "id": 3,
+        "item": "Gizmo",
+        "price": 15,
+        "qty": 15
+      },
+      "rows": [
+        {
+          "id": 1,
+          "item": "Widget",
+          "price": 10,
+          "qty": 8
+        },
+        {
+          "id": 2,
+          "item": "Gadget",
+          "price": 25,
+          "qty": 0
+        },
+        {
+          "id": 3,
+          "item": "Gizmo",
+          "price": 15,
+          "qty": 15
+        }
+      ],
+      "rowsAffected": 1
+    },
+    "variables": {}
+  },
+  {
+    "line": 7,
+    "nodeType": "UpdateStatement",
+    "statementText": "UPDATE inventory SET qty = qty + 5 WHERE qty < 10;",
+    "stepNumber": 6,
+    "table": {
+      "columns": [
+        "id",
+        "item",
+        "qty",
+        "price"
+      ],
+      "name": "inventory",
+      "operation": "UPDATE",
+      "row": null,
+      "rows": [
+        {
+          "id": 1,
+          "item": "Widget",
+          "price": 10,
+          "qty": 13
+        },
+        {
+          "id": 2,
+          "item": "Gadget",
+          "price": 25,
+          "qty": 5
+        },
+        {
+          "id": 3,
+          "item": "Gizmo",
+          "price": 15,
+          "qty": 15
+        }
+      ],
+      "rowsAffected": 2
+    },
+    "variables": {}
+  },
+  {
+    "line": 8,
+    "nodeType": "UpdateStatement",
+    "statementText": "UPDATE inventory SET price = price - 2 WHERE price > 12;",
+    "stepNumber": 7,
+    "table": {
+      "columns": [
+        "id",
+        "item",
+        "qty",
+        "price"
+      ],
+      "name": "inventory",
+      "operation": "UPDATE",
+      "row": null,
+      "rows": [
+        {
+          "id": 1,
+          "item": "Widget",
+          "price": 10,
+          "qty": 13
+        },
+        {
+          "id": 2,
+          "item": "Gadget",
+          "price": 23,
+          "qty": 5
+        },
+        {
+          "id": 3,
+          "item": "Gizmo",
+          "price": 13,
+          "qty": 15
+        }
+      ],
+      "rowsAffected": 2
+    },
+    "variables": {}
+  },
+  {
+    "line": 9,
+    "nodeType": "DeleteStatement",
+    "statementText": "DELETE FROM inventory WHERE id = 2;",
+    "stepNumber": 8,
+    "table": {
+      "columns": [
+        "id",
+        "item",
+        "qty",
+        "price"
+      ],
+      "name": "inventory",
+      "operation": "DELETE",
+      "row": null,
+      "rows": [
+        {
+          "id": 1,
+          "item": "Widget",
+          "price": 10,
+          "qty": 13
+        },
+        {
+          "id": 3,
+          "item": "Gizmo",
+          "price": 13,
+          "qty": 15
+        }
+      ],
+      "rowsAffected": 1
+    },
+    "variables": {}
+  }
+]

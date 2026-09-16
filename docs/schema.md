@@ -64,7 +64,15 @@ phase since that has touched the interpreter has re-measured in-process
 | CASE statement | `ClassifyOrder` (both CASE forms) | 0.407ms |
 | LOOP/LEAVE | `FindPairSum` (58 steps, nested labeled loops) | 0.532ms (200-run avg) |
 | User-created tables (CREATE TABLE/INSERT/UPDATE/DELETE) | `ManageInventory` (8 steps, 1 table, 3 rows, 2 UPDATEs, 1 DELETE); all 18 samples | 0.462ms; 8.3ms combined |
+| Testing infrastructure (golden traces / property-based / grammar edge cases) | Real `WHILE` loop at 9,999 iterations (20,001-step trace) through the REAL `/debug` endpoint (HTTP + JSON + `history.save_run` included, not just in-process) | **617ms** — the largest trace ever measured against this NFR, still comfortably under budget |
 
-No measurable overhead from any of these phases. Re-time via the live-server approach
-(loop the sample list, hit `/debug`, measure wall time) if the interpreter, cursor
-handling, or history-write path changes again, and append a new row here.
+No measurable overhead from any of these phases (all comfortably sub-millisecond
+in-process). The one deliberately extreme measurement above — a trace 300-1000x larger
+than any real sample procedure produces — exists specifically to stress-test the 2s
+budget at a scale no hand-written sample reaches on its own; see
+`backend/app/tests/test_grammar_edge_cases.py::test_large_loop_count_stays_under_the_2s_nfr`
+for the checked-in, always-re-measured version of this same check (asserted against a
+looser 1.8s ceiling, not the exact number above, so ordinary machine variance doesn't
+make it flaky). Re-time via the live-server approach (loop the sample list, hit
+`/debug`, measure wall time) if the interpreter, cursor handling, or history-write path
+changes again, and append a new row here.

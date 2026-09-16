@@ -161,9 +161,18 @@ tracked in `HANDOFF.md`, not here** — this section only defines what's require
   prompt text, in chronological order. Keep appending to it at the end of each phase;
   don't let it go stale.
 - **Testing**: backend has a thorough pytest suite (`backend/app/tests/`, one file per
-  module/endpoint) — run via `cd backend && .venv/Scripts/python.exe -m pytest -q` (or
-  activate the venv first). Frontend has no test suite, only `npm run lint` (oxlint) and
-  `npm run build` as the correctness gate — treat both as required before considering a
+  module/endpoint, plus `hypothesis` for property-based tests) — run via `cd backend &&
+  .venv/Scripts/python.exe -m pytest -q` (or activate the venv first). **Every phase that
+  touches the tokenizer/parser/interpreter should run `test_golden_traces.py`** — a
+  checked-in, per-sample golden fixture (`backend/app/tests/golden/*.json`) of every
+  built-in sample's full step trace, run through the REAL `/debug` endpoint; a genuine
+  behavior change fails it loudly with a diff naming the exact step, and a deliberate one
+  regenerates fixtures via `UPDATE_GOLDENS=1 pytest ...` (review the diff before
+  committing). `test_property_based.py`/`test_known_bugs.py` fuzz the pipeline by
+  mutating the real samples — see `test_known_bugs.py` for a currently-reported,
+  intentionally-unfixed bug (`xfail(strict=True)`, so it'll loudly flip the moment
+  someone fixes it). Frontend has no test suite, only `npm run lint` (oxlint) and `npm
+  run build` as the correctness gate — treat both as required before considering a
   frontend phase done.
 - **Live-verification habit**: this project's sessions have consistently driven the
   actual running app (headless Chrome from the scratchpad — via puppeteer-core when
