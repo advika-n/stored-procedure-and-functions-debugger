@@ -26,35 +26,26 @@ Two invariants, per this phase's own scope:
       structured 400 response). Anything else escaping is a real bug:
       a stack trace reaching the user instead of a clean error.
   (b) A run that completes successfully produces a step trace of
-      length >= 1 -- **with one hand-verified, documented exception**:
-      a bare (wrapper-less) procedure whose body is empty (see
+      length >= 1, with NO exceptions. (This invariant used to carve
+      out a bare/wrapper-less empty-body procedure, which legitimately
+      produced a genuinely empty trace -- see
       `test_grammar_edge_cases.py::test_empty_bare_procedure_body_
-      produces_zero_steps`) legitimately parses AND runs successfully
-      with a genuinely empty trace (`steps == []`) -- there is no
-      synthetic "entry" step for the bare form the way a wrapped
-      `ProcedureNode`/`FunctionNode` always gets one (see
-      `interpreter.py`'s own "Functions" section). This was hand-
-      verified directly against the real endpoint before writing this
-      test, not assumed -- see this phase's own report for the full
-      finding (flagged separately, not silently special-cased away).
-      Mutation trivially reaches this case (e.g. `truncate` cutting a
-      bare sample down to nothing, or enough `delete_char` calls
-      hollowing one out) -- excluding it here means invariant (b) tests
-      something real (a WRAPPED definition, or an unwrapped one that
-      still has statements, never silently drops to zero steps),
-      instead of being falsified by already-understood behavior on the
-      very first run.
+      now_gets_a_synthetic_step_too`. That inconsistency was found and
+      reported here, then FIXED in a dedicated follow-up bug-fix phase:
+      `Interpreter.run` now gives that exact case a synthetic
+      placeholder step too, so this invariant holds unconditionally --
+      see `HANDOFF.md`/`test_known_bugs.py` for the fix's own
+      write-up.)
 
 Any genuine crash Hypothesis finds is reported (see this phase's own
 summary), never silently patched here -- these tests exist to surface
 problems, not fix them. One already was: arithmetic on a DECLAREd-but-
-never-assigned (`None`-valued) variable raises Python's own raw,
+never-assigned (`None`-valued) variable used to raise Python's own raw,
 unstructured `TypeError` rather than a clean `InterpreterError` --
-narrowly excluded from invariant (a) below by its exact message shape
-(not "every TypeError"), and separately tracked as a minimal,
-`xfail(strict=True)` regression in `test_known_bugs.py`, so this
-general fuzz test keeps doing its real job (surfacing NEW crashes)
-instead of permanently re-reporting the same already-known one.
+FIXED in the same dedicated follow-up bug-fix phase mentioned above
+(a `None`-operand guard in `Interpreter._evaluate_binary` now raises a
+clean, structured `InterpreterError` instead), so invariant (a) below
+no longer needs to carve it out either -- see `test_known_bugs.py`.
 """
 
 from __future__ import annotations
@@ -212,24 +203,6 @@ def _run_pipeline(code: str) -> dict:
 
 # -- invariant (a): never an uncaught exception --------------------------
 
-# Matches Python's own message shape for e.g. `None * 2` --
-# "unsupported operand type(s) for *: 'NoneType' and 'int'" -- the
-# EXACT ALREADY-FOUND-AND-REPORTED bug in `Interpreter._evaluate_binary`
-# (arithmetic on a DECLAREd-but-never-assigned/never-SET variable; see
-# `test_known_bugs.py` for the full write-up and a minimal, tracked
-# `xfail(strict=True)` regression). Excluded here narrowly -- by this
-# EXACT message shape, not "every TypeError" -- so this general fuzz
-# test keeps doing its real job (surfacing NEW, not-yet-known crashes)
-# instead of permanently failing on one already-diagnosed root cause
-# every run reaches by a different random mutation path.
-_KNOWN_NONE_ARITHMETIC_BUG_RE = re.compile(
-    r"unsupported operand type\(s\) for [-+*/]: .*NoneType"
-)
-
-
-def _is_the_known_none_arithmetic_bug(error: Exception) -> bool:
-    return isinstance(error, TypeError) and bool(_KNOWN_NONE_ARITHMETIC_BUG_RE.search(str(error)))
-
 
 @settings(
     max_examples=1000,
@@ -242,8 +215,6 @@ def test_mutated_sample_never_crashes_with_an_uncaught_exception(code):
     if result["status"] != "CRASH":
         return
     error = result["error"]
-    if _is_the_known_none_arithmetic_bug(error):
-        return  # already found, reported, and tracked -- see test_known_bugs.py
     raise AssertionError(
         "A mutated sample crashed the interpreter with an UNSTRUCTURED exception "
         f"({type(error).__name__}: {error}) instead of a known TokenizerError/"
@@ -251,18 +222,7 @@ def test_mutated_sample_never_crashes_with_an_uncaught_exception(code):
     ) from error
 
 
-# -- invariant (b): a successful run's trace has length >= 1, except the -
-# one hand-verified, documented exception (see module docstring) --------
-
-
-def _is_the_documented_zero_step_exception(ast: dict) -> bool:
-    """A bare (wrapper-less) `Procedure` with a genuinely empty body is
-    the ONE known, hand-verified way to legitimately reach a
-    zero-length trace -- see the module docstring and
-    `test_grammar_edge_cases.py`. Every other AST shape
-    (`ProcedureNode`/`FunctionNode`/`ProgramNode`, or any bare
-    `Procedure` with at least one statement) always produces >= 1 step."""
-    return ast.get("type") == "Procedure" and ast.get("body") == []
+# -- invariant (b): a successful run's trace always has length >= 1 ------
 
 
 @settings(
@@ -271,14 +231,11 @@ def _is_the_documented_zero_step_exception(ast: dict) -> bool:
     suppress_health_check=[HealthCheck.too_slow],
 )
 @given(code=_mutated_sample_code())
-def test_successful_mutated_run_has_a_nonempty_trace_unless_the_body_is_genuinely_empty(code):
+def test_successful_mutated_run_has_a_nonempty_trace(code):
     result = _run_pipeline(code)
     if result["status"] != "ok":
         return  # invariant (a) covers the crash/known-error cases separately
-    if _is_the_documented_zero_step_exception(result["ast"]):
-        return
     assert len(result["steps"]) >= 1, (
-        f"A successfully-run mutated sample produced ZERO steps despite a non-empty/"
-        f"wrapped AST ({result['ast'].get('type')!r}) -- this is a genuinely new case, "
-        f"not the documented bare-empty-body exception. Offending code:\n{code!r}"
+        f"A successfully-run mutated sample produced ZERO steps -- AST type "
+        f"{result['ast'].get('type')!r}. Offending code:\n{code!r}"
     )

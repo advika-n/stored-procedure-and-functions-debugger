@@ -186,34 +186,46 @@ END
 # -- empty procedure bodies -------------------------------------------------
 
 
-def test_empty_bare_procedure_body_produces_zero_steps():
-    """**Hand-verified finding, documented here rather than assumed**:
-    a bare (wrapper-less) procedure body with zero statements --
-    whether from genuinely empty source, whitespace-only source, or (as
+def test_empty_bare_procedure_body_now_gets_a_synthetic_step_too():
+    """**Was a hand-verified finding, since FIXED in a dedicated
+    follow-up bug-fix phase -- see `HANDOFF.md`/`test_known_bugs.py`**:
+    a bare (wrapper-less) procedure body with zero statements -- whether
+    from genuinely empty source, whitespace-only source, or (as
     `test_property_based.py` discovered via mutation) a mutated sample
-    reduced to nothing -- parses to `{"type": "Procedure", "body": []}`
-    and RUNS successfully, producing a trace of length **zero**, not
-    one. This is because the bare/legacy form has no synthetic "entry"
-    step the way a wrapped `ProcedureNode`/`FunctionNode` always gets
-    one (see interpreter.py's own "Functions" section) -- there is
-    simply nothing to execute and nothing to record. This is the ONE
-    documented exception `test_property_based.py`'s own "successful run
-    has >= 1 step" invariant carves out explicitly, rather than being
-    silently falsified by it on the very first mutated example that
-    happens to hollow a sample out completely."""
+    reduced to nothing -- used to produce a trace of length **zero**,
+    inconsistent with a wrapped empty body (below), which always got a
+    synthetic entry step. `Interpreter.run` now gives this exact case
+    (bare form AND a genuinely empty body -- a bare body with at least
+    one statement is completely unaffected) one synthetic placeholder
+    step of its own, so this is consistent with the wrapped form: never
+    a zero-length trace."""
     for code in ("", "   \n\t  "):
         steps = _run(code)
-        assert steps == []
+        assert len(steps) == 1
+        step_dict = steps[0].to_dict()
+        assert step_dict["nodeType"] == "Procedure"
+        assert step_dict["statementText"] == "(empty procedure body)"
+        assert step_dict["variables"] == {}
 
 
 def test_empty_wrapped_procedure_body_gets_exactly_the_entry_step():
-    """Unlike the bare form above, a `CREATE PROCEDURE ... BEGIN END`
-    with zero body statements still gets its own synthetic entry step
-    (the `CREATE PROCEDURE ...` signature line) -- so an empty WRAPPED
-    body's trace length is 1, never 0."""
+    """A `CREATE PROCEDURE ... BEGIN END` with zero body statements
+    still gets its own synthetic entry step (the `CREATE PROCEDURE ...`
+    signature line) -- so an empty WRAPPED body's trace length is 1,
+    never 0."""
     steps = _run("CREATE PROCEDURE Empty() BEGIN END")
     assert len(steps) == 1
     assert steps[0].to_dict()["nodeType"] == "ProcedureNode"
+
+
+def test_bare_and_wrapped_empty_bodies_now_produce_the_same_shape():
+    """Regression for the bare-vs-wrapped inconsistency itself: an empty
+    body ALWAYS produces exactly one step now, regardless of which of
+    the two procedure forms it's written in -- there is no longer a
+    third, zero-step behavior specific to the bare form."""
+    bare_steps = _run("")
+    wrapped_steps = _run("CREATE PROCEDURE Empty() BEGIN END")
+    assert len(bare_steps) == len(wrapped_steps) == 1
 
 
 def test_empty_function_body_is_a_clear_interpretererror_not_a_silent_null():

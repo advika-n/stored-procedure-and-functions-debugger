@@ -2171,3 +2171,101 @@ session's own ad-hoc, outside-pytest hand-verification scripts (which aren't cov
 `conftest.py`'s per-test DB isolation, since that only applies inside a pytest session)
 -- cleaned up back to the established baseline (max id 94, 12 rows) afterward. No live
 browser verification was needed or performed this session (no frontend changes at all).
+
+---
+
+## 22. Bug-fix phase: the two bugs the testing-infrastructure session found and did not fix
+
+**Date:** 2026-09-17 · **Not yet committed** (see `HANDOFF.md`)
+
+**Prompt (verbatim):**
+
+> This is the SQL Stored Procedure & Function Debugger project. The tree should be clean. This is a bug-fix phase, not a feature phase — the golden-output regression harness, Hypothesis tests, and grammar edge-case tests from the last phase are your safety net; run the full suite before and after, and the golden traces for all 18 existing samples must not change unless you can explain exactly why.
+>
+> Fix two bugs found and documented in `test_known_bugs.py` / `HANDOFF.md`:
+>
+> **1. `None`-arithmetic crash (the real bug — fix properly)**
+> `DECLARE x NUMBER; SET x = x * 2;` (or any `+ - * /` where an operand is `None`) crashes with a raw, unstructured 500 instead of this app's structured error contract. In `Interpreter._evaluate_binary`, guard against `None` operands on `+ - * /` and raise the same structured error type/shape every other runtime error already uses (check an existing case like DIVISION_BY_ZERO for the exact convention — error code, message format, whatever step-trace field carries it — and match it exactly, don't invent a new error shape). Decide and document what the error should say in a way a first-time user would understand (e.g. "variable used before being assigned a value") rather than a generic type error.
+> - Un-xfail `test_known_bugs.py`'s test for this once fixed — it should now pass for real, not just stop failing.
+> - Add regression tests: the exact repro above, plus each of `+ - *` on a `None` operand individually, and confirm `/` still correctly reports DIVISION_BY_ZERO before this fix would even trigger (i.e. don't let the new guard mask a different existing error).
+>
+> **2. Empty-body zero-length trace inconsistency**
+> A bare (wrapper-less) empty procedure body (`POST /debug` with `code: ""`) returns `{"steps": []}`, while a wrapped `CREATE PROCEDURE ... BEGIN END`'s empty body gets a synthetic entry step. Make the bare case consistent with the wrapped case — same synthetic entry-step behavior — rather than picking a new third behavior. Check whether the frontend ever actually hits this path (search for any place assuming `steps[0]` exists) and note what you find, but fix the backend regardless since it's a real inconsistency in the contract.
+> - Add a regression test covering both the bare-empty and wrapped-empty cases producing the same shape.
+>
+> Full verification: full backend suite passes (golden traces, property-based, grammar edge cases, existing unit/endpoint tests) with the two bug fixes and their new regression tests, zero unrelated files touched, lint/build clean if any frontend file needed a change for #2. Update `HANDOFF.md`'s "Bugs found this session, NOT fixed" section to move these two into "fixed this session" with a one-line note each.
+
+**Tree check**: `git status` was already clean (previous session's testing-infrastructure
+work was already committed as `774dd05`) — no commit was needed before starting.
+Baseline run confirmed first: 483 passing + 1 xfailed.
+
+**1. `None`-arithmetic crash — fixed.** Traced the exact convention DIVISION_BY_ZERO
+already uses (`app/main.py`'s `/debug` handler: `except InterpreterError as exc: raise
+_error_response("interpret", str(exc), exc.line)`, giving the client a 400 with
+`{"stage": "interpret", "message", "line"}` — nothing in `interpreter.py` catches
+`InterpreterError` internally before it reaches that handler, so simply raising one from
+`_evaluate_binary` slots straight into the existing contract with zero new plumbing).
+Added a `None`-operand guard to `+ - * /` only (confirmed comparisons don't need one —
+`None == 2` is simply `False` in Python, never a `TypeError`), placed *before* the `/`
+branch's own `right == 0` check so a genuinely-zero (not `None`) divisor still raises the
+pre-existing DIVISION_BY_ZERO error untouched — verified with a dedicated regression test
+(`test_division_by_zero_still_wins_over_the_none_guard_when_both_apply`) that the new
+guard cannot mask it. Message written for a first-time user, not a Python type-error
+echo: `"Cannot use '*': a variable used in this expression has no value yet -- it was
+declared but never assigned (or is an OUT parameter never SET on this code path)"`.
+`test_known_bugs.py`'s original regression test had its `xfail` removed and now asserts
+the fix positively (`result["status"] == "known_error"`, not just "not a crash"); added
+four more regression tests to `test_interpreter.py` (each of `+ - * /` individually via
+`@pytest.mark.parametrize`, the division-by-zero-still-wins case above, and a real
+`TestClient` hit against the actual `/debug` endpoint confirming 400 with the expected
+`stage`/`message`, not a raw 500) — matching the original bug report's own verification
+method, not just the interpreter in isolation.
+
+**2. Empty-body zero-length trace inconsistency — fixed.** Root cause: a bare/legacy
+`Procedure` AST node (`{"type": "Procedure", "body": [...]}`) has no `"line"` key and no
+CREATE-header line to give an entry step to at all (unlike `ProcedureNode`/
+`FunctionNode`, which get one from `render_definition_header` in `Interpreter.run`) — so
+when its body was ALSO completely empty, nothing ever got recorded, and `self.steps`
+stayed `[]`. Fixed narrowly: `Interpreter.run` now checks specifically for `entry_node is
+None and not body` (the bare form AND a genuinely empty body — a bare body with even one
+statement is completely untouched by this change) and records one synthetic placeholder
+step (`nodeType: "Procedure"`, line `1` since there's no real source line to point at,
+statement text `"(empty procedure body)"`), giving it the same "always >= 1 step" shape a
+wrapped empty body already had. Checked the frontend per the prompt's own instruction
+before touching anything there: `DebuggerPage.jsx` already gates every steps-dependent
+render behind `hasSteps = Array.isArray(steps) && steps.length > 0` (falling back to a
+plain "No steps yet" label otherwise) — confirmed this was never a live crash risk, so no
+frontend file needed changing. Rewrote `test_grammar_edge_cases.py`'s now-outdated
+"produces zero steps" test to assert the new "produces exactly one synthetic step"
+behavior instead, and added a new `test_bare_and_wrapped_empty_bodies_now_produce_the_
+same_shape` regression test asserting both forms produce the same step count for an
+empty body.
+
+**Test-suite cleanup for consistency.** Since both of `test_property_based.py`'s
+documented invariant carve-outs (the None-arithmetic-crash exclusion in invariant (a),
+the bare-empty-body zero-step exception in invariant (b)) were exactly the two bugs just
+fixed, removed both special-case exclusions from that file rather than leaving now-dead
+carve-out logic in a test suite that's supposed to be the project's regression safety
+net — both invariants now hold completely unconditionally, and the module docstring was
+rewritten to describe this as history (what used to be excluded, and why it no longer
+needs to be) rather than silently deleting the context. `test_known_bugs.py` itself was
+kept (per this project's own convention for tracking a bug found while testing something
+else) but its docstring rewritten to record both bugs as FIXED, pointing at where their
+now-permanent regression coverage lives.
+
+**Verification**: full backend suite 483 passing + 1 xfailed -> **491 passing, 0
+xfailed** (net +7 across the fix's regression coverage: the un-xfailed test stays 1, plus
+4 new tests in `test_interpreter.py`, plus 1 new test in `test_grammar_edge_cases.py`,
+plus the removed carve-out logic collapsing two property-based test *names* into
+differently-named ones with no count change there). Golden-trace harness re-run in
+isolation and confirmed **byte-for-byte unchanged, all 19 tests still passing** — neither
+fix's trigger condition (arithmetic on a `None` operand; a genuinely empty procedure
+body) occurs in any of the 18 built-in samples, so this is a real, verified "no
+unintended behavior change" result, not an assumption. `git status --short` confirmed
+only `backend/app/interpreter.py` plus four test files touched — zero frontend files, so
+no lint/build step was needed for this session (the prompt's own "if any frontend file
+needed a change for #2" conditional never triggered, confirmed above). `HANDOFF.md`
+rewritten: both bugs moved from "NOT fixed" into a new "Bugs fixed this session" section,
+each with a one-line note on what changed and where its regression tests live; the
+"Immediate next steps" list had the now-resolved "decide whether to fix bug #1" item
+removed.

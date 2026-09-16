@@ -936,6 +936,23 @@ class Interpreter:
         # its first step is exactly what it always was.
         if entry_node is not None:
             self._record_step(entry_node, render_definition_header(entry_node))
+        elif not body:
+            # The bare/legacy form has no CREATE header line to give an
+            # entry step to (see above) -- but when its body is ALSO
+            # completely empty, that used to mean a genuinely
+            # zero-length trace: a `Procedure` node with no statements
+            # falls straight through the loop below and never touches
+            # `self.steps` at all. That was an inconsistency with the
+            # wrapped forms just above, which always get >= 1 step even
+            # with an empty body (their entry step). Fixed by giving
+            # this one specific case -- and ONLY this case, so a bare
+            # body with at least one statement is completely unaffected
+            # and every existing golden trace stays byte-for-byte the
+            # same -- a synthetic step of its own, using a placeholder
+            # node (there's no real source line to point at) rather than
+            # `render_definition_header`, which only knows how to render
+            # a FunctionNode/ProcedureNode's signature line.
+            self._record_step({"type": "Procedure", "line": 1}, "(empty procedure body)")
 
         returned = False
         try:
@@ -1843,6 +1860,25 @@ class Interpreter:
         op = node["operator"]
         line = node["line"]
 
+        # `+ - * /` are the only operators that hand their operands
+        # straight to Python's own numeric operators, so they're the
+        # only ones a None operand (a DECLAREd-but-never-assigned
+        # variable, or an OUT param never SET on some code path -- both
+        # established, intentional conventions elsewhere in this
+        # interpreter) can crash: Python raises an unstructured
+        # TypeError for `None * 2`, which would otherwise surface as a
+        # raw 500 with no body, breaking this app's "every runtime
+        # error is a structured {stage, message, line}" contract. The
+        # comparison operators below are unaffected (`None == 2` is
+        # simply `False` in Python) and deliberately not guarded here.
+        if op in ("+", "-", "*", "/") and (left is None or right is None):
+            raise InterpreterError(
+                f"Cannot use {op!r}: a variable used in this expression has "
+                "no value yet -- it was declared but never assigned (or is "
+                "an OUT parameter never SET on this code path)",
+                line,
+            )
+
         if op == "+":
             return left + right
         if op == "-":
@@ -1992,7 +2028,11 @@ def run(
         ProgramNode), step 1 is an extra "entry" step for the CREATE
         .../BEGIN line itself (see the module docstring's "Functions"
         section) -- the bare/legacy Procedure form has no such step, and
-        its trace is exactly what it always was. Every step's
+        its trace is exactly what it always was, UNLESS its body is
+        completely empty, in which case it gets one synthetic
+        placeholder step of its own (a fixed, non-source `"(empty
+        procedure body)"` line) rather than a genuinely zero-length
+        trace -- see `Interpreter.run`. Every step's
         `variables` entries carry an `isOutput` flag, True only for a
         ProcedureNode's declared OUT/INOUT params -- so an OUT param's
         final value is visible (and identifiable as an output) in the

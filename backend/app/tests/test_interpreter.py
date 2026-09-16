@@ -128,6 +128,58 @@ def test_division_by_zero_raises():
         run(ast, {})
 
 
+# -- arithmetic on a None-valued (declared-but-never-assigned) variable --
+# Regression tests for a real bug found while building the testing-
+# infrastructure phase and fixed in a dedicated follow-up phase -- see
+# `test_known_bugs.py` for the full history. Before the fix, `+ - * /`
+# on a None operand crashed with Python's own raw, unstructured
+# TypeError instead of this app's structured InterpreterError.
+
+
+@pytest.mark.parametrize("operator", ["+", "-", "*", "/"])
+def test_arithmetic_on_an_unset_variable_raises_a_structured_error(operator):
+    """Each of `+ - * /` individually, on a DECLAREd-but-never-assigned
+    (None) variable, raises a clean InterpreterError -- not a raw
+    TypeError -- and the message is written for a first-time user
+    ("no value yet"), not a generic Python type-error string."""
+    code = f"DECLARE x NUMBER;\nSET x = x {operator} 2;\n"
+    ast = parse(tokenize(code))
+    with pytest.raises(InterpreterError, match="no value yet") as exc_info:
+        run(ast, {})
+    assert "TypeError" not in str(exc_info.value)
+
+
+def test_division_by_zero_still_wins_over_the_none_guard_when_both_apply():
+    """A `/` by a genuinely-zero (not None) value must still raise
+    the ordinary DIVISION_BY_ZERO error -- confirms the new None-operand
+    guard added alongside the arithmetic-crash fix doesn't accidentally
+    intercept or mask this pre-existing, differently-caused error."""
+    ast = parse(tokenize("DECLARE x NUMBER DEFAULT 1 / 0;"))
+    with pytest.raises(InterpreterError, match="[Dd]ivision by zero") as exc_info:
+        run(ast, {})
+    assert "no value yet" not in str(exc_info.value)
+
+
+def test_none_arithmetic_produces_a_structured_400_at_the_real_endpoint():
+    """The original bug report's own confirmation method (TestClient
+    against the real /debug endpoint, not just the interpreter in
+    isolation) -- now must return a structured 400 `{stage, message,
+    line}`, never a raw 500."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    response = client.post(
+        "/debug",
+        json={"code": "DECLARE x NUMBER;\nSET x = x * 2;\n", "params": {}},
+    )
+    assert response.status_code == 400
+    body = response.json()["detail"]
+    assert body["stage"] == "interpret"
+    assert "no value yet" in body["message"]
+
+
 def test_runaway_while_loop_is_capped():
     ast = parse(tokenize("WHILE 1 = 1 DO SET x = x + 1; END WHILE;"))
     with pytest.raises(InterpreterError):
