@@ -61,6 +61,39 @@ class ReportSection:
     blocks: list[ReportBlock] = field(default_factory=list)
 
 
+#  DOCX (python-docx) and PDF (reportlab) both pay a genuinely high
+# per-row cost when building a `Table` -- each row is its own lxml
+# element insertion (DOCX) or its own flowable layout pass (PDF) -- fine
+# for the handful of rows any built-in sample produces, but a table
+# whose row count scales with the step trace (Processing Steps: one row
+# per step; Intermediate Results: one row per variable per step) turns
+# "click Download" into a multi-second-to-multi-minute stall for
+# anything past a tiny trace: measured ~2s at 600 steps, ~12s at 3,000,
+# ~90s at 9,000 (see docs/schema.md) -- easily mistaken for "Download
+# doesn't work" since nothing errors, it just never seems to finish. The
+# plain-text renderer has no such cost (the same 9,000-step report
+# renders in well under a second as .txt), so only the two format
+# renderers that actually build a `Table` object cap what they draw,
+# each with a trailing note pointing at the Text export for the
+# untruncated data -- `build_report()`'s IR itself stays complete for
+# every format, preserving this module's "one IR feeds all renderers"
+# design; the cap is a rendering-library limitation, not a content
+# decision.
+_MAX_TABLE_ROWS_FOR_DOCUMENT_EXPORTS = 500
+
+
+def _cap_table_rows(
+    rows: list[list[str]], max_rows: int = _MAX_TABLE_ROWS_FOR_DOCUMENT_EXPORTS
+) -> tuple[list[list[str]], str | None]:
+    """Returns (rows_to_render, note_or_None). The note is `None` when
+    `rows` was already within the cap."""
+    if len(rows) <= max_rows:
+        return rows, None
+    omitted = len(rows) - max_rows
+    note = f"... {omitted} more row(s) omitted in this format -- see the Text export for the complete data ..."
+    return rows[:max_rows], note
+
+
 def _fmt_value(value) -> str:
     """Render a DebugStep variable/return value for report display --
     mirrors the frontend's formatValue() (DebuggerPage.jsx): an em-dash
@@ -395,7 +428,10 @@ def render_docx(meta: dict, sections: list[ReportSection]) -> bytes:
                 run.font.name = "Consolas"
                 run.font.size = Pt(9)
             elif block.kind == "table":
-                _add_docx_table(doc, block.headers or [], block.rows or [])
+                capped_rows, truncation_note = _cap_table_rows(block.rows or [])
+                _add_docx_table(doc, block.headers or [], capped_rows)
+                if truncation_note:
+                    doc.add_paragraph().add_run(truncation_note).italic = True
             elif block.kind == "image":
                 if block.caption:
                     caption_run = doc.add_paragraph().add_run(block.caption)
@@ -471,10 +507,11 @@ def render_pdf(meta: dict, sections: list[ReportSection]) -> bytes:
                     story.append(Paragraph(esc(line) or "&nbsp;", code_style))
                 story.append(Spacer(1, 0.1 * inch))
             elif block.kind == "table":
+                capped_rows, truncation_note = _cap_table_rows(block.rows or [])
                 story.append(
                     _build_pdf_table(
                         block.headers or [],
-                        block.rows or [],
+                        capped_rows,
                         content_width,
                         block.col_ratios,
                         cell_style,
@@ -482,6 +519,8 @@ def render_pdf(meta: dict, sections: list[ReportSection]) -> bytes:
                         esc,
                     )
                 )
+                if truncation_note:
+                    story.append(Paragraph(f"<i>{esc(truncation_note)}</i>", body_style))
                 story.append(Spacer(1, 0.15 * inch))
             elif block.kind == "image":
                 if block.caption:

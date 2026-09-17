@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react'
+import developerPhoto from './assets/developer-photo.jpeg'
+import guidePhoto from './assets/guide-photo.jpg'
 
 // Course-grading requirement: student photo, name, register number, and
 // guide, surfaced from a nav trigger as a modal rather than a route (see
-// Layout.jsx). All four fields below are placeholders -- swap the photo
-// slot for a real <img> and the two bracketed strings for the real
-// values once you have them; nothing else about this component needs
-// to change to do that.
+// Layout.jsx). Student and guide get identical treatment -- one
+// .developed-by-member row each (photo + role/name/detail stack).
 function DevelopedByModal({ onClose }) {
   const panelRef = useRef(null)
 
@@ -52,19 +52,29 @@ function DevelopedByModal({ onClose }) {
         </button>
 
         <div className="developed-by-content">
-          {/* PLACEHOLDER -- replace with <img src="/path/to/photo.jpg" alt="[NAME]" /> */}
-          <div className="developed-by-photo" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="12" cy="8" r="4" />
-              <path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8" />
-            </svg>
+          <div className="developed-by-member">
+            <div className="developed-by-photo">
+              <img src={developerPhoto} alt="N. Advika" />
+            </div>
+            <div className="developed-by-info">
+              <p className="developed-by-role">Developed By:</p>
+              <h2 id="developed-by-name" className="developed-by-name">
+                N. Advika
+              </h2>
+              <p className="developed-by-reg">Register Number: 25BCE5669</p>
+            </div>
           </div>
 
-          <h2 id="developed-by-name" className="developed-by-name">
-            N. Advika
-          </h2>
-          <p className="developed-by-reg">Register Number: 25BCE5669</p>
-          <p className="developed-by-guide">Guided By: Dr. Swaminathan A, Assistant Professor</p>
+          <div className="developed-by-member">
+            <div className="developed-by-photo">
+              <img src={guidePhoto} alt="Dr. Swaminathan A" />
+            </div>
+            <div className="developed-by-info">
+              <p className="developed-by-role">Guided By:</p>
+              <h2 className="developed-by-name">Dr. Swaminathan A</h2>
+              <p className="developed-by-reg">Assistant Professor</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -1006,8 +1006,8 @@ function DebuggerPage() {
                 onClick={() => loadSample(sample)}
               >
                 <div className="sample-card-header">
-                  <strong>{sample.name}</strong>
                   <span className={`sample-kind-tag sample-kind-tag-${sample.kind.toLowerCase()}`}>{sample.kind}</span>
+                  <strong>{sample.name}</strong>
                 </div>
                 <span className="sample-description">{sample.description}</span>
               </button>

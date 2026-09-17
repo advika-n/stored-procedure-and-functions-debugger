@@ -119,6 +119,7 @@ h2 {
 
 .top-nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.25rem;
 }
 
@@ -305,17 +306,28 @@ h2 {
   background: var(--accent-coral-bg);
 }
 
+/* Student and guide get one identical row each -- photo left, a
+   role/name/detail text stack right of it -- rather than the student
+   getting a full photo treatment and the guide only a trailing text
+   line, so both read as equally credited. */
 .developed-by-content {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.35rem;
+  align-items: stretch;
+  gap: 1.1rem;
   padding-top: 0.5rem;
+  text-align: left; /* overrides .developed-by-modal's centered dialog text for these rows */
+}
+
+.developed-by-member {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
 }
 
 .developed-by-photo {
-  width: 96px;
-  height: 96px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   border: 1px solid var(--border-hairline);
   background: var(--bg-panel-raised);
@@ -323,8 +335,8 @@ h2 {
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  margin-bottom: 0.6rem;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .developed-by-photo svg {
@@ -332,9 +344,31 @@ h2 {
   height: 56%;
 }
 
+.developed-by-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.developed-by-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.developed-by-role {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin: 0;
+}
+
 .developed-by-name {
   font-family: var(--font-display);
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -345,15 +379,6 @@ h2 {
   font-size: 0.82rem;
   color: var(--text-muted);
   margin: 0;
-}
-
-.developed-by-guide {
-  margin-top: 0.7rem;
-  padding-top: 0.7rem;
-  border-top: 1px solid var(--border-hairline);
-  width: 100%;
-  font-size: 0.85rem;
-  color: var(--text-primary);
 }
 
 #page-content {
@@ -1063,11 +1088,17 @@ h2 {
   background: var(--accent-teal-bg);
 }
 
+/* Badge above title, not inline beside it -- an inline row pushed the
+   PROCEDURE/FUNCTION tag past the card's right edge on longer names
+   (TieredPricingCalculator, SumUntilLimit) since neither element would
+   shrink to make room for the other. Stacking removes the width
+   contest entirely: the tag stays its own natural chip size, and the
+   title gets the full card width to wrap into. */
 .sample-card-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
   width: 100%;
 }
 
@@ -1075,6 +1106,11 @@ h2 {
   font-family: var(--font-mono);
   font-size: 0.86rem;
   color: var(--text-primary);
+  width: 100%;
+  /* Names are single unbroken camelCase identifiers (no spaces/hyphens),
+     so normal wrapping wouldn't break them at all -- force a mid-word
+     break once one is too long for the card instead of overflowing. */
+  overflow-wrap: break-word;
 }
 
 /* PROCEDURE = neutral (the baseline case); FUNCTION = teal, tying it

@@ -158,12 +158,25 @@ function HelpPage() {
             SQL. A gutter arrow (▸) glides to whichever line is currently executing once you've run Debug.
           </li>
           <li>
+            <strong>Breakpoints</strong> -- click a line number (or the glyph margin beside it) to toggle a
+            breakpoint on that line; a red dot marks it. Click the same spot again to remove it. Breakpoints
+            survive re-running Debug, so you can set them once and reuse them across runs.
+          </li>
+          <li>
             <strong>◀ Previous / Next ▶</strong> -- step backward/forward one statement at a time through
             the trace. You can also use the Left/Right arrow keys (as long as the editor itself isn't
             focused).
           </li>
           <li>
-            <strong>Reset</strong> -- jumps back to step 1 of the current trace without re-running Debug.
+            <strong>⏵ Continue</strong> -- fast-forwards from the current step to the next breakpointed
+            line, without re-running Debug. If no breakpoints are set, it instead runs all the way to the
+            end of the trace. When you're stopped on a breakpointed line, a{' '}
+            <span className="breakpoint-paused-badge">⏸ Paused at breakpoint</span> badge appears next to
+            the step counter.
+          </li>
+          <li>
+            <strong>↺ Restart</strong> -- jumps back to step 1 of the current trace without re-running
+            Debug.
           </li>
           <li>
             <strong>Step scrubber</strong> (slider) -- drag to any step directly instead of stepping one at

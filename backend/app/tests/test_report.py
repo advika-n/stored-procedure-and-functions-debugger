@@ -214,6 +214,59 @@ def test_generate_report_pdf_embeds_a_real_flowchart_image():
     assert len(content) > 2000
 
 
+def test_cap_table_rows_leaves_small_tables_untouched():
+    rows = [["a", "1"], ["b", "2"]]
+    capped, note = report._cap_table_rows(rows, max_rows=500)
+    assert capped == rows
+    assert note is None
+
+
+def test_cap_table_rows_truncates_and_notes_large_tables():
+    rows = [[str(i)] for i in range(600)]
+    capped, note = report._cap_table_rows(rows, max_rows=500)
+    assert len(capped) == 500
+    assert capped == rows[:500]
+    assert note is not None
+    assert "100" in note  # 600 - 500 omitted
+    assert "Text export" in note
+
+
+def test_generate_report_docx_caps_large_tables_but_txt_stays_complete():
+    """Regression test for the report-download performance bug (see
+    test_report_endpoint.py's test_report_endpoint_large_trace_stays_fast
+    for the full story): DOCX/PDF must cap any table that scales with
+    step count, but the plain-text renderer -- which has no comparable
+    per-row cost -- must keep the complete, untruncated data."""
+    from docx import Document
+
+    big_step_count = report._MAX_TABLE_ROWS_FOR_DOCUMENT_EXPORTS + 50
+    steps = [
+        {
+            "stepNumber": i + 1,
+            "line": i + 1,
+            "nodeType": "SetStatement",
+            "statementText": f"SET x = {i};",
+            "variables": {},
+        }
+        for i in range(big_step_count)
+    ]
+
+    txt_content, _, _ = report.generate_report(
+        fmt="txt", code="x", params={}, procedure_name="Big", steps=steps, flowchart_png_bytes=None
+    )
+    text = txt_content.decode("utf-8")
+    assert f"SET x = {big_step_count - 1};" in text  # the real last step, present -- not truncated
+    assert "omitted" not in text
+
+    docx_content, _, _ = report.generate_report(
+        fmt="docx", code="x", params={}, procedure_name="Big", steps=steps, flowchart_png_bytes=None
+    )
+    doc = Document(io.BytesIO(docx_content))
+    all_text = "\n".join(p.text for p in doc.paragraphs)
+    assert "omitted" in all_text
+    assert "Text export" in all_text
+
+
 def test_generate_report_rejects_unsupported_format():
     import pytest
 
