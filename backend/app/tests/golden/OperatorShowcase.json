@@ -1,0 +1,193 @@
+[
+  {
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE OperatorShowcase(OUT grade STRING, OUT isPerfect NUMBER)",
+    "stepNumber": 1,
+    "variables": {
+      "grade": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "isPerfect": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      }
+    }
+  },
+  {
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE score NUMBER DEFAULT 82;",
+    "stepNumber": 2,
+    "variables": {
+      "grade": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "isPerfect": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "score": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 82
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "score <> 100",
+      "path": "then",
+      "result": true
+    },
+    "line": 4,
+    "nodeType": "IfStatement",
+    "statementText": "IF score <> 100 THEN",
+    "stepNumber": 3,
+    "variables": {
+      "grade": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "isPerfect": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "score": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 82
+      }
+    }
+  },
+  {
+    "line": 5,
+    "nodeType": "SetStatement",
+    "statementText": "SET isPerfect = 0;",
+    "stepNumber": 4,
+    "variables": {
+      "grade": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "isPerfect": {
+        "changed": true,
+        "isOutput": true,
+        "type": "number",
+        "value": 0
+      },
+      "score": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 82
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "score >= 90",
+      "path": "else",
+      "result": false
+    },
+    "line": 9,
+    "nodeType": "IfStatement",
+    "statementText": "IF score >= 90 THEN",
+    "stepNumber": 5,
+    "variables": {
+      "grade": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "isPerfect": {
+        "changed": false,
+        "isOutput": true,
+        "type": "number",
+        "value": 0
+      },
+      "score": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 82
+      }
+    }
+  },
+  {
+    "branch": {
+      "condition": "score >= 75",
+      "path": "then",
+      "result": true
+    },
+    "line": 12,
+    "nodeType": "IfStatement",
+    "statementText": "IF score >= 75 THEN",
+    "stepNumber": 6,
+    "variables": {
+      "grade": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "isPerfect": {
+        "changed": false,
+        "isOutput": true,
+        "type": "number",
+        "value": 0
+      },
+      "score": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 82
+      }
+    }
+  },
+  {
+    "line": 13,
+    "nodeType": "SetStatement",
+    "statementText": "SET grade = 'B';",
+    "stepNumber": 7,
+    "variables": {
+      "grade": {
+        "changed": true,
+        "isOutput": true,
+        "type": "string",
+        "value": "B"
+      },
+      "isPerfect": {
+        "changed": false,
+        "isOutput": true,
+        "type": "number",
+        "value": 0
+      },
+      "score": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 82
+      }
+    }
+  }
+]

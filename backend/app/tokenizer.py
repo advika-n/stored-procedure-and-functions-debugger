@@ -21,7 +21,16 @@ Supported keywords (case-insensitive):
     NULL
 
 Supported operators:
-    +  -  *  /  >  <  =  !=
+    +  -  *  /  >  <  =  !=  >=  <=  <>
+    >=, <=, and <> are each a single OPERATOR token carrying their full
+    two-character text as `value` (exactly like != already does) -- not
+    two separate one-character tokens. This matters for lexing order:
+    `_TOKEN_SPEC` below matches the two-character forms BEFORE the
+    single-character `>`/`<`/`=` pattern, so `>=` is never split into a
+    bare `>` token followed by a bare `=` token. <> is an alternate
+    spelling of != (both mean "not equal"); the parser/interpreter treat
+    a `<>` token exactly like a `!=` token from this point on -- there is
+    no separate "NEQ2" concept anywhere past the tokenizer.
     % is also recognized, but only as the cursor-attribute suffix in
     `cur_name%FOUND` / `cur_name%NOTFOUND` (see app.parser) -- it is
     not a general modulo operator.
@@ -125,11 +134,19 @@ KEYWORDS = {
 
 # Order matters: longer/more-specific patterns must come before shorter
 # ones that would otherwise shadow them (e.g. NEQ before OPERATOR, and
-# NUMBER's float form before its integer form).
+# NUMBER's float form before its integer form). GTE/LTE must likewise
+# come before the bare single-character OPERATOR pattern -- otherwise
+# `>=` would lex as a `>` OPERATOR token immediately followed by a `=`
+# OPERATOR token instead of one `>=` token, and the parser's comparison
+# rule (which looks for a single OPERATOR token whose value is one of
+# COMPARISON_OPERATORS) would never see `>=` as such. NEQ's pattern
+# covers both `!=` and `<>` -- see the module docstring above.
 _TOKEN_SPEC = [
     ("WS", r"\s+"),
     ("STRING", r"'(?:[^'\\]|\\.)*'"),
-    ("NEQ", r"!="),
+    ("NEQ", r"!=|<>"),
+    ("GTE", r">="),
+    ("LTE", r"<="),
     ("NUMBER", r"\d+\.\d+|\d+"),
     ("IDENT", r"[A-Za-z_][A-Za-z0-9_]*"),
     ("OPERATOR", r"[+\-*/><=%]"),
@@ -195,7 +212,7 @@ def tokenize(code: str) -> list[dict]:
         if kind == "IDENT":
             upper = value.upper()
             token_type = "KEYWORD" if upper in KEYWORDS else "IDENTIFIER"
-        elif kind == "NEQ":
+        elif kind in ("NEQ", "GTE", "LTE"):
             token_type = "OPERATOR"
         else:
             token_type = kind

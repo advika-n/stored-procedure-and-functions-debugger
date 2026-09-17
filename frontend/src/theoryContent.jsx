@@ -1,67 +1,11 @@
-// Static reference content for the Theory section. Each entry is a
-// short, skimmable page (150-300 words + one code example), not a
-// textbook chapter -- something to read before or during a debugging
-// session, not instead of one.
-
-export function StoredProceduresTopic() {
-  return (
-    <>
-      <p>
-        A <strong>stored procedure</strong> is a named block of SQL and
-        procedural logic (variables, assignments, branching, loops) that
-        lives inside the database and is invoked by name, instead of being
-        sent as fresh SQL text on every call. A plain query is one
-        statement that returns a result set; a procedure can run several
-        statements in sequence, hold local state while it runs, and cause
-        side effects (updates, inserts, logging) as part of one call.
-      </p>
-      <p>
-        A <strong>PROCEDURE</strong> has no return value -- it's invoked as
-        its own statement with <code>CALL</code>. A{' '}
-        <strong>FUNCTION</strong> returns exactly one value and is used
-        <em> inside</em> an expression, e.g. in a <code>SELECT</code> list
-        or a <code>WHERE</code> clause.
-      </p>
-      <p>
-        They're used for <strong>reusability</strong> (write the logic
-        once, call it from anywhere), <strong>fewer network round-trips</strong>{' '}
-        (one call runs many statements server-side instead of the
-        application sending each one), and <strong>encapsulated business
-        logic</strong> (the rules live next to the data, so every caller
-        gets the same behavior instead of reimplementing it).
-      </p>
-      <p className="theory-code-label">Procedure vs. function, side by side:</p>
-      <pre className="theory-code">{`-- PROCEDURE: no return value, run with CALL
-CREATE PROCEDURE ApplyDiscount(IN orderId INT)
-BEGIN
-  UPDATE orders SET total = total * 0.9 WHERE id = orderId;
-END;
-
-CALL ApplyDiscount(42);
-
--- FUNCTION: returns one value, used inside an expression
-CREATE FUNCTION DiscountedPrice(price NUMBER) RETURNS NUMBER
-BEGIN
-  RETURN price * 0.9;
-END;
-
-SELECT DiscountedPrice(50);`}</pre>
-      <p className="theory-note">
-        Both wrappers above ARE executable here: paste in the full{' '}
-        <code>CREATE PROCEDURE(...) BEGIN...END</code> or{' '}
-        <code>CREATE FUNCTION(...) RETURNS ... BEGIN...END</code> and it
-        runs, params and all. You can also skip the wrapper entirely and
-        paste in just the bare body -- that still works exactly as it
-        always has, and is how every persisted History entry saved before
-        <code>CREATE PROCEDURE</code> support existed is stored.{' '}
-        <code>CALL</code> and the <code>UPDATE</code> statement in this
-        specific example are still just real SQL context, though -- this
-        grammar doesn't support table updates or invoking one procedure
-        from another.
-      </p>
-    </>
-  )
-}
+// Static reference content for the Learn page's "Deep Dive" panel (formerly
+// its own standalone Theory tab, merged into Learn -- see LearnPage.jsx).
+// Each entry is a short, skimmable page (150-300 words + one code example),
+// not a textbook chapter -- something to read before or during a debugging
+// session, not instead of one. StoredProceduresTopic was dropped when this
+// merged into Learn: its content duplicated Learn's own Concept Explanation
+// section (what a procedure/function is, why they exist, procedure vs.
+// function).
 
 export function VariablesTopic() {
   return (

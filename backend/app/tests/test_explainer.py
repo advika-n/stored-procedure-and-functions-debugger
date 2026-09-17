@@ -426,49 +426,65 @@ def test_build_prompt_still_includes_loop_for_while_steps():
     assert "iteration 2" in prompt
 
 
-# -- template generator: user-created tables ---------------------------------
+# -- template generator: SQL passthrough statements --------------------------
+# (CREATE TABLE / INSERT / UPDATE / DELETE / SELECT -- see
+# app.interpreter's "SQL passthrough statements" section; one shared
+# `nodeType` ("SqlStatement") and `sql` field now, not four separate
+# node types each with their own `table` field.)
 
 
-def test_create_table_explanation_names_the_columns():
+def test_create_table_explanation_names_the_table():
     step = {
         "line": 1,
-        "nodeType": "CreateTableStatement",
+        "nodeType": "SqlStatement",
         "statementText": "CREATE TABLE emp (id NUMBER, name TEXT);",
         "variables": {},
-        "table": {"name": "emp", "operation": "CREATE", "columns": ["id", "name"], "rowsAffected": 0, "row": None, "rows": []},
-    }
-    text = generate_template_explanation(step, None)
-    assert "emp" in text
-    assert "id" in text and "name" in text
-
-
-def test_insert_explanation_describes_the_new_row():
-    step = {
-        "line": 1,
-        "nodeType": "InsertStatement",
-        "statementText": "INSERT INTO emp (id, name) VALUES (1, 'Alice');",
-        "variables": {},
-        "table": {
-            "name": "emp",
-            "operation": "INSERT",
-            "columns": ["id", "name"],
-            "rowsAffected": 1,
-            "row": {"id": 1, "name": "Alice"},
-            "rows": [{"id": 1, "name": "Alice"}],
+        "sql": {
+            "keyword": "CREATE",
+            "statement": "CREATE TABLE emp (id NUMBER, name TEXT)",
+            "kind": "write",
+            "rowsAffected": 0,
+            "tableName": "emp",
+            "snapshot": {"columns": ["id", "name"], "rows": []},
         },
     }
     text = generate_template_explanation(step, None)
     assert "emp" in text
-    assert "Alice" in text
+
+
+def test_insert_explanation_describes_the_affected_table():
+    step = {
+        "line": 1,
+        "nodeType": "SqlStatement",
+        "statementText": "INSERT INTO emp (id, name) VALUES (1, 'Alice');",
+        "variables": {},
+        "sql": {
+            "keyword": "INSERT",
+            "statement": "INSERT INTO emp (id, name) VALUES (1, 'Alice')",
+            "kind": "write",
+            "rowsAffected": 1,
+            "tableName": "emp",
+            "snapshot": {"columns": ["id", "name"], "rows": [[1, "Alice"]]},
+        },
+    }
+    text = generate_template_explanation(step, None)
+    assert "emp" in text
 
 
 def test_update_explanation_mentions_rows_affected():
     step = {
         "line": 1,
-        "nodeType": "UpdateStatement",
+        "nodeType": "SqlStatement",
         "statementText": "UPDATE emp SET name = 'Bob' WHERE id = 1;",
         "variables": {},
-        "table": {"name": "emp", "operation": "UPDATE", "columns": ["id", "name"], "rowsAffected": 1, "row": None, "rows": []},
+        "sql": {
+            "keyword": "UPDATE",
+            "statement": "UPDATE emp SET name = 'Bob' WHERE id = 1",
+            "kind": "write",
+            "rowsAffected": 1,
+            "tableName": "emp",
+            "snapshot": {"columns": ["id", "name"], "rows": [[1, "Bob"]]},
+        },
     }
     text = generate_template_explanation(step, None)
     assert "emp" in text
@@ -478,36 +494,76 @@ def test_update_explanation_mentions_rows_affected():
 def test_delete_explanation_mentions_rows_affected():
     step = {
         "line": 1,
-        "nodeType": "DeleteStatement",
+        "nodeType": "SqlStatement",
         "statementText": "DELETE FROM emp WHERE id = 1;",
         "variables": {},
-        "table": {"name": "emp", "operation": "DELETE", "columns": ["id", "name"], "rowsAffected": 1, "row": None, "rows": []},
+        "sql": {
+            "keyword": "DELETE",
+            "statement": "DELETE FROM emp WHERE id = 1",
+            "kind": "write",
+            "rowsAffected": 1,
+            "tableName": "emp",
+            "snapshot": {"columns": ["id", "name"], "rows": []},
+        },
     }
     text = generate_template_explanation(step, None)
     assert "emp" in text
     assert "Deleted 1" in text
 
 
-def test_build_prompt_includes_table_state_for_a_mutating_step():
+def test_select_explanation_mentions_row_count():
     step = {
         "line": 1,
-        "nodeType": "InsertStatement",
+        "nodeType": "SqlStatement",
+        "statementText": "SELECT * FROM emp;",
+        "variables": {},
+        "sql": {
+            "keyword": "SELECT",
+            "statement": "SELECT * FROM emp",
+            "kind": "rows",
+            "columns": ["id", "name"],
+            "rows": [[1, "Alice"]],
+            "rowCount": 1,
+        },
+    }
+    text = generate_template_explanation(step, None)
+    assert "1" in text
+
+
+def test_build_prompt_includes_sql_state_for_a_mutating_step():
+    step = {
+        "line": 1,
+        "nodeType": "SqlStatement",
         "statementText": "INSERT INTO emp VALUES (1);",
         "variables": {},
-        "table": {"name": "emp", "operation": "INSERT", "columns": ["id"], "rowsAffected": 1, "row": {"id": 1}, "rows": [{"id": 1}]},
+        "sql": {
+            "keyword": "INSERT",
+            "statement": "INSERT INTO emp VALUES (1)",
+            "kind": "write",
+            "rowsAffected": 1,
+            "tableName": "emp",
+            "snapshot": {"columns": ["id"], "rows": [[1]]},
+        },
     }
     prompt = explainer._build_prompt(step, None)
     assert "emp" in prompt
     assert "INSERT" in prompt
 
 
-def test_build_ask_prompt_includes_table_state():
+def test_build_ask_prompt_includes_sql_state():
     step = {
         "line": 1,
-        "nodeType": "DeleteStatement",
+        "nodeType": "SqlStatement",
         "statementText": "DELETE FROM emp;",
         "variables": {},
-        "table": {"name": "emp", "operation": "DELETE", "columns": ["id"], "rowsAffected": 2, "row": None, "rows": []},
+        "sql": {
+            "keyword": "DELETE",
+            "statement": "DELETE FROM emp",
+            "kind": "write",
+            "rowsAffected": 2,
+            "tableName": "emp",
+            "snapshot": {"columns": ["id"], "rows": []},
+        },
     }
     prompt = explainer._build_ask_prompt("DELETE FROM emp;", step, "why did this remove rows?")
     assert "emp" in prompt

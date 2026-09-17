@@ -2,12 +2,13 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from app import demo_db, history, report
+from app import history, report, user_db
 from app.advisor import analyze as analyze_anti_patterns
 from app.explainer import answer_question, explain_step
 from app.interpreter import InterpreterError, run
 from app.parser import ParserError, parse
 from app.quiz import generate_quiz
+from app.sql_console import SqlExecutionError, execute_sql
 from app.tokenizer import TokenizerError, tokenize
 
 app = FastAPI(title="Stored Procedure and Functions Debugger API")
@@ -73,10 +74,10 @@ def debug(request: DebugRequest):
     # HANDOFF.md for that scope note).
     issues = analyze_anti_patterns(ast)
 
-    # A fresh, small demo database (see app/demo_db.py) so cursor
-    # statements have something to query without a schema-authoring
-    # feature -- closed again once this run finishes either way.
-    conn = demo_db.create_demo_connection()
+    # The persistent, on-disk user database (see app/user_db.py) so
+    # cursor statements query the same data the SQL Console reads and
+    # writes -- closed again once this run finishes either way.
+    conn = user_db.get_connection()
     try:
         steps = run(ast, request.params, db_connection=conn)
     except InterpreterError as exc:
@@ -147,6 +148,30 @@ def debug_report(request: ReportRequest):
         media_type=content_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+class SqlExecuteRequest(BaseModel):
+    sql: str
+
+
+@app.post("/sql/execute")
+def sql_execute(request: SqlExecuteRequest):
+    """SQL Console: run arbitrary SQL as-is against app.user_db's
+    persistent database, straight through the sqlite3 driver -- NOT
+    through this project's own tokenize/parse/interpret pipeline (see
+    app/sql_console.py). Used by the frontend's merged SQL Console page
+    (see frontend/src/pages/SqlConsolePage.jsx) whenever input doesn't
+    parse as a procedure/function but looks like plain SQL, and directly
+    by SqlStatement's own execution inside a procedure body (see
+    app/interpreter.py's `_exec_sql_statement`, which calls the shared
+    `execute_sql_on_connection` this endpoint's own `execute_sql` wraps,
+    not this HTTP route itself). Returns column names + rows for a
+    SELECT, or a rows-affected summary for a write/DDL statement. SQLite
+    errors come back as a clean 400 message, never a raw traceback."""
+    try:
+        return execute_sql(request.sql)
+    except SqlExecutionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 class ExplainRequest(BaseModel):

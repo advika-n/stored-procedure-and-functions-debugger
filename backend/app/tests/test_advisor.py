@@ -89,6 +89,36 @@ END
     assert "select-star" not in _categories(advisor.analyze(ast))
 
 
+def test_standalone_select_star_is_also_flagged():
+    # A standalone SELECT (SqlStatement, keyword="SELECT" -- see
+    # app.parser's "SQL passthrough statements" section) is a different
+    # AST shape from a cursor's embedded SELECT (CursorDeclNode.query),
+    # but the same anti-pattern -- both get flagged.
+    ast = _ast(
+        """CREATE PROCEDURE Bad()
+BEGIN
+    SELECT * FROM products;
+END
+"""
+    )
+    issues = advisor.analyze(ast)
+    assert "select-star" in _categories(issues)
+    hit = next(i for i in issues if i["category"] == "select-star")
+    assert hit["severity"] == "suggestion"
+    assert hit["line"] == 3
+
+
+def test_standalone_select_with_explicit_columns_is_not_flagged():
+    ast = _ast(
+        """CREATE PROCEDURE Good()
+BEGIN
+    SELECT name, price FROM products;
+END
+"""
+    )
+    assert "select-star" not in _categories(advisor.analyze(ast))
+
+
 # -- 2. cursor loop that only accumulates -------------------------------------
 
 
@@ -1335,7 +1365,14 @@ END
     assert lines == sorted(lines)
 
 
-# -- missing-where-clause (user-created tables) --------------------------------
+# -- missing-where-clause (SQL passthrough statements) -----------------------
+# See app.parser's "SQL passthrough statements" section: CREATE TABLE/
+# INSERT/UPDATE/DELETE/SELECT are raw SQL text now (SqlStatement), not
+# the four separately-parsed node types an earlier phase gave them --
+# this check now regexes `sql` for a literal WHERE rather than checking
+# a parsed `where` field for None, but the same literal-only source
+# text below still round-trips identically either way, so these three
+# tests are otherwise unchanged.
 
 
 def test_update_with_no_where_is_flagged():
@@ -1381,23 +1418,31 @@ END
     assert "missing-where-clause" not in _categories(advisor.analyze(ast))
 
 
-def test_magic_number_and_unused_variable_checks_see_inside_insert_update_delete():
-    # `_statement_exprs`'s new InsertStatement/UpdateStatement/
-    # DeleteStatement cases feed every shared check built on top of it,
-    # not just missing-where-clause -- verified directly rather than
-    # assumed, per this project's own testing convention.
+def test_magic_number_and_unused_variable_checks_do_not_see_inside_raw_sql_statements():
+    # The retired InsertStatement/UpdateStatement/DeleteStatement node
+    # types used to feed their own VALUES/SET/WHERE expressions into
+    # `_statement_exprs`, so magic-number could see a literal like `42`
+    # inside an INSERT and unused-variable could see `threshold` read
+    # inside an UPDATE's WHERE. SqlStatement carries raw `sql` text, not
+    # an expression tree (same scope boundary a cursor's own embedded
+    # query already had -- see app.advisor's `_statement_exprs`), so
+    # neither check can see inside these statements any more -- verified
+    # directly (the new, narrower boundary) rather than assumed, per
+    # this project's own testing convention.
     ast = _ast(
         """CREATE PROCEDURE Demo()
 BEGIN
     DECLARE threshold NUMBER DEFAULT 42;
     CREATE TABLE t (a NUMBER);
     INSERT INTO t VALUES (42);
-    UPDATE t SET a = 42 WHERE a > threshold;
+    UPDATE t SET a = 42 WHERE a > 10;
 END
 """
     )
     issues = advisor.analyze(ast)
-    assert "magic-number" in _categories(issues)
-    # `threshold` is read inside UPDATE's own WHERE clause -- must NOT be
-    # flagged as unused.
-    assert "unused-variable" not in _categories(issues)
+    assert "magic-number" not in _categories(issues)
+    # `threshold` is declared but never read anywhere the advisor can
+    # see (its own DEFAULT doesn't count as a read) -- correctly flagged
+    # now that the UPDATE's WHERE is opaque raw text, not something that
+    # could read it.
+    assert "unused-variable" in _categories(issues)

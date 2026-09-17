@@ -1,15 +1,16 @@
 import { useState } from 'react'
 import { readLastProcedure } from '../lastProcedure'
 
-// A standalone conceptual quiz, distinct from the Debugger's inline
-// "Predict Mode" (predicting one step's outcome mid-trace) -- this is a
-// full 5-question multiple-choice quiz generated fresh by Gemini, either
-// general theory or grounded in whatever procedure is currently loaded
-// in the Debugger. See backend/app/quiz.py for the generation/parsing.
+// A standalone conceptual quiz, distinct from the SQL Console page's
+// inline "Predict Mode" (predicting one step's outcome mid-trace) --
+// this is a full 5-question multiple-choice quiz generated fresh by
+// Gemini, either general theory or grounded in whatever procedure is
+// currently loaded on the SQL Console page. See backend/app/quiz.py
+// for the generation/parsing.
 function QuizPage() {
   // Read once per page visit (this component remounts on every
   // navigation to /quiz, so a fresh read always reflects whatever the
-  // Debugger last had loaded -- see lastProcedure.js).
+  // SQL Console page last had loaded -- see lastProcedure.js).
   const [lastProcedure] = useState(() => readLastProcedure())
   const hasLoadedProcedure = Boolean(lastProcedure)
 
@@ -74,7 +75,7 @@ function QuizPage() {
           <p className="quiz-page-blurb">
             Five Gemini-generated multiple-choice questions -- either general theory covering procedures,
             functions, control flow, cursors, and exception handling, or questions specific to whatever
-            procedure is currently loaded in the Debugger.
+            procedure is currently loaded on the SQL Console page.
           </p>
 
           <div className="quiz-page-source-picker">
@@ -101,7 +102,7 @@ function QuizPage() {
             </label>
           </div>
           {!hasLoadedProcedure && (
-            <p className="quiz-page-hint">Load a procedure in the Debugger first to enable this option.</p>
+            <p className="quiz-page-hint">Load a procedure on the SQL Console page first to enable this option.</p>
           )}
 
           <p>

@@ -41,15 +41,24 @@ function formatValue(value) {
   return String(value)
 }
 
-// A user-created table's rows (see backend/app/interpreter.py's "User-
-// created tables" section) are checked against the LAST step in the
-// whole trace whose OWN `table.name` matches -- i.e. the state right
+// A table's rows (see backend/app/interpreter.py's "SQL passthrough
+// statements" section -- CREATE TABLE/INSERT/UPDATE/DELETE, raw SQL
+// against the real database) are checked against the LAST step in the
+// whole trace whose OWN `sql.tableName` matches -- i.e. the state right
 // after that table's own final CREATE/INSERT/UPDATE/DELETE -- not just
 // whatever the very last step overall happens to be (which may belong
 // to an entirely different table, or to no table mutation at all).
+// `sql.snapshot` is `{columns, rows}` with each row a plain array in
+// column order (see app.sql_console's response shape) -- zipped back
+// into `{column: value}` dicts here so `rowsMatch`/testCaseExpectations.js's
+// own expectation format (a list of column-keyed objects, unchanged
+// from the retired `table.rows` field's own shape) needs no rewrite.
 function findFinalTableState(steps, tableName) {
   for (let i = steps.length - 1; i >= 0; i -= 1) {
-    if (steps[i].table?.name === tableName) return steps[i].table
+    const sql = steps[i].sql
+    if (sql?.kind === 'write' && sql.tableName === tableName && sql.snapshot) {
+      return sql.snapshot.rows.map((row) => Object.fromEntries(sql.snapshot.columns.map((col, idx) => [col, row[idx]])))
+    }
   }
   return null
 }
@@ -123,8 +132,7 @@ async function runOneCase(sample, expectation) {
   // own contract comment) -- a user-created table's FINAL row state,
   // not just scalar variables/a return value.
   for (const [tableName, expectedRows] of Object.entries(expectation.tables ?? {})) {
-    const finalState = findFinalTableState(steps, tableName)
-    const actualRows = finalState?.rows ?? null
+    const actualRows = findFinalTableState(steps, tableName)
     if (actualRows === null || !rowsMatch(actualRows, expectedRows)) {
       diffs.push({ field: `table:${tableName}`, expected: formatRows(expectedRows), actual: formatRows(actualRows), raw: true })
     }

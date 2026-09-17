@@ -1,4 +1,4 @@
-// A tiny cross-page bridge: DebuggerPage writes whatever code is
+// A tiny cross-page bridge: SqlConsolePage writes whatever code is
 // currently in its editor here, so QuizPage's "This Procedure" option
 // (see /quiz) knows whether a procedure is loaded and what its source
 // is -- without standing up a global state store for one field. Every

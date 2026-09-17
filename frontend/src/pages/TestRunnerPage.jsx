@@ -11,7 +11,7 @@ export default function TestRunnerPage() {
     <section className="test-runner-page">
       <h1>Test-Case Runner</h1>
       <p className="page-subtitle">
-        Runs every built-in sample through the same /debug pipeline the Debugger page uses, then checks the
+        Runs every built-in sample through the same /debug pipeline the SQL Console page uses, then checks the
         final result against a hand-verified expected outcome for each -- a pass/fail regression check, not
         just a manual spot-check.
       </p>

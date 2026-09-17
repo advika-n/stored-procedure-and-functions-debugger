@@ -5,12 +5,14 @@ import { defineConfig } from 'vite'
 
 // Vite's dev proxy matches these keys as PATH PREFIXES, not exact paths.
 // That collides with the app's own routes now that there are real pages
-// at those same paths: '/debug' is a prefix of the '/debugger' page
-// route, and '/history' *is* both the History page's route and the
-// history-list API path. Without this guard, loading/refreshing
-// /debugger or /history directly would get proxied straight to the
-// FastAPI backend and come back as raw JSON (or a 404) instead of the
-// SPA's index.html.
+// at those same paths: '/debug' is a prefix of the '/debugger' route
+// (now just a redirect to '/sql-console' -- the Debugger and SQL
+// Console pages merged, see SqlConsolePage.jsx -- but still a real
+// client-side route the SPA needs to handle, not the backend), and
+// '/history' *is* both the History page's route and the history-list
+// API path. Without this guard, loading/refreshing /debugger or
+// /history directly would get proxied straight to the FastAPI backend
+// and come back as raw JSON (or a 404) instead of the SPA's index.html.
 //
 // A top-level browser navigation sends `Accept: text/html...`; the
 // app's own fetch() calls to these same paths don't. bypass() lets an
@@ -49,6 +51,15 @@ export default defineConfig({
         bypass: bypassNavigations,
       },
       '/history': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        bypass: bypassNavigations,
+      },
+      // Same collision as '/debug'/'/debugger' above: '/sql' (the API
+      // path prefix for '/sql/execute') is also a path-prefix match for
+      // the SQL Console page's own route, '/sql-console' -- needs the
+      // same bypass guard.
+      '/sql': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         bypass: bypassNavigations,

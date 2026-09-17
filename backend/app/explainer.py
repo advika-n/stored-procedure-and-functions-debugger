@@ -53,7 +53,10 @@ _SYSTEM_PROMPT = (
 _COMPARISON_PHRASES = {
     ">": "exceeded",
     "<": "was less than",
+    ">=": "was at least",
+    "<=": "was at most",
     "!=": "was not equal to",
+    "<>": "was not equal to",  # alternate spelling of != -- see app.tokenizer
     "=": "equaled",
 }
 
@@ -74,6 +77,33 @@ def _get_gemini_client() -> genai.Client:
 def _cache_key(step: dict, previous_variables: dict | None) -> str:
     payload = {"step": step, "previousVariables": previous_variables}
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _describe_sql_step(sql: dict) -> str:
+    """One plain-text line describing a `sql` DebugStep field (see
+    app.interpreter's "SQL passthrough statements" section) -- shared by
+    `_build_prompt`, `_build_ask_prompt`, and the template fallback
+    below, since all three want the same underlying facts (what ran,
+    what it returned/affected)."""
+    into = sql.get("into")
+    if into is not None:
+        # SelectIntoStatement -- see app.interpreter's own section of the
+        # same name. `rows` is either [] (the NOT_FOUND case, `error` on
+        # the step itself already carries that) or exactly one row.
+        rows = sql.get("rows") or []
+        if rows:
+            assignments = ", ".join(f"{name} = {value!r}" for name, value in zip(into, rows[0]))
+            return f"Ran SELECT...INTO `{sql.get('statement')}`, found one row, and assigned {assignments}."
+        return f"Ran SELECT...INTO `{sql.get('statement')}` -- it matched no row, so {', '.join(into)} were left unchanged."
+    if sql.get("kind") == "rows":
+        return (
+            f"Ran {sql.get('keyword')} `{sql.get('statement')}`, returning "
+            f"{sql.get('rowCount')} row(s): {sql.get('rows')!r} (columns: {sql.get('columns')!r})."
+        )
+    return (
+        f"Ran {sql.get('keyword')} `{sql.get('statement')}` against table "
+        f"'{sql.get('tableName')}', affecting {sql.get('rowsAffected')} row(s)."
+    )
 
 
 # -- Gemini-backed generation --------------------------------------------
@@ -113,12 +143,9 @@ def _build_prompt(step: dict, previous_variables: dict | None) -> str:
             row_desc = "no current row yet"
         lines.append(f"Cursor `{cursor.get('name')}` state: {row_desc} (hasMore={cursor.get('hasMore')}).")
 
-    table = step.get("table")
-    if table:
-        lines.append(
-            f"Table `{table.get('name')}` operation: {table.get('operation')}, "
-            f"{table.get('rowsAffected')} row(s) affected. Current rows: {table.get('rows')!r}."
-        )
+    sql = step.get("sql")
+    if sql:
+        lines.append(_describe_sql_step(sql))
 
     error = step.get("error")
     if error:
@@ -219,12 +246,9 @@ def _build_ask_prompt(code: str, step: dict, question: str) -> str:
     for name, entry in (step.get("variables") or {}).items():
         lines.append(f"  {name} = {entry.get('value')!r} ({entry.get('type')})")
 
-    table = step.get("table")
-    if table:
-        lines.append(
-            f"Table `{table.get('name')}` operation: {table.get('operation')}, "
-            f"{table.get('rowsAffected')} row(s) affected. Current rows: {table.get('rows')!r}."
-        )
+    sql = step.get("sql")
+    if sql:
+        lines.append(_describe_sql_step(sql))
 
     lines.append("")
     lines.append(f"Question: {question}")
@@ -269,7 +293,11 @@ def _describe_condition(condition_text: str, variables: dict) -> str:
     """Best-effort natural phrasing of a `LEFT OP RIGHT` condition,
     substituting the left operand's live value when it's a known
     variable (e.g. "total (120) exceeded 100")."""
-    match = re.match(r"^(.+?)\s*(>|<|!=|=)\s*(.+)$", condition_text)
+    # Longer operators must be tried before their single-character
+    # prefixes in this alternation (>= before >, <= before <, and <> is
+    # its own two-character form) -- same ordering concern as
+    # app.tokenizer's own lexing of these, just at the regex level.
+    match = re.match(r"^(.+?)\s*(>=|<=|<>|!=|>|<|=)\s*(.+)$", condition_text)
     if not match:
         return f"`{condition_text}`"
     left, op, right = (group.strip() for group in match.groups())
@@ -355,24 +383,35 @@ def generate_template_explanation(step: dict, previous_variables: dict | None) -
             return f"Evaluated {condition_text} against each WHEN in order; none matched, so the ELSE branch ran."
         return f"Evaluated {condition_text} against each WHEN in order; none matched, and there was no ELSE branch to run."
 
-    if node_type == "CreateTableStatement":
-        table = step.get("table") or {}
-        columns = ", ".join(table.get("columns") or [])
-        return f"Created table `{table.get('name')}` with columns {columns}."
+    if node_type == "SqlStatement":
+        sql = step.get("sql") or {}
+        keyword = sql.get("keyword")
+        if keyword == "CREATE":
+            return f"Created table `{sql.get('tableName')}` (raw SQL, run directly against the database)."
+        if keyword == "INSERT":
+            return f"Inserted into `{sql.get('tableName')}` ({sql.get('rowsAffected', 0)} row(s))."
+        if keyword == "UPDATE":
+            return f"Updated {sql.get('rowsAffected', 0)} row(s) in `{sql.get('tableName')}`."
+        if keyword == "DELETE":
+            return f"Deleted {sql.get('rowsAffected', 0)} row(s) from `{sql.get('tableName')}`."
+        if keyword == "SELECT":
+            return f"Ran a SELECT, returning {sql.get('rowCount', 0)} row(s)."
+        return "Ran a raw SQL statement."
 
-    if node_type == "InsertStatement":
-        table = step.get("table") or {}
-        row = table.get("row") or {}
-        row_desc = ", ".join(f"{k}={v!r}" for k, v in row.items())
-        return f"Inserted a new row into `{table.get('name')}` ({row_desc})."
-
-    if node_type == "UpdateStatement":
-        table = step.get("table") or {}
-        return f"Updated {table.get('rowsAffected', 0)} row(s) in `{table.get('name')}`."
-
-    if node_type == "DeleteStatement":
-        table = step.get("table") or {}
-        return f"Deleted {table.get('rowsAffected', 0)} row(s) from `{table.get('name')}`."
+    if node_type == "SelectIntoStatement":
+        sql = step.get("sql") or {}
+        error = step.get("error")
+        into = sql.get("into") or []
+        if error and error.get("condition") == "NOT_FOUND":
+            handler = error.get("handler")
+            handled_text = "unhandled" if handler == "unhandled" else f"caught by the {handler}"
+            return (
+                f"Ran a SELECT...INTO lookup that matched no row, triggering NOT_FOUND "
+                f"({handled_text}); {', '.join(into) or 'the target variable(s)'} were left unchanged."
+            )
+        row = (sql.get("rows") or [[]])[0]
+        assignments = ", ".join(f"{name} = {value!r}" for name, value in zip(into, row))
+        return f"Ran a SELECT...INTO lookup, found exactly one row, and assigned {assignments}."
 
     return f"Executed line {step.get('line')}: `{step.get('statementText', '')}`."
 

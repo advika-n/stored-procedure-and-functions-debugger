@@ -10,6 +10,44 @@ import { getMermaidPalette } from '../mermaidColors'
 import { rasterizeSvgToPng } from '../svgToPng'
 import VariableTimeline from '../VariableTimeline'
 
+// This page merges what used to be two separate routes/pages: the
+// step-through Debugger (/debugger) and the standalone SQL Console
+// (/sql-console) -- see `handleRun`'s own comment below for the
+// detection logic that routes one Monaco editor + one Run button to
+// whichever of the two the current content actually is. The merged
+// page now lives at /sql-console (the SQL Console's old route; /debugger
+// no longer exists), labeled "SQL Console" in the nav. Internal
+// CSS class names (`debugger-page`, `debugger-topbar`, `debugger-grid`,
+// `panel-editor`, ...) and this component's own former name
+// (`DebuggerPage`) are UNCHANGED from before the merge, deliberately --
+// renaming every one of them was pure churn with no functional benefit,
+// so only the file name, the exported component name, and the route/
+// nav-facing identity actually changed.
+
+// Merged Debugger/SQL Console detection -- see `handleRun`'s own
+// comment for the full flow this backs. Only reached once POST /debug
+// has already failed to TOKENIZE or PARSE the input as a procedure/
+// function; a heuristic, not a real parse (the real parse already just
+// ran and already failed) -- mirrors backend/app/sql_console.py's own
+// "no SQL parsing of our own" convention. Note: since CREATE TABLE/
+// INSERT/UPDATE/DELETE/SELECT are now all valid bare-procedure-body
+// statements too (see backend/app/parser.py's "SQL passthrough
+// statements" section), input starting with one of those five almost
+// always already parses successfully and never reaches this check at
+// all -- in practice this heuristic mostly catches DROP/ALTER (not
+// part of the procedure grammar) and SQL this tokenizer can't even
+// tokenize (e.g. backtick-quoted identifiers).
+const SQL_LEADING_KEYWORDS = ['CREATE', 'INSERT', 'UPDATE', 'DELETE', 'SELECT', 'DROP', 'ALTER']
+const PROCEDURE_MARKER_RE = /\b(BEGIN|END|DECLARE)\b/i
+
+function looksLikePlainSql(code) {
+  const trimmed = code.trim()
+  if (!trimmed) return false
+  const upper = trimmed.toUpperCase()
+  const startsWithSqlKeyword = SQL_LEADING_KEYWORDS.some((keyword) => upper.startsWith(keyword))
+  return startsWithSqlKeyword && !PROCEDURE_MARKER_RE.test(trimmed)
+}
+
 const REPORT_FORMATS = [
   { format: 'pdf', label: 'Download PDF' },
   { format: 'docx', label: 'Download Document' },
@@ -39,7 +77,7 @@ function checkGuess(guessRaw, entry) {
   return unquoted === String(entry.value)
 }
 
-function DebuggerPage() {
+function SqlConsolePage() {
   const location = useLocation()
   const navigate = useNavigate()
   const { theme } = useTheme()
@@ -60,6 +98,18 @@ function DebuggerPage() {
   const [debugError, setDebugError] = useState(null)
   const [isRunning, setIsRunning] = useState(false)
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
+
+  // -- merged Debugger / SQL Console detection --------------------------
+  // This page now has ONE editor and ONE Run button covering two
+  // formerly-separate pages (the step-through Debugger, and the
+  // standalone SQL Console) -- see `handleRun`'s own comment for the
+  // detection logic. `mode` drives which results UI renders below the
+  // editor: null (nothing run yet), 'debugger' (a procedure/function --
+  // the existing full debugger UI, unchanged), or 'sql' (plain SQL that
+  // didn't parse as a procedure -- the SQL Console's results view).
+  const [mode, setMode] = useState(null)
+  const [sqlResult, setSqlResult] = useState(null)
+  const [sqlError, setSqlError] = useState(null)
 
   // Tracks the code text as of the last programmatic load (sample or
   // history replay), so the Editor's onChange can tell "this is the
@@ -232,11 +282,14 @@ function DebuggerPage() {
     return order
   }, [steps])
 
-  // Shared by "load a new sample" and "about to run Debug" -- any time the
+  // Shared by "load a new sample" and "about to Run" -- any time the
   // code changes out from under the current trace, that trace (and its
   // cached explanations) is stale and must be cleared.
   function resetRunState() {
     setDebugError(null)
+    setMode(null)
+    setSqlResult(null)
+    setSqlError(null)
     setSteps(null)
     setAst(null)
     setIssues(null)
@@ -286,8 +339,12 @@ function DebuggerPage() {
   // Reload a saved history entry: since its step trace and AST were
   // already computed by the interpreter when it was first run, this
   // just replays that saved state -- no re-execution. Routing to this
-  // page is handled by HistoryPage (navigate('/debugger', { state }));
-  // this only rehydrates the state once it arrives.
+  // page is handled by HistoryPage (navigate('/sql-console', { state }));
+  // this only rehydrates the state once it arrives. A history entry is
+  // always a procedure/function run (see app/history.py -- only
+  // successful /debug runs are ever saved), so `mode` is left null
+  // rather than 'sql' here -- every debugger-UI panel below already
+  // renders on `mode !== 'sql'`, which null satisfies.
   const loadHistoryRun = useCallback((run) => {
     setCode(run.code)
     lastLoadedCodeRef.current = run.code
@@ -302,36 +359,106 @@ function DebuggerPage() {
     if (replayRun) {
       loadHistoryRun(replayRun)
       // Clear the router state so a later refresh/back-navigation to
-      // /debugger doesn't silently replay this run again.
+      // /sql-console doesn't silently replay this run again.
       navigate('.', { replace: true, state: null })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state])
 
-  async function handleDebug() {
+  // Single entry point for the single Run button -- detects which of
+  // this page's two underlying capabilities the current editor content
+  // is, then delegates to it, rather than the user picking a mode:
+  //
+  //   1. POST /debug (the real tokenize -> parse -> interpret pipeline,
+  //      same endpoint the Debugger always used) -- if it succeeds, OR
+  //      fails at the INTERPRET stage (meaning it genuinely parsed as a
+  //      procedure/function, it just failed to RUN), this is a
+  //      procedure/function: render the full existing debugger UI,
+  //      completely unchanged from before this page merged with the SQL
+  //      Console.
+  //   2. If /debug instead fails to TOKENIZE or PARSE, this input isn't
+  //      a procedure/function at all -- check `looksLikePlainSql` (see
+  //      its own comment) before trying /sql/execute. Success there
+  //      renders the SQL Console's results view (a table for SELECT, a
+  //      status line for a write, in place of the debugger UI).
+  //   3. If it matches neither cleanly (doesn't parse AND doesn't look
+  //      like plain SQL), show one clear error rather than silently
+  //      guessing which path to take.
+  //
+  // Both underlying capabilities (the interpreter pipeline, the raw SQL
+  // passthrough) are completely unchanged by this -- this function is
+  // pure routing between two pre-existing, independently working paths.
+  async function handleRun() {
     setIsRunning(true)
     resetRunState()
 
+    let debugRes
+    let debugBody
     try {
-      const res = await fetch('/debug', {
+      debugRes = await fetch('/debug', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, params: {}, name: selectedSampleName }),
       })
-      const body = await res.json()
-
-      if (!res.ok) {
-        // Backend error shape: { detail: { stage, message, line } }
-        const detail = body.detail
-        const line = detail?.line != null ? ` (line ${detail.line})` : ''
-        throw new Error(`[${detail?.stage ?? 'error'}] ${detail?.message ?? 'Unknown error'}${line}`)
-      }
-
-      setSteps(body.steps)
-      setAst(body.ast)
-      setIssues(body.issues ?? [])
+      debugBody = await debugRes.json()
     } catch (err) {
-      setDebugError(err.message)
+      setMode(null)
+      setDebugError(`Network error: ${err.message}`)
+      setIsRunning(false)
+      return
+    }
+
+    if (debugRes.ok) {
+      setMode('debugger')
+      setSteps(debugBody.steps)
+      setAst(debugBody.ast)
+      setIssues(debugBody.issues ?? [])
+      setIsRunning(false)
+      return
+    }
+
+    // Backend error shape: { detail: { stage, message, line } }
+    const detail = debugBody.detail
+    const line = detail?.line != null ? ` (line ${detail.line})` : ''
+
+    if (detail?.stage === 'interpret') {
+      // Parsed fine as a procedure/function -- a genuine runtime error
+      // INSIDE it, not "doesn't look like a procedure". Stays on the
+      // debugger UI's own error display, exactly as this page always
+      // handled a failed Debug run.
+      setMode('debugger')
+      setDebugError(`[${detail.stage}] ${detail.message ?? 'Unknown error'}${line}`)
+      setIsRunning(false)
+      return
+    }
+
+    // stage is 'tokenize' or 'parse' -- genuinely not a procedure/
+    // function. Don't guess: only fall back to /sql/execute if this
+    // also looks like plain SQL.
+    if (!looksLikePlainSql(code)) {
+      setMode(null)
+      setDebugError(
+        `This doesn't parse as a procedure or function (${detail?.message ?? 'unknown error'}${line}), and it doesn't look like plain SQL either.`,
+      )
+      setIsRunning(false)
+      return
+    }
+
+    try {
+      const sqlRes = await fetch('/sql/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sql: code }),
+      })
+      const sqlBody = await sqlRes.json()
+      if (!sqlRes.ok) {
+        throw new Error(typeof sqlBody.detail === 'string' ? sqlBody.detail : 'Unknown SQL error')
+      }
+      setMode('sql')
+      setSqlResult(sqlBody)
+    } catch (err) {
+      setMode('sql')
+      setSqlError(err.message)
     } finally {
       setIsRunning(false)
     }
@@ -514,14 +641,16 @@ function DebuggerPage() {
     // any better than CASE does -- checked and excluded on purpose, not
     // silently missed, same as CASE.
     //
-    // Same non-extension for CreateTableStatement/InsertStatement/
-    // UpdateStatement/DeleteStatement (see backend/app/interpreter.py's
-    // "User-created tables" section, added in a later phase still):
-    // none of these change a scope variable (so the `changedEntry`
-    // check above never fires for one) and none carry a boolean branch
-    // to guess -- their own mutation is instead visible in the Tables
-    // panel once the step is revealed, same as a cursor's FETCH already
-    // isn't Predict-Mode-quizzable either.
+    // Same non-extension for SqlStatement (CREATE TABLE/INSERT/UPDATE/
+    // DELETE/SELECT -- see backend/app/interpreter.py's "SQL passthrough
+    // statements" section; the retired CreateTableStatement/
+    // InsertStatement/UpdateStatement/DeleteStatement node types this
+    // comment used to name had the exact same non-extension, for the
+    // same reason): it never changes a scope variable (so the
+    // `changedEntry` check above never fires for one) and carries no
+    // boolean branch to guess -- its own mutation/result is instead
+    // visible in the SQL panel once the step is revealed, same as a
+    // cursor's FETCH already isn't Predict-Mode-quizzable either.
     return null
   }, [quizMode, hasSteps, isLastStep, steps, currentStepIndex])
 
@@ -635,6 +764,14 @@ function DebuggerPage() {
     setIsEditorReady(true)
     editor.onDidScrollChange(() => updateCaretAndConnectorsRef.current())
     editor.onDidLayoutChange(() => updateCaretAndConnectorsRef.current())
+
+    // Ctrl/Cmd+Enter runs the current editor content, same convenience
+    // the standalone SQL Console page offered before merging into this
+    // one -- `handleRun` is a plain function declaration later in this
+    // component, safe to reference here since this callback only ever
+    // actually runs after the whole component body (including that
+    // declaration) has executed once, at mount.
+    editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.Enter, () => handleRun())
 
     // Breakpoints: clicking either the glyph margin (where the red dot
     // lives) or the line-number column itself toggles a breakpoint on
@@ -789,7 +926,7 @@ function DebuggerPage() {
   }, [flowchartGraph, diagramState, theme])
 
   useEffect(() => {
-    // Nothing to render yet (no successful Debug run) -- handleDebug
+    // Nothing to render yet (no successful Debug run) -- handleRun
     // already cleared diagramSvg when it started this run.
     if (!mermaidDefinition) return
 
@@ -1046,6 +1183,21 @@ function DebuggerPage() {
               }}
             />
           </div>
+
+          <p className="sql-console-actions">
+            <button onClick={handleRun} disabled={isRunning}>
+              {isRunning ? 'Running…' : 'Run'}
+            </button>
+            <span className="sql-console-hint">
+              Runs as a procedure/function if it parses as one, otherwise as plain SQL. Ctrl/Cmd + Enter also
+              runs it.
+            </span>
+          </p>
+
+          {debugError && <p className="status status-error">Error: {debugError}</p>}
+
+          {mode !== 'sql' && (
+          <>
           <p className="breakpoint-hint">
             Click a line number (or the glyph margin beside it) to toggle a breakpoint.
             {breakpoints.size > 0 && ` ${breakpoints.size} breakpoint${breakpoints.size === 1 ? '' : 's'} set.`}
@@ -1148,22 +1300,23 @@ function DebuggerPage() {
               </button>
             </div>
           )}
-
-          <p>
-            <button onClick={handleDebug} disabled={isRunning}>
-              {isRunning ? 'Running…' : 'Debug'}
-            </button>
-          </p>
-
-          {debugError && <p className="status status-error">Error: {debugError}</p>}
+          </>
+          )}
         </div>
 
         <aside className="panel panel-state">
           <span className="panel-tab">LIVE STATE</span>
 
+          {mode === 'sql' ? (
+            <p className="placeholder">
+              Not applicable for a plain SQL statement -- call stack, variables, and the flowchart only apply to a
+              procedure/function run.
+            </p>
+          ) : (
+            <>
           <div className="call-stack-panel">
             <h2>Call Stack</h2>
-            {!hasSteps && <p className="placeholder">Run Debug to see the call stack here.</p>}
+            {!hasSteps && <p className="placeholder">Run to see the call stack here.</p>}
             {hasSteps && callStackFrames.length === 0 && (
               <p className="call-stack-top-level">Top level — not inside a CALL.</p>
             )}
@@ -1244,52 +1397,92 @@ function DebuggerPage() {
             </div>
           )}
 
-          {hasSteps && currentStep?.table && (
+          {hasSteps && currentStep?.sql && (
             <div className="table-state-panel">
-              <h2>Tables</h2>
-              <table className="cursor-table">
-                <thead>
-                  <tr>
-                    <th>Table</th>
-                    <th>Operation</th>
-                    <th>Rows affected</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="cursor-name">{currentStep.table.name}</td>
-                    <td>{currentStep.table.operation}</td>
-                    <td>{currentStep.table.rowsAffected}</td>
-                  </tr>
-                </tbody>
-              </table>
-              {currentStep.table.rows.length > 0 ? (
-                <table className="cursor-table table-state-rows">
-                  <thead>
-                    <tr>
-                      {currentStep.table.columns.map((column) => (
-                        <th key={column}>{column}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {currentStep.table.rows.map((row, rowIndex) => (
-                      <tr key={rowIndex}>
-                        {currentStep.table.columns.map((column) => (
-                          <td key={column}>
-                            {row[column] === null || row[column] === undefined ? (
-                              <em className="var-empty">—</em>
-                            ) : (
-                              String(row[column])
-                            )}
-                          </td>
-                        ))}
+              <h2>{currentStep.sql.into ? 'SELECT ... INTO' : 'SQL'}</h2>
+              {currentStep.sql.into && (
+                <p className="status status-ok sql-into-assignments">
+                  {currentStep.sql.rows.length > 0 ? (
+                    <>
+                      Assigned:{' '}
+                      {currentStep.sql.into
+                        .map((target, i) => `${target} = ${JSON.stringify(currentStep.sql.rows[0][i])}`)
+                        .join(', ')}
+                    </>
+                  ) : (
+                    <>No row matched -- {currentStep.sql.into.join(', ')} left unchanged (see NOT_FOUND above).</>
+                  )}
+                </p>
+              )}
+              {currentStep.sql.kind === 'write' ? (
+                <>
+                  <table className="cursor-table">
+                    <thead>
+                      <tr>
+                        <th>Table</th>
+                        <th>Statement</th>
+                        <th>Rows affected</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="cursor-name">{currentStep.sql.tableName ?? <em className="var-empty">—</em>}</td>
+                        <td>{currentStep.sql.keyword}</td>
+                        <td>{currentStep.sql.rowsAffected}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  {currentStep.sql.snapshot && currentStep.sql.snapshot.rows.length > 0 ? (
+                    <table className="cursor-table table-state-rows">
+                      <thead>
+                        <tr>
+                          {currentStep.sql.snapshot.columns.map((column, i) => (
+                            <th key={`${column}-${i}`}>{column}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentStep.sql.snapshot.rows.map((row, rowIndex) => (
+                          <tr key={rowIndex}>
+                            {row.map((value, columnIndex) => (
+                              <td key={columnIndex}>{value === null ? <em className="var-empty">—</em> : String(value)}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="placeholder table-state-empty">
+                      {currentStep.sql.snapshot ? 'No rows.' : 'No table snapshot available.'}
+                    </p>
+                  )}
+                </>
               ) : (
-                <p className="placeholder table-state-empty">No rows.</p>
+                <>
+                  <p className="status status-ok">{currentStep.sql.description}</p>
+                  {currentStep.sql.rows.length > 0 ? (
+                    <table className="cursor-table table-state-rows">
+                      <thead>
+                        <tr>
+                          {currentStep.sql.columns.map((column, i) => (
+                            <th key={`${column}-${i}`}>{column}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentStep.sql.rows.map((row, rowIndex) => (
+                          <tr key={rowIndex}>
+                            {row.map((value, columnIndex) => (
+                              <td key={columnIndex}>{value === null ? <em className="var-empty">—</em> : String(value)}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="placeholder table-state-empty">No rows returned.</p>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -1297,7 +1490,7 @@ function DebuggerPage() {
           <h2>Variables</h2>
           {!hasSteps && (
             <p className="placeholder">
-              {debugError ? 'Fix the error above and run Debug again.' : 'Run Debug to see variable state here.'}
+              {debugError ? 'Fix the error above and run again.' : 'Run to see variable state here.'}
             </p>
           )}
           {hasSteps && currentStep && (
@@ -1367,7 +1560,7 @@ function DebuggerPage() {
               )}
             </div>
             {!hasSteps && (
-              <p className="placeholder">Run Debug to see a plain-English explanation of each step.</p>
+              <p className="placeholder">Run to see a plain-English explanation of each step.</p>
             )}
             {hasSteps && !currentExplanation && explanationLoading && (
               <p className="placeholder">Explaining…</p>
@@ -1391,6 +1584,8 @@ function DebuggerPage() {
               </p>
             )}
           </div>
+            </>
+          )}
         </aside>
 
         {connectors.length > 0 && (
@@ -1402,6 +1597,7 @@ function DebuggerPage() {
         )}
       </div>
 
+      {mode !== 'sql' && (
       <div className="panel panel-askai">
         <button
           className="ask-ai-toggle"
@@ -1418,7 +1614,7 @@ function DebuggerPage() {
         {isAskExpanded && (
           <div className="ask-panel">
             {!hasSteps && (
-              <p className="placeholder">Run Debug, then step to a point in execution to ask about it.</p>
+              <p className="placeholder">Run, then step to a point in execution to ask about it.</p>
             )}
             {hasSteps && (
               <>
@@ -1459,14 +1655,18 @@ function DebuggerPage() {
           </div>
         )}
       </div>
+      )}
 
+      {mode !== 'sql' && (
+      <>
       <div className="panel panel-advisor">
         <span className="panel-tab">SQL ANTI-PATTERN ADVISOR</span>
         <p className="page-subtitle">
           A static check of the parsed procedure's structure -- runs automatically every time you click
-          Debug, before (and independent of) whether it actually executes cleanly.
+          Run, before (and independent of) whether it actually executes cleanly. Not applicable to a plain
+          SQL statement.
         </p>
-        {issues === null && <p className="placeholder">Run Debug to see anti-pattern analysis here.</p>}
+        {issues === null && <p className="placeholder">Run to see anti-pattern analysis here.</p>}
         {issues !== null && issues.length === 0 && (
           <p className="advisor-clean">✓ No anti-patterns detected — this procedure's structure looks clean.</p>
         )}
@@ -1496,7 +1696,7 @@ function DebuggerPage() {
         <div className="diagram-panel">
           {!flowchartGraph && (
             <p className="placeholder">
-              {debugError ? 'Fix the error above and run Debug again.' : 'Run Debug to see the control-flow diagram here.'}
+              {debugError ? 'Fix the error above and run again.' : 'Run to see the control-flow diagram here.'}
             </p>
           )}
           {diagramRenderError && <p className="status status-error">Diagram error: {diagramRenderError}</p>}
@@ -1522,7 +1722,7 @@ function DebuggerPage() {
           Every step in the <em>current</em> trace only — nothing here is saved. For past sessions across
           reloads, see the <strong>History</strong> page in the top nav.
         </p>
-        {!hasSteps && <p className="placeholder">Run Debug to populate the step log.</p>}
+        {!hasSteps && <p className="placeholder">Run to populate the step log.</p>}
         {hasSteps && (
           <ol className="step-log-list">
             {steps.map((step, index) => (
@@ -1545,8 +1745,57 @@ function DebuggerPage() {
           </ol>
         )}
       </div>
+      </>
+      )}
+
+      {mode === 'sql' && (
+        <div className="panel sql-console-results-panel">
+          <span className="panel-tab">RESULT</span>
+
+          {sqlError && (
+            <div className="error-banner error-banner-unhandled">
+              <div className="error-banner-headline">
+                <span className="error-banner-condition">SQL_ERROR</span>
+                {sqlError}
+              </div>
+            </div>
+          )}
+
+          {!sqlError && sqlResult?.kind === 'write' && <p className="status status-ok">{sqlResult.description}</p>}
+
+          {!sqlError && sqlResult?.kind === 'rows' && (
+            <>
+              <p className="status status-ok">{sqlResult.description}</p>
+              {sqlResult.rows.length === 0 ? (
+                <p className="placeholder">No rows returned.</p>
+              ) : (
+                <div className="sql-console-table-scroll">
+                  <table className="cursor-table">
+                    <thead>
+                      <tr>
+                        {sqlResult.columns.map((column, i) => (
+                          <th key={`${column}-${i}`}>{column}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sqlResult.rows.map((row, rowIndex) => (
+                        <tr key={rowIndex}>
+                          {row.map((value, columnIndex) => (
+                            <td key={columnIndex}>{value === null ? <em className="var-empty">NULL</em> : String(value)}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </section>
   )
 }
 
-export default DebuggerPage
+export default SqlConsolePage

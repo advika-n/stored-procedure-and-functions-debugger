@@ -1,0 +1,400 @@
+[
+  {
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE LookupOnePlayer(OUT foundScore NUMBER, OUT missingHandled NUMBER)",
+    "stepNumber": 1,
+    "variables": {
+      "foundScore": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "missingHandled": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      }
+    }
+  },
+  {
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE notFoundFlag NUMBER DEFAULT 0;",
+    "stepNumber": 2,
+    "variables": {
+      "foundScore": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "missingHandled": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "notFoundFlag": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 4,
+    "nodeType": "HandlerDeclNode",
+    "statementText": "DECLARE CONTINUE HANDLER FOR NOT_FOUND SET notFoundFlag = 1;",
+    "stepNumber": 3,
+    "variables": {
+      "foundScore": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "missingHandled": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "notFoundFlag": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 5,
+    "nodeType": "SqlStatement",
+    "sql": {
+      "description": "CREATE statement executed successfully.",
+      "keyword": "CREATE",
+      "kind": "write",
+      "rowsAffected": 0,
+      "snapshot": {
+        "columns": [
+          "id",
+          "name",
+          "score"
+        ],
+        "rows": []
+      },
+      "statement": "CREATE TABLE IF NOT EXISTS players ( id NUMBER PRIMARY KEY, name TEXT, score NUMBER )",
+      "tableName": "players"
+    },
+    "statementText": "CREATE TABLE IF NOT EXISTS players ( id NUMBER PRIMARY KEY, name TEXT, score NUMBER );",
+    "stepNumber": 4,
+    "variables": {
+      "foundScore": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "missingHandled": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "notFoundFlag": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 6,
+    "nodeType": "SqlStatement",
+    "sql": {
+      "description": "DELETE affected 0 rows.",
+      "keyword": "DELETE",
+      "kind": "write",
+      "rowsAffected": 0,
+      "snapshot": {
+        "columns": [
+          "id",
+          "name",
+          "score"
+        ],
+        "rows": []
+      },
+      "statement": "DELETE FROM players",
+      "tableName": "players"
+    },
+    "statementText": "DELETE FROM players;",
+    "stepNumber": 5,
+    "variables": {
+      "foundScore": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "missingHandled": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "notFoundFlag": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 7,
+    "nodeType": "SqlStatement",
+    "sql": {
+      "description": "INSERT affected 1 row.",
+      "keyword": "INSERT",
+      "kind": "write",
+      "rowsAffected": 1,
+      "snapshot": {
+        "columns": [
+          "id",
+          "name",
+          "score"
+        ],
+        "rows": [
+          [
+            1,
+            "Ada",
+            95
+          ]
+        ]
+      },
+      "statement": "INSERT INTO players VALUES ( 1, 'Ada', 95 )",
+      "tableName": "players"
+    },
+    "statementText": "INSERT INTO players VALUES ( 1, 'Ada', 95 );",
+    "stepNumber": 6,
+    "variables": {
+      "foundScore": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "missingHandled": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "notFoundFlag": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 8,
+    "nodeType": "SqlStatement",
+    "sql": {
+      "description": "INSERT affected 1 row.",
+      "keyword": "INSERT",
+      "kind": "write",
+      "rowsAffected": 1,
+      "snapshot": {
+        "columns": [
+          "id",
+          "name",
+          "score"
+        ],
+        "rows": [
+          [
+            1,
+            "Ada",
+            95
+          ],
+          [
+            2,
+            "Grace",
+            88
+          ]
+        ]
+      },
+      "statement": "INSERT INTO players VALUES ( 2, 'Grace', 88 )",
+      "tableName": "players"
+    },
+    "statementText": "INSERT INTO players VALUES ( 2, 'Grace', 88 );",
+    "stepNumber": 7,
+    "variables": {
+      "foundScore": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "missingHandled": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "notFoundFlag": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 9,
+    "nodeType": "SelectIntoStatement",
+    "sql": {
+      "columns": [
+        "score"
+      ],
+      "description": "SELECT INTO assigned 1 row to foundScore.",
+      "into": [
+        "foundScore"
+      ],
+      "keyword": "SELECT",
+      "kind": "rows",
+      "rowCount": 1,
+      "rows": [
+        [
+          95
+        ]
+      ],
+      "statement": "SELECT score FROM players WHERE name = 'Ada'"
+    },
+    "statementText": "SELECT score INTO foundScore FROM players WHERE name = 'Ada';",
+    "stepNumber": 8,
+    "variables": {
+      "foundScore": {
+        "changed": true,
+        "isOutput": true,
+        "type": "number",
+        "value": 95
+      },
+      "missingHandled": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "notFoundFlag": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "error": {
+      "condition": "NOT_FOUND",
+      "handler": "NOT_FOUND handler",
+      "message": "SELECT INTO matched no row"
+    },
+    "line": 10,
+    "nodeType": "SelectIntoStatement",
+    "sql": {
+      "columns": [
+        "score"
+      ],
+      "description": "SELECT INTO matched no row.",
+      "into": [
+        "foundScore"
+      ],
+      "keyword": "SELECT",
+      "kind": "rows",
+      "rowCount": 0,
+      "rows": [],
+      "statement": "SELECT score FROM players WHERE name = 'Nonexistent'"
+    },
+    "statementText": "SELECT score INTO foundScore FROM players WHERE name = 'Nonexistent';",
+    "stepNumber": 9,
+    "variables": {
+      "foundScore": {
+        "changed": false,
+        "isOutput": true,
+        "type": "number",
+        "value": 95
+      },
+      "missingHandled": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "notFoundFlag": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 4,
+    "nodeType": "SetStatement",
+    "statementText": "SET notFoundFlag = 1;",
+    "stepNumber": 10,
+    "variables": {
+      "foundScore": {
+        "changed": false,
+        "isOutput": true,
+        "type": "number",
+        "value": 95
+      },
+      "missingHandled": {
+        "changed": false,
+        "isOutput": true,
+        "type": "null",
+        "value": null
+      },
+      "notFoundFlag": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  },
+  {
+    "line": 11,
+    "nodeType": "SetStatement",
+    "statementText": "SET missingHandled = notFoundFlag;",
+    "stepNumber": 11,
+    "variables": {
+      "foundScore": {
+        "changed": false,
+        "isOutput": true,
+        "type": "number",
+        "value": 95
+      },
+      "missingHandled": {
+        "changed": true,
+        "isOutput": true,
+        "type": "number",
+        "value": 1
+      },
+      "notFoundFlag": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 1
+      }
+    }
+  }
+]

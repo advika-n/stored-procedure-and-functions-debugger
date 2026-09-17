@@ -21,8 +21,8 @@ Supported grammar (informal, keywords in CAPS are literal tokens):
     statement   := declare_stmt | declare_cursor_stmt | declare_handler_stmt
                     | set_stmt | if_stmt | while_stmt | case_stmt | return_stmt
                     | open_cursor_stmt | fetch_cursor_stmt | close_cursor_stmt
-                    | call_stmt | loop_stmt | leave_stmt
-                    | create_table_stmt | insert_stmt | update_stmt | delete_stmt
+                    | call_stmt | loop_stmt | leave_stmt | sql_stmt
+                    | select_into_stmt
 
     declare_stmt        := DECLARE IDENT IDENT (DEFAULT expr)? ';'
     declare_cursor_stmt := DECLARE IDENT CURSOR FOR <raw tokens up to ';'> ';'
@@ -44,16 +44,16 @@ Supported grammar (informal, keywords in CAPS are literal tokens):
     loop_stmt         := (IDENT ':')? LOOP statement* END LOOP IDENT? ';'
     leave_stmt        := LEAVE IDENT? ';'
 
-    create_table_stmt := CREATE TABLE IDENT '(' column_def (',' column_def)* ')' ';'
-    column_def         := IDENT IDENT (NOT NULL | PRIMARY KEY)*
-    insert_stmt        := INSERT INTO IDENT ('(' IDENT (',' IDENT)* ')')?
-                            VALUES '(' expr (',' expr)* ')' ';'
-    update_stmt        := UPDATE IDENT SET IDENT '=' expr (',' IDENT '=' expr)*
-                            (WHERE expr)? ';'
-    delete_stmt        := DELETE FROM IDENT (WHERE expr)? ';'
+    sql_stmt     := (CREATE TABLE | INSERT | UPDATE | DELETE | SELECT) <raw tokens up to ';'> ';'
+
+    select_into_stmt := SELECT <raw tokens up to INTO> INTO IDENT (',' IDENT)*
+                          <raw tokens up to ';'> ';'
+                         -- only when an INTO appears before the next FROM
+                         -- or ';' (see `_select_has_into`); otherwise a
+                         -- bare SELECT is a sql_stmt above, not this.
 
     expr         := comparison
-    comparison   := term (('>' | '<' | '=' | '!=') term)*
+    comparison   := term (('>' | '<' | '=' | '!=' | '>=' | '<=' | '<>') term)*
     term         := factor (('+' | '-') factor)*
     factor       := unary (('*' | '/') unary)*
     unary        := '-' unary | primary
@@ -311,54 +311,87 @@ how a LEAVE actually unwinds to the correct enclosing LOOP (including
 across nested loops), how loop-label scope is isolated across a CALL/
 function-call boundary, and the step-trace shape this reuses from WHILE.
 
--- User-created tables (CREATE TABLE / INSERT / UPDATE / DELETE) ----------
+-- SQL passthrough statements (CREATE TABLE / INSERT / UPDATE / DELETE / SELECT) --
 
-Four new statement types, all parseable anywhere any other statement is
+Five statement types, all parseable anywhere any other statement is
 (inside IF/WHILE/CASE/LOOP bodies, a handler's action, ...), exactly like
-every other statement type in this grammar:
+every other statement type in this grammar -- and all sharing ONE AST
+node type and ONE parsing method, `_parse_sql_passthrough`:
 
-  ``CREATE TABLE name (col TYPE [constraint]*, ...);``
-  ``INSERT INTO name [(col, ...)] VALUES (expr, ...);``
-  ``UPDATE name SET col = expr [, col = expr]* [WHERE expr];``
-  ``DELETE FROM name [WHERE expr];``
+  ``CREATE TABLE ...;``
+  ``INSERT INTO ...;``
+  ``UPDATE ...;``
+  ``DELETE FROM ...;``
+  ``SELECT ...;``
 
-A column definition is `IDENT IDENT` -- name then TYPE -- exactly the same
-shape a DECLARE's `name TYPE` or a procedure/function parameter's `name
-TYPE` already is: TYPE is a bare identifier this grammar never validates
-against a fixed set (see "Variables" above and app.interpreter's module
-docstring's "value <-> debugger type name" section) -- it's advisory
-documentation, not enforced. Zero or more constraints follow, in either
-order, each spelled as two keywords: `NOT NULL` and `PRIMARY KEY`.
-app.interpreter is what actually enforces them (a NULL value for a
-NOT NULL/PRIMARY KEY column, or a duplicate value in a PRIMARY KEY
-column, is a clear InterpreterError raised at INSERT/UPDATE time -- see
-its own "User-created tables" section) -- the parser only records which
-constraints a column was given.
+A bare ``SELECT`` here means the whole result set comes back as one
+DebugStep's worth of rows/columns, nothing assigned into a variable --
+for a single-row lookup that assigns each selected column into its own
+procedure-scope variable, see "SELECT ... INTO" below instead, a
+DIFFERENT statement type with its own AST node and parsing method.
+`_parse_statement`'s own dispatch (`_select_has_into`) tells the two
+apart before committing to either: an INTO appearing before the next
+FROM/';' routes to SelectIntoStatement, anything else falls through to
+this SqlStatement passthrough.
 
-INSERT's column list is optional; when omitted, `values` are bound
-positionally to every column of the table **in the order CREATE TABLE
-declared them** (app.interpreter is what actually knows that order, by
-looking the table up at INSERT time -- the parser has no schema to
-consult and doesn't need one). `NULL` is a new primary-expression literal
-(`primary` above), usable anywhere any other literal is -- most usefully
-as an explicit INSERT value for a column with no CREATE TABLE-level
-default -- evaluating to the same Python `None` a DECLAREd-but-unset
-variable already does (see `NullLiteral` in app.interpreter's `_evaluate`/
-`render_expr`).
+**Superseded feature, not an addition alongside it**: an earlier phase
+gave CREATE TABLE/INSERT/UPDATE/DELETE their own four structured AST node
+types (`CreateTableStatement`/`InsertStatement`/`UpdateStatement`/
+`DeleteStatement`), each deeply parsed (column defs, a real `expr` for
+every VALUES/SET/WHERE value) and executed by app.interpreter as a pure
+Python simulation (`Interpreter.tables`) -- never touching real SQLite,
+and for exactly that reason never visible to a cursor's embedded SELECT.
+This phase retires all four of those node types and that entire
+simulation in favor of the raw-passthrough approach below, closing that
+gap: these statements now execute for real, against the exact same
+persistent database (`app.user_db`) a cursor's SELECT already reads from
+-- see app.interpreter's own section of this same name for the execution
+side, and `docs/features.md` for the full retirement rationale. This is
+a real, deliberate behavior change to an already-shipped feature, not a
+new one bolted on beside it.
 
-UPDATE's `SET col = expr, ...` is a **different grammar from the existing
-top-level `SET` statement** (`set_stmt` above, a single bare-variable
-assignment) despite reusing the same SET keyword -- parsed by a dedicated
-method (`_parse_update`), not `_parse_set`, since UPDATE's list can have
-several comma-separated column assignments and is always prefixed by a
-table name. WHERE (already a reserved keyword, previously only ever
-captured verbatim inside a cursor's raw embedded SELECT text -- see
-"Cursors" below) is genuinely parsed here as an ordinary `expr` -- the
-exact same expression grammar an IF/WHILE condition already uses, no new
-expression syntax (no AND/OR chaining; a WHERE here is one comparison,
-same limit an IF/WHILE condition already has). See app.interpreter's own
-section for how a WHERE's column references are resolved against the
-matching row.
+Like a cursor's embedded SELECT (see "Cursors" below), NONE of these five
+are parsed into any further structure -- `_parse_sql_passthrough` just
+captures every token from the leading keyword up to the closing ';'
+verbatim and reassembles it into one raw SQL string via the exact same
+`_render_raw_query` helper the cursor path already uses, producing:
+
+    {"type": "SqlStatement", "keyword": "CREATE" | "INSERT" | "UPDATE" | "DELETE" | "SELECT",
+     "sql": str, "line": int}
+
+`keyword` is which of the five this is (recorded by the parser, which
+already knows -- it dispatched here because it saw that keyword) --
+`sql` is the ENTIRE statement text including that leading keyword itself
+(unlike `CursorDeclNode.query`, which starts only after `CURSOR FOR`).
+app.interpreter hands `sql` straight to SQLite unmodified; there is no
+column-definition parsing, no VALUES/SET/WHERE expression parsing, and
+critically **no variable interpolation** -- a raw statement cannot
+reference a procedure-scope DECLAREd variable by name the way the old
+simulated UPDATE/DELETE's WHERE or the old INSERT's VALUES could
+(`UPDATE t SET price = price - discount` now means the literal SQL
+column/identifier `discount`, which SQLite will reject as "no such
+column" unless a real column happens to share that name -- it is NOT
+substituted with the current value of a same-named procedure variable).
+This is a genuine capability loss relative to the retired feature,
+traded deliberately for "real SQL, real database, real interoperability
+with cursors" per this phase's own instruction -- a procedure that needs
+a variable's value inside one of these statements must currently splice
+it into the SQL text itself before it reaches the parser (e.g. building
+the string is not supported either -- there is no string-concatenation
+expression in this grammar -- so today this genuinely only works with
+literal values, exactly like a cursor's own embedded SELECT already only
+ever worked with literals, never a bound parameter).
+
+Round-trips cleanly for every comparison operator this grammar's own
+tokenizer knows, `<=`/`>=`/`<>` included: each is lexed as ONE OPERATOR
+token carrying its full text (see app.tokenizer), so `_render_raw_query`
+never has to reassemble a two-character operator out of two separate
+one-character tokens with a space forced between them. (This used to be
+a real, documented caveat -- `<=`/`>=`/`<>` would tokenize as two
+separate operator tokens and reassemble as invalid SQL like `score > =
+90` -- fixed as part of extending the *procedural* comparison rule above
+to accept them too; see app.tokenizer's own module docstring for the
+lexing-order fix that made both true at once.)
 
 **Top-level dispatch note**: `CREATE` was, before this, only ever the
 first token of a `CREATE FUNCTION`/`CREATE PROCEDURE` definition (see
@@ -378,17 +411,56 @@ appears as a statement inside a procedure/function body or a bare
 statement list, never as a sibling of a `CREATE PROCEDURE`/`CREATE
 FUNCTION` definition chain.
 
+-- SELECT ... INTO ----------------------------------------------------------
+
+A single-row lookup, distinct from both the cursor mechanism (DECLARE
+CURSOR/OPEN/FETCH/CLOSE, entirely unchanged by this) and the standalone
+``SELECT`` SqlStatement passthrough above (a whole result set as one
+DebugStep, nothing assigned to a variable):
+
+    ``SELECT col1, col2, ... INTO var1, var2, ... FROM table WHERE condition;``
+
+Own AST node type, own parsing method (`_parse_select_into`), not a
+variant of either of the other two. Two spans are captured verbatim,
+exactly like `_parse_sql_passthrough`/`_parse_declare_cursor` already
+capture their own raw SQL text -- the column list between SELECT and
+INTO, and everything after the INTO variable list up to the closing
+';' (the FROM/WHERE clause) -- with the INTO variable list itself parsed
+structurally in between, token-for-token the same way
+`_parse_fetch_cursor` already parses a FETCH's own `INTO var1, var2`
+list. The two raw spans are then rejoined into one ready-to-execute
+query with the INTO clause removed (real SQLite has no ``SELECT ...
+INTO ...`` syntax in this position -- that's a T-SQL/PL-SQL-ism this
+grammar borrows only as procedural sugar, never hands to SQLite
+verbatim):
+
+    {"type": "SelectIntoStatement", "targets": [str, ...],
+     "query": str,  # "SELECT <cols> FROM ... WHERE ..." -- INTO clause stripped
+     "line": int}
+
+Same "no variable interpolation, literals only" limitation as every
+other raw-passthrough statement above applies to the WHERE clause here
+too. **Dispatch**: `_parse_statement` sees a bare `SELECT` and must
+decide between this and the plain SqlStatement passthrough BEFORE
+committing to either parsing method -- `_select_has_into` does a bounded
+lookahead (no consumption) for an INTO keyword appearing before the next
+FROM or the statement-ending ';'; found means SELECT ... INTO, not found
+means an ordinary standalone SELECT. See app.interpreter's own "SELECT
+... INTO" module docstring section for how zero/one/many-row results are
+handled (the zero-row case deliberately reuses cursor FETCH's own
+NOT_FOUND condition, not a new error path).
+
 -- Cursors -----------------------------------------------------------------
 
 A cursor declaration's embedded SELECT is *not* parsed into its own AST:
 the tokens between FOR and the closing ';' are captured verbatim and
 reassembled into a single SQL string (CursorDeclNode.query), which
-app.interpreter hands straight to SQLite when the cursor is OPENed. This
-means only single-character comparison operators from this grammar's own
-token set round-trip correctly inside an embedded WHERE clause (=, >, <,
-!=) -- multi-character SQL operators this tokenizer doesn't know as a
-single token (<=, >=, <>) will NOT reconstruct correctly, since they'd be
-captured as two separate tokens with a space forced between them.
+app.interpreter hands straight to SQLite when the cursor is OPENed. Every
+comparison operator this grammar's own tokenizer knows (=, >, <, !=, >=,
+<=, <>) round-trips correctly inside an embedded WHERE clause -- each is
+one OPERATOR token carrying its full text, so reassembly never splits a
+two-character operator across two tokens (see "SQL passthrough
+statements" above for the fix that made this true).
 
 `cur_name%FOUND` / `cur_name%NOTFOUND` are a pragmatic, and deliberately
 *asymmetric*, reading of Oracle's cursor-attribute syntax: %FOUND is
@@ -423,7 +495,7 @@ non-fatal vs. still a hard error.
 
 from __future__ import annotations
 
-COMPARISON_OPERATORS = {">", "<", "=", "!="}
+COMPARISON_OPERATORS = {">", "<", "=", "!=", ">=", "<=", "<>"}
 ADDITIVE_OPERATORS = {"+", "-"}
 MULTIPLICATIVE_OPERATORS = {"*", "/"}
 
@@ -478,8 +550,8 @@ class Parser:
         ':'`) apart from every other statement (see the module
         docstring's "LOOP / LEAVE" section), and to tell a `CREATE
         TABLE` statement apart from a `CREATE PROCEDURE`/`CREATE
-        FUNCTION` definition (see "User-created tables" below). `value`
-        is compared case-insensitively, same as `_check`, since a
+        FUNCTION` definition (see "SQL passthrough statements" below).
+        `value` is compared case-insensitively, same as `_check`, since a
         KEYWORD's own case never matters in this grammar."""
         token = self.tokens[self.pos + 1] if self.pos + 1 < len(self.tokens) else None
         if token is None or token["type"] != type_:
@@ -487,6 +559,29 @@ class Parser:
         if value is not None and token["value"].upper() != value:
             return False
         return True
+
+    def _select_has_into(self) -> bool:
+        """Bounded lookahead from a bare SELECT (still unconsumed, sitting
+        at the current position) to tell a `SELECT ... INTO ...`
+        single-row lookup (`_parse_select_into`) apart from a standalone
+        SqlStatement SELECT passthrough (`_parse_sql_passthrough`) --
+        see the module docstring's "SELECT ... INTO" section. Scans
+        forward for an INTO keyword; the first of INTO / FROM / ';'
+        encountered settles it, since INTO always comes right after the
+        column list and before FROM in this grammar's own SELECT ...
+        INTO form. Consumes nothing -- a pure peek, same contract as
+        `_peek_ahead_is`, just not limited to exactly one token ahead."""
+        i = self.pos + 1
+        while i < len(self.tokens):
+            token = self.tokens[i]
+            if token["type"] == "KEYWORD" and token["value"].upper() == "INTO":
+                return True
+            if token["type"] == "KEYWORD" and token["value"].upper() == "FROM":
+                return False
+            if token["type"] == "PUNCTUATION" and token["value"] == ";":
+                return False
+            i += 1
+        return False
 
     def _error(self, message: str, token: dict | None = None) -> ParserError:
         """Build a ParserError, falling back to the last consumed token's
@@ -633,13 +728,21 @@ class Parser:
         if self._check("KEYWORD", "LEAVE"):
             return self._parse_leave()
         if self._check("KEYWORD", "CREATE") and self._peek_ahead_is("KEYWORD", "TABLE"):
-            return self._parse_create_table()
+            return self._parse_sql_passthrough("CREATE")
         if self._check("KEYWORD", "INSERT"):
-            return self._parse_insert()
+            return self._parse_sql_passthrough("INSERT")
         if self._check("KEYWORD", "UPDATE"):
-            return self._parse_update()
+            return self._parse_sql_passthrough("UPDATE")
         if self._check("KEYWORD", "DELETE"):
-            return self._parse_delete()
+            return self._parse_sql_passthrough("DELETE")
+        if self._check("KEYWORD", "SELECT"):
+            # Two different statement types share a bare SELECT keyword
+            # -- see the module docstring's "SELECT ... INTO" section for
+            # why this has to be a lookahead decided BEFORE either
+            # parsing method runs, not a fallback after one fails.
+            if self._select_has_into():
+                return self._parse_select_into()
+            return self._parse_sql_passthrough("SELECT")
         if self._check("IDENTIFIER") and self._peek_ahead_is("PUNCTUATION", ":"):
             # `label: LOOP ...` -- see the module docstring's "LOOP /
             # LEAVE" section for why an IDENTIFIER immediately followed
@@ -652,7 +755,7 @@ class Parser:
 
         raise self._error(
             "Expected DECLARE, SET, IF, WHILE, CASE, RETURN, OPEN, FETCH, CLOSE, CALL, LOOP, "
-            "LEAVE, CREATE TABLE, INSERT, UPDATE, or DELETE",
+            "LEAVE, CREATE TABLE, INSERT, UPDATE, DELETE, or SELECT",
             token,
         )
 
@@ -945,140 +1048,84 @@ class Parser:
         self._expect("PUNCTUATION", ";")
         return {"type": "LeaveStatement", "label": label, "line": start["line"]}
 
-    # -- user-created tables (CREATE TABLE / INSERT / UPDATE / DELETE) ------
-    # See the module docstring's "User-created tables" section for the full
-    # grammar/design; app.interpreter's own section of the same name for
-    # how each of these actually executes (constraint enforcement, WHERE
-    # evaluation, the DebugStep `table` field).
+    # -- SQL passthrough statements (CREATE TABLE / INSERT / UPDATE / -------
+    # DELETE / SELECT) -- see the module docstring's section of the same
+    # name for the full design; app.interpreter's own section of the same
+    # name for how the captured `sql` text actually executes.
 
-    def _parse_create_table(self) -> dict:
-        start = self._keyword("CREATE")
-        self._keyword("TABLE")
-        name_token = self._expect("IDENTIFIER")
-
-        self._expect("PUNCTUATION", "(")
-        columns = [self._parse_column_def()]
-        while self._match("PUNCTUATION", ","):
-            columns.append(self._parse_column_def())
-        self._expect("PUNCTUATION", ")")
+    def _parse_sql_passthrough(self, keyword: str) -> dict:
+        """Capture the ENTIRE statement -- starting at `keyword` itself,
+        already sitting under the cursor -- verbatim up to the closing
+        ';', exactly like `_parse_declare_cursor` already captures a
+        cursor's embedded SELECT (just starting one token earlier: that
+        one begins capture only after `CURSOR FOR`, this one includes
+        the leading keyword since there's no earlier wrapper to skip
+        past). No structure is parsed at all -- not even enough to know
+        a table name -- see the module docstring for exactly what this
+        trades away (constraint enforcement, WHERE/VALUES expression
+        parsing, variable interpolation) for real-SQLite execution."""
+        start = self._peek()
+        sql_tokens: list[dict] = []
+        while self._peek() is not None and not self._check("PUNCTUATION", ";"):
+            sql_tokens.append(self._advance())
+        if not sql_tokens:
+            raise self._error(f"Expected a SQL statement after {keyword}")
         self._expect("PUNCTUATION", ";")
 
         return {
-            "type": "CreateTableStatement",
-            "name": name_token["value"],
-            "columns": columns,
+            "type": "SqlStatement",
+            "keyword": keyword,
+            "sql": _render_raw_query(sql_tokens),
             "line": start["line"],
         }
 
-    def _parse_column_def(self) -> dict:
-        """`IDENT IDENT (NOT NULL | PRIMARY KEY)*` -- name then TYPE (an
-        unvalidated bare identifier, exactly like a DECLARE's own `name
-        TYPE` -- see the module docstring), followed by zero or more
-        constraints in either order. Each constraint is two keywords, not
-        one -- `NOT` alone or `PRIMARY` alone is a ParserError, matching
-        this grammar's "structural problems raise immediately" convention
-        used everywhere else (e.g. `_parse_declare_handler`'s NOT_FOUND/
-        DIVISION_BY_ZERO check)."""
-        name_token = self._expect("IDENTIFIER")
-        type_token = self._expect("IDENTIFIER")
-        not_null = False
-        primary_key = False
-        while True:
-            if self._match("KEYWORD", "NOT"):
-                self._keyword("NULL")
-                not_null = True
-                continue
-            if self._match("KEYWORD", "PRIMARY"):
-                self._keyword("KEY")
-                primary_key = True
-                continue
-            break
-        return {
-            "name": name_token["value"],
-            "col_type": type_token["value"],
-            "not_null": not_null,
-            "primary_key": primary_key,
-        }
+    # -- SELECT ... INTO -------------------------------------------------
+    # See the module docstring's section of the same name for the full
+    # design; app.interpreter's own section of the same name for how
+    # zero/one/many-row results are handled.
 
-    def _parse_insert(self) -> dict:
-        start = self._keyword("INSERT")
+    def _parse_select_into(self) -> dict:
+        """Called only after `_select_has_into` (see `_parse_statement`)
+        already confirmed an INTO appears before the next FROM/';', so
+        this can capture up to INTO unconditionally with no further
+        disambiguation. Two raw-captured spans sandwich a structurally
+        parsed INTO variable list -- the column list before INTO (exactly
+        like `_parse_sql_passthrough` captures its own raw SQL), the
+        variable list itself (token-for-token like `_parse_fetch_cursor`
+        already parses a FETCH's own `INTO var1, var2` list), then the
+        FROM/WHERE clause after it, up to the closing ';'."""
+        start = self._keyword("SELECT")
+
+        select_tokens: list[dict] = []
+        while self._peek() is not None and not self._check("KEYWORD", "INTO"):
+            select_tokens.append(self._advance())
+        if not select_tokens:
+            raise self._error("Expected a column list between SELECT and INTO")
         self._keyword("INTO")
-        name_token = self._expect("IDENTIFIER")
 
-        # Optional column list -- None (rather than "every column") is
-        # what app.interpreter reads as "bind positionally to the
-        # table's own CREATE-TABLE-declared column order", since the
-        # parser has no schema to resolve that against itself.
-        columns: list[str] | None = None
-        if self._match("PUNCTUATION", "("):
-            columns = [self._expect("IDENTIFIER")["value"]]
-            while self._match("PUNCTUATION", ","):
-                columns.append(self._expect("IDENTIFIER")["value"])
-            self._expect("PUNCTUATION", ")")
-
-        self._keyword("VALUES")
-        self._expect("PUNCTUATION", "(")
-        values = [self._parse_expr()]
+        targets = [self._expect("IDENTIFIER")["value"]]
         while self._match("PUNCTUATION", ","):
-            values.append(self._parse_expr())
-        self._expect("PUNCTUATION", ")")
+            targets.append(self._expect("IDENTIFIER")["value"])
+
+        tail_tokens: list[dict] = []
+        while self._peek() is not None and not self._check("PUNCTUATION", ";"):
+            tail_tokens.append(self._advance())
+        if not tail_tokens:
+            raise self._error("Expected FROM ... after SELECT ... INTO var-list")
         self._expect("PUNCTUATION", ";")
 
+        # Rejoined into one ready-to-execute query with the INTO clause
+        # removed -- real SQLite has no `SELECT ... INTO ...` syntax in
+        # this position, so this can never be handed to it verbatim (see
+        # the module docstring).
+        select_clause = _render_raw_query(select_tokens)
+        tail_clause = _render_raw_query(tail_tokens)
         return {
-            "type": "InsertStatement",
-            "table": name_token["value"],
-            "columns": columns,
-            "values": values,
-            "line": start["line"],
-        }
-
-    def _parse_update(self) -> dict:
-        """`UPDATE name SET col = expr (',' col = expr)* (WHERE expr)? ';'`
-        -- a DIFFERENT grammar from the existing top-level `set_stmt`
-        (a single bare-variable assignment) despite reusing the same SET
-        keyword; see the module docstring for why this needed its own
-        parsing method rather than reusing `_parse_set`."""
-        start = self._keyword("UPDATE")
-        name_token = self._expect("IDENTIFIER")
-        self._keyword("SET")
-
-        assignments = [self._parse_update_assignment()]
-        while self._match("PUNCTUATION", ","):
-            assignments.append(self._parse_update_assignment())
-
-        where = None
-        if self._match("KEYWORD", "WHERE"):
-            where = self._parse_expr()
-        self._expect("PUNCTUATION", ";")
-
-        return {
-            "type": "UpdateStatement",
-            "table": name_token["value"],
-            "assignments": assignments,
-            "where": where,
-            "line": start["line"],
-        }
-
-    def _parse_update_assignment(self) -> dict:
-        column_token = self._expect("IDENTIFIER")
-        self._expect("OPERATOR", "=")
-        value = self._parse_expr()
-        return {"column": column_token["value"], "value": value}
-
-    def _parse_delete(self) -> dict:
-        start = self._keyword("DELETE")
-        self._keyword("FROM")
-        name_token = self._expect("IDENTIFIER")
-
-        where = None
-        if self._match("KEYWORD", "WHERE"):
-            where = self._parse_expr()
-        self._expect("PUNCTUATION", ";")
-
-        return {
-            "type": "DeleteStatement",
-            "table": name_token["value"],
-            "where": where,
+            "type": "SelectIntoStatement",
+            "selectClause": select_clause,
+            "targets": targets,
+            "tailClause": tail_clause,
+            "query": f"SELECT {select_clause} {tail_clause}",
             "line": start["line"],
         }
 
@@ -1169,11 +1216,15 @@ class Parser:
             }
 
         if token["type"] == "KEYWORD" and token["value"].upper() == "NULL":
-            # A new primary-expression literal (see the module
-            # docstring's "User-created tables" section) -- most useful
-            # as an explicit INSERT value, but valid anywhere any other
-            # literal is; evaluates to Python `None`, same as a
-            # DECLAREd-but-unset variable already does.
+            # A primary-expression literal, valid anywhere any other
+            # literal is (an ordinary SET/DECLARE DEFAULT/IF condition,
+            # ...); evaluates to Python `None`, same as a DECLAREd-but-
+            # unset variable already does. Originally added alongside the
+            # since-retired simulated table-statement feature as an
+            # explicit INSERT value -- that grammar is gone (see the
+            # module docstring's "SQL passthrough statements" section),
+            # but NULL itself stayed as an ordinary literal since nothing
+            # about it was specific to that feature.
             self._advance()
             return {"type": "NullLiteral", "line": token["line"]}
 
@@ -1241,10 +1292,11 @@ def _render_raw_query(tokens: list[dict]) -> str:
     FOR and the closing ';') back into a single SQL string to hand to
     the SQLite driver at OPEN time.
 
-    Good enough to round-trip the common cases this grammar's own
-    tokenizer already understands (SELECT ... FROM ... WHERE col = /
-    > / < / != value/'string'); see the module docstring for what does
-    NOT round-trip cleanly (<=, >=, <>).
+    Round-trips every case this grammar's own tokenizer understands
+    (SELECT ... FROM ... WHERE col = / > / < / != / >= / <= / <>
+    value/'string') -- every comparison operator lexes as exactly one
+    OPERATOR token carrying its full text (see app.tokenizer), so
+    reassembly never splits a two-character operator across two tokens.
     """
     parts: list[str] = []
     for token in tokens:
@@ -1258,8 +1310,8 @@ def _render_raw_query(tokens: list[dict]) -> str:
 def _is_definition_start(parser: Parser) -> bool:
     """Whether the parser is sitting on the start of a chainable
     `CREATE PROCEDURE`/`CREATE FUNCTION` definition -- see the module
-    docstring's "User-created tables" section's "Top-level dispatch
-    note" for why this is no longer just "peek at a bare CREATE": a
+    docstring's "SQL passthrough statements" section's "Top-level
+    dispatch note" for why this is no longer just "peek at a bare CREATE": a
     `CREATE TABLE` statement (or any other `CREATE ...`) must fall
     through to the ordinary bare statement-list grammar instead."""
     if not parser._check("KEYWORD", "CREATE"):
@@ -1336,7 +1388,7 @@ def parse(tokens: list[dict]) -> dict:
         # definition-chain at all (vs. falling through to the ordinary
         # bare statement-list grammar below, where a `CREATE TABLE`
         # dispatches as an ordinary statement instead -- see the module
-        # docstring's "User-created tables" section). Once we're
+        # docstring's "SQL passthrough statements" section). Once we're
         # genuinely inside a chain, every SUBSEQUENT leading `CREATE`
         # still unconditionally means "another PROCEDURE/FUNCTION
         # definition follows" -- `_parse_one_definition` itself raises a

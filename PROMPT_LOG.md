@@ -2269,3 +2269,525 @@ rewritten: both bugs moved from "NOT fixed" into a new "Bugs fixed this session"
 each with a one-line note on what changed and where its regression tests live; the
 "Immediate next steps" list had the now-resolved "decide whether to fix bug #1" item
 removed.
+
+## 23. Persistent user database + standalone SQL Console
+
+**Date:** 2026-09-17 · **Not yet committed** (see `HANDOFF.md`)
+
+**Prompt (verbatim):**
+
+> Add a real, persistent SQLite database that user data lives in (replacing
+> the current hardcoded demo `products` table), plus a standalone SQL
+> console page for running arbitrary SQL outside of any procedure.
+>
+> Backend:
+> - Set up a separate SQLite database file (distinct from whatever SQLite
+>   file/table already backs app persistence — don't mix app tables with
+>   user data tables) that persists across requests, not per-request/in-memory.
+> - New endpoint: POST /sql/execute, takes { sql: string }, executes it
+>   as-is against that database using the SQLite driver directly (not
+>   through this project's own parser/interpreter — this is raw passthrough).
+> - Response: for SELECT, return column names + rows. For
+>   INSERT/UPDATE/DELETE/CREATE/DROP/ALTER, return rows-affected (or
+>   success) and a brief description of what ran. Return SQL errors from
+>   SQLite as a clean error message, not a stack trace.
+> - Seed the new database with the existing `products(name, price)` table
+>   and its 3 rows on first run, so the ProductPriceTotal and
+>   SafeAverageWithHandlers cursor samples keep working unchanged.
+> - Update the cursor-handling code path (OPEN/FETCH) to query this same
+>   persistent database instead of the old fixed in-memory demo table --
+>   cursors and the SQL console should now share one source of truth.
+>
+> Frontend:
+> - New page/route: SQL Console. Monaco editor for input (reuse existing
+>   Monaco setup/theme), an Execute button, and a results area: a table
+>   for SELECT results, a short status line for writes, an error panel
+>   styled consistently with existing error displays elsewhere in the app.
+> - Add it to nav. Theme-aware (day/night mode), matches existing
+>   "Debugger Notebook" visual system (dark navy, IBM Plex Mono/Space
+>   Grotesk, amber/teal/coral accents).
+> - Keep it a separate page from the procedure debugger — this is not a
+>   step-through trace, just run-and-see-result.
+>
+> Verify: existing backend test suite still fully passing (no regressions
+> to cursor behavior), new tests for /sql/execute covering SELECT, INSERT,
+> UPDATE, DELETE, CREATE TABLE, and a deliberate SQL error. Live-check the
+> console page in both themes and confirm ProductPriceTotal/
+> SafeAverageWithHandlers samples still run correctly against the new
+> persistent DB. Confirm /debug and /sql/execute both comfortably clear
+> the 2s NFR.
+
+**New backend module: `app/user_db.py`.** `get_connection()` opens
+`backend/data/user_data.db` (a real on-disk file, sibling to but never mixed with
+`history.py`'s `debug_history.db`), seeding `products(name, price)` — the exact same 3
+rows as the old `demo_db.py` — the first time the table doesn't already exist
+(`_ensure_seed_data`, checked via `sqlite_master` rather than an unconditional `CREATE
+TABLE IF NOT EXISTS` + insert, so re-seeding never clobbers a user's own edits/deletes
+through the console; a `DROP TABLE products` does legitimately re-trigger seeding on the
+next open, which reads as correct "bootstrap" behavior rather than a bug). A short-lived
+connection is opened per call, same convention `history.py` already uses (sqlite3
+connections aren't safe to share across FastAPI's sync-handler threads).
+
+`app/demo_db.py` was deliberately left alone rather than deleted: several existing tests
+(`test_grammar_edge_cases.py`, `test_property_based.py`) call
+`demo_db.create_demo_connection()` directly to get a cheap, deterministic, disk-free
+seeded connection for interpreter-level unit tests, decoupled from `app.main`'s actual
+request path — that's still a legitimate use. Its docstring was rewritten to say plainly
+that it's no longer wired into `/debug` and point at `user_db.py` instead.
+
+**New backend module: `app/sql_console.py`.** `execute_sql(sql)` backs the new endpoint:
+opens `user_db.get_connection()`, runs the statement through `cursor.execute()` (NOT
+`app.tokenizer`/`app.parser`/`app.interpreter` — genuinely raw passthrough), and branches
+the response shape on `cursor.description is not None` (SQLite's own signal for "this
+statement produces rows") rather than trying to keyword-sniff SELECT vs. everything else
+— covers PRAGMA and any other row-producing statement for free, and can never
+misclassify in a way that breaks execution (only the human-readable `description` string
+depends on keyword-sniffing, via `_first_keyword`, which skips leading `--`/`/* */`
+comments). A `sqlite3.Error` (bad table, syntax error, running two statements in one
+`execute()` call, ...) is caught and re-raised as `SqlExecutionError(str(exc))` — SQLite's
+own error text is already a clean one-liner ("no such table: foo", "near \"SELEKT\":
+syntax error"), so no message-rewriting was needed; `main.py` surfaces it as a 400.
+
+**`app/main.py` changes.** Swapped `demo_db.create_demo_connection()` for
+`user_db.get_connection()` in the `/debug` handler (one line — `interpreter.run()` already
+accepted any `sqlite3.Connection` via its `db_connection` param, so no interpreter change
+was needed for this half of the prompt). Added `POST /sql/execute`
+(`SqlExecuteRequest{sql: str}` -> `execute_sql`, `SqlExecutionError` -> 400).
+
+**Test isolation.** `conftest.py` gained an autouse `_isolated_user_db` fixture,
+monkeypatching `user_db.DB_PATH` to a per-test `tmp_path` file — exact same shape as the
+pre-existing `_isolated_history_db` fixture, for the same reason (the suite must never
+touch the real `backend/data/user_data.db` a developer might be using locally, now that
+both `/debug` cursor runs and `/sql/execute` have real on-disk side effects).
+
+**New tests.** `test_user_db.py` (seeding on first open, persistence across separate
+`get_connection()` calls, no re-seed after a user DELETEs rows, re-seed after a DROP).
+`test_sql_console.py` (unit tests directly on `execute_sql` — SELECT with/without rows,
+CREATE TABLE, INSERT/UPDATE/DELETE rows-affected counts, writes persisting across calls,
+a SQL syntax error, a missing-table error, empty SQL, and multiple statements in one
+call). `test_sql_endpoint.py` (the same SELECT/INSERT/UPDATE/DELETE/CREATE TABLE/error
+coverage through the real `TestClient`-driven `POST /sql/execute`, plus one round-trip
+test proving the console and a cursor's OPEN/FETCH share one source of truth: INSERT a
+row via `/sql/execute`, then run a cursor-based procedure through `/debug` that sums
+exactly that row). Also fixed one now-stale comment in `test_debug_endpoint.py` that
+still referenced `app/demo_db.py` for the endpoint's own seeding.
+
+**Frontend: `pages/SqlConsolePage.jsx`, route `/sql-console`.** A Monaco editor (reusing
+the Debugger's exact options/fontFamily and `theme === 'light' ? 'vs' : 'vs-dark'`
+pattern) plus an Execute button (also bound to Ctrl/Cmd+Enter via
+`editor.addCommand`), and a results panel that renders one of three states: a
+`.cursor-table` for SELECT rows (reusing the Debugger's own cursor/table styling
+wholesale rather than a new table component), a `.status.status-ok` line for a write's
+`description`, or a `.error-banner.error-banner-unhandled` for a `SqlExecutionError` —
+the exact same coral error styling every other error display in the app already uses.
+Added to `App.jsx`'s routes and `Layout.jsx`'s nav (between Compare and Quiz). A few
+console-specific CSS rules (`.sql-console-actions`, `.sql-console-hint`,
+`.sql-console-table-scroll`) added to `App.css` right before the existing SQL
+Anti-Pattern Advisor section, matching that section's own "reuse first, add only what's
+missing" comment style.
+
+**`vite.config.js`.** Added a `/sql` proxy entry with the same `bypassNavigations` guard
+every other entry already needs — `/sql` (the API prefix for `/sql/execute`) is a
+path-prefix match for the page's own `/sql-console` route, the identical collision
+`/debug`/`/debugger` already has.
+
+**Verification.** Backend suite: 491 passing -> **522 passing, 0 xfailed**, zero
+regressions (ran the full suite, not just the new files). `npm run lint` clean (same two
+pre-existing warnings as before, unrelated to this change) and `npm run build` clean.
+Live-checked via a small dependency-free raw-CDP driver script (headless Chrome, no
+puppeteer available) against an already-running dev backend+frontend (found both already
+up and already serving the current code — used them directly rather than starting
+redundant instances against the same `backend/data/*.db` files): SQL Console in dark
+mode (default SELECT * FROM products renders its 3-row table correctly), a deliberate
+`SELEKT * FROM products` syntax error renders the coral error banner correctly, toggled
+to light mode and re-ran the same SELECT (Monaco and every panel re-themed correctly),
+then navigated to the Debugger and ran both `ProductPriceTotal` (17 steps) and
+`SafeAverageWithHandlers` (19 steps) to completion against the new persistent database.
+Timing: `POST /sql/execute` ~13ms, `POST /debug` (cursor sample) ~24ms live via curl,
+both comfortably under the 2s NFR. Cleaned up the 4 history rows this verification
+session's browser-driven sample runs added to the real, already-running backend's
+`debug_history.db` (`DELETE /history/{id}` for ids 446-449), confirmed `/history`'s top
+entry is back to the pre-session state; confirmed the real `user_data.db` still has
+exactly the one seeded `products` table (all CREATE/INSERT/UPDATE/DELETE test coverage
+ran through pytest's isolated `tmp_path` DB instead, never against the real file).
+`HANDOFF.md` rewritten with this session's status; `CLAUDE.md` §2 updated (new shipped-
+feature bullet, backend/frontend file maps, endpoint list, the "SQLite has two unrelated
+jobs" bullet rewritten to three); `docs/features.md` gained a new "Persistent user
+database + SQL Console" section.
+
+## 24. Merge Debugger + SQL Console pages; SQL passthrough statements inside procedures
+
+**Date:** 2026-09-17 · **Not yet committed** (see `HANDOFF.md`)
+
+**Prompt (verbatim):**
+
+> Merge the Debugger page and the SQL Console page into a single page/tab,
+> labeled "SQL Console" in the nav (remove the separate "Debugger" and old
+> "SQL Console" nav entries and routes).
+>
+> Detection logic on Run/Execute (single button, one Monaco editor):
+> 1. Attempt to parse the input using the existing procedure/function
+>    parser (same entry point /debug already uses — CREATE PROCEDURE/
+>    FUNCTION wrapper or bare body).
+> 2. If it parses successfully as a procedure/function: call /debug as
+>    normal, render the existing full debugger UI beneath the editor
+>    (step trace, breakpoints, call stack, control-flow flowchart, Ask AI,
+>    anti-pattern advisor — everything currently on the Debugger page,
+>    unchanged).
+> 3. If it does NOT parse as a procedure, check whether it looks like
+>    plain SQL (starts with CREATE, INSERT, UPDATE, DELETE, SELECT, DROP,
+>    or ALTER, no BEGIN/END or DECLARE wrapper): call /sql/execute instead,
+>    render the existing SQL Console results panel (table for SELECT,
+>    status line for writes, error banner) in place of the debugger UI.
+> 4. If it matches neither cleanly, show one clear error rather than
+>    silently picking a path — don't guess.
+>
+> Then, per the existing Phase 2 scope (still needed, now inside this
+> merged page): extend the procedure/function grammar so CREATE TABLE,
+> INSERT, UPDATE, DELETE, and standalone SELECT are valid *inside* a
+> procedure body too (raw-passthrough statement, same approach as the
+> cursor's embedded SELECT — capture as text, execute directly against
+> the persistent DB from Phase 1, no SQL parsing of your own). Add a new
+> DebugStep type/shape for these statements (SQL keyword, rows affected,
+> resulting table snapshot) and render it in the step panel. Update the
+> DebugStep schema note in HANDOFF.md per existing convention (this is a
+> central-contract change).
+>
+> Sample selector, Compare page links, and any other place that referenced
+> the old Debugger route need updating to the merged route.
+>
+> Keep both underlying capabilities intact and independently testable —
+> this is a UI/routing consolidation plus the grammar extension, not a
+> rewrite of either execution path.
+>
+> Verify: full backend suite passing, new tests for the raw-SQL-in-
+> procedure statement types (parsing + execution) and the new DebugStep
+> shape, one new sample procedure combining CREATE TABLE + INSERT + UPDATE
+> + a cursor SELECT to demonstrate the merged flow end-to-end. Frontend:
+> lint/build clean, live-check both detection paths (a plain CREATE TABLE
+> input, and a full procedure input) in both themes, confirm Compare page
+> and sample selector still work after the route merge.
+
+**Blocking ambiguity, resolved with the user before writing code.** CREATE TABLE/INSERT/
+UPDATE/DELETE already existed as a simulated, in-memory-only feature from an earlier
+phase (`Interpreter.tables`, its own `table` DebugStep field, its own Tables UI panel,
+`ManageInventory` sample, its own tests/golden traces) — a different, already-shipped,
+graded piece of work from what this prompt describes. The new spec wants the same five
+keywords to be raw passthrough against the real persistent DB (`app.user_db`), which is
+exactly what would close the interoperability gap the previous session's `HANDOFF.md`
+flagged (a cursor's SELECT couldn't see a procedure's own CREATE TABLEd data) — but the
+same keywords can't parse two different ways at once. Asked the user via `AskUserQuestion`
+how the two should coexist: replace the simulated feature entirely (closes the actual
+gap, matches "raw passthrough for all five" most literally, but retires already-graded
+work), keep both side by side under a disambiguating marker (zero risk to existing work,
+real added parser complexity, two ways to do the same thing), or only add the genuinely-
+missing standalone SELECT (simplest, lowest-risk, but doesn't close the gap or match the
+prompt's wording). User chose **replace** (recommended option). This decision shaped
+everything that followed.
+
+**Frontend merge.** `DebuggerPage.jsx` (~1550 lines, extensive existing functionality:
+breakpoints, call stack, cursor/table panels, flowchart, explanations, Ask AI, Predict
+Mode, report export) was edited in place — new `mode`/`sqlResult`/`sqlError` state, a
+`looksLikePlainSql` heuristic helper, `handleDebug` rewritten into `handleRun`
+implementing the three-way detection flow described above, the step-navigator/breakpoint-
+hint/Predict-Mode/Live-State-panel-contents/Ask-AI-panel/Advisor-panel all wrapped in
+`{mode !== 'sql' && (...)}` (falling back to a one-line "not applicable" placeholder in
+the Live State column, and simply not rendering the other three panels, when
+`mode === 'sql'`), and a new `{mode === 'sql' && (...)}` block rendering the exact SQL
+Console results view (reusing `.cursor-table`/`.status.status-ok`/`.error-banner`
+wholesale) in their place. The Run button (renamed from "Debug") and its Ctrl/Cmd+Enter
+binding are the only pieces always visible regardless of `mode`. The file was then
+renamed to `SqlConsolePage.jsx` (`mv`, after first deleting the OLD standalone
+`SqlConsolePage.jsx` from the previous session — its results-panel JSX had already been
+folded into the renamed file, not lost), component renamed to match, `App.jsx`'s
+`/debugger` route replaced with `<Navigate to="/sql-console" replace />` (so an old
+bookmark/link still works), `Layout.jsx`'s nav collapsed to one "SQL Console" entry,
+`HistoryPage.jsx`/`HomePage.jsx` updated to target `/sql-console` directly instead of
+`/debugger`. Internal CSS class names and the component's former identity
+(`debugger-page`, `debugger-grid`, `panel-editor`, ...) were deliberately left unchanged
+-- documented as a conscious choice, not an oversight, in the file's own new header
+comment.
+
+**A consequence of the grammar extension that changes what the detection heuristic
+actually catches in practice, discovered and confirmed live rather than just reasoned
+about**: since CREATE TABLE/INSERT/UPDATE/DELETE/SELECT are now ALSO valid bare-procedure-
+body statements (see below), input starting with one of those five almost always parses
+successfully at step 1 and lands in the full debugger UI (with its new `sql` step panel)
+-- it essentially never reaches the plain-SQL heuristic/flat-results-panel path at all.
+Verified directly: a bare `CREATE TABLE ...;` and a bare `SELECT ...;` both render the
+debugger UI (1-step trace, `sql` panel showing the result); only a `DROP TABLE ...;`
+(not part of the procedure grammar) renders the flat SQL Console panel. Documented this
+prominently in code comments, `docs/features.md`, and `HANDOFF.md` rather than silently
+shipping a heuristic that rarely fires without explaining why.
+
+**Backend grammar/interpreter.** Replaced `CreateTableStatement`/`InsertStatement`/
+`UpdateStatement`/`DeleteStatement` (4 node types, structured column-def/VALUES/SET/WHERE
+expression parsing, `Interpreter.tables` Python-dict simulation, NOT NULL/PRIMARY KEY
+enforcement written in this interpreter) with one new node type, `SqlStatement`
+(`{type, keyword, sql, line}`), covering all four PLUS the genuinely new fifth case,
+standalone SELECT. `app/parser.py`'s `_parse_sql_passthrough` captures tokens verbatim
+from the leading keyword to the next top-level `;` and reassembles them via the exact
+same `_render_raw_query` helper a cursor's embedded query already used -- deliberately
+"no SQL parsing of our own," matching that precedent exactly rather than inventing a new
+capture mechanism. `app/interpreter.py`'s `_exec_sql_statement` hands `node["sql"]`
+straight to a NEW shared function, `app/sql_console.py`'s `execute_sql_on_connection`
+(the previous session's `execute_sql` was refactored into a thin wrapper around this),
+called against `self._db` -- the SAME connection a cursor's OPEN already uses, which is
+the entire mechanism that makes the new interoperability demo possible. A
+`sqlite3.Error`/`SqlExecutionError` becomes an ordinary `InterpreterError` at the
+statement's line (same treatment a cursor query against a nonexistent table already got).
+Added `extract_table_name(keyword, sql)` (a small per-keyword regex, not a real parse) to
+`sql_console.py`, used by the new `sql.tableName`/`sql.snapshot` DebugStep fields (a
+follow-up read-only `SELECT *` on the affected table) and reused by `app/advisor.py`'s
+rewritten `_check_missing_where_clause`.
+
+**Three real, deliberate capability losses versus the retired feature**, each tested and
+documented rather than left as an implicit surprise: (1) no variable interpolation -- a
+DECLAREd variable's name inside a passthrough statement means a literal SQL identifier
+("no such column"), never a value substitution, since there's no expression parsing left
+for VALUES/SET/WHERE to hook into; (2) no server-side NOT NULL/PRIMARY KEY enforcement --
+real SQLite's own behavior is authoritative now, including its well-known quirk that a
+non-INTEGER PRIMARY KEY column doesn't reject NULL by itself (verified directly, not
+assumed); (3) a missing `;` no longer fails to PARSE (the old structured grammar caught it
+immediately) -- it silently merges with the next statement and fails to INTERPRET instead
+as a real SQLite syntax error. An existing `test_grammar_edge_cases.py` parametrized case
+asserting the old behavior was removed and replaced with a new test asserting the new one,
+with a comment explaining why.
+
+**Ripple-through updates**, each checked for actual usages rather than assumed unaffected:
+`app/advisor.py` (`_statement_exprs` lost its three retired cases entirely -- no
+expression tree inside raw `sql` text, same scope boundary a cursor's own query already
+had; `_check_select_star` gained a second case for standalone-SELECT `SqlStatement`).
+`app/explainer.py` (four template-fallback cases and two prompt-builders collapsed to one
+case plus a shared `_describe_sql_step` helper). `frontend/src/cfg.js` (four flowchart-
+rendering cases collapsed to one, `renderColumnDef` helper deleted as now-unused).
+`frontend/src/TestCaseRunner.jsx`'s `findFinalTableState` (reads `sql.tableName`/
+`sql.kind`/`sql.snapshot`, zipping the new list-of-lists row shape back into the
+column-keyed dicts `testCaseExpectations.js`'s existing format already used, so that
+file's own expectation entries needed no reshaping, just a new one for the new sample).
+
+**New sample, `InventoryValueReport`** (`frontend/src/samples.js`): CREATE TABLE + 3
+INSERTs + 1 UPDATE (raw SQL) followed by a cursor that reads back those exact rows and
+sums `qty * price` -- hand-traced (Widget 4->14, Gadget 2->12, Gizmo unchanged at 6;
+14*10 + 12*25 + 6*15 = 530) and cross-checked against a real interpreter run. Uses
+`CREATE TABLE IF NOT EXISTS`/`INSERT OR REPLACE INTO` specifically so it stays safely
+re-runnable against the real, persistent database (a plain `CREATE TABLE`/`INSERT` would
+fail with a real SQLite error on a second click, since the previous run's data is still
+there for real now -- not simulated, not reset per-request). `ManageInventory` (the
+previous session's demo of the now-retired simulated feature) migrated to the same
+`IF NOT EXISTS`/`OR REPLACE` pattern for the same re-runnability reason; its actual data
+and final row state (`Widget(13, 10)`, `Gizmo(15, 13)`) are unchanged, since its original
+SQL was already valid, standard SQL the retired simulation's own semantics happened to
+already match.
+
+**Tests.** Deleted `test_table_crud.py` (tested the retired feature's structured grammar
+and Python-simulation semantics, no longer applicable), replaced with
+`test_sql_passthrough_statement.py`: parser tests (all five keywords produce the shared
+node type, valid inside IF/WHILE, the missing-semicolon behavior change), interpreter
+tests against a real `user_db.get_connection()` (write/rows step shapes, the cursor-sees-
+raw-INSERT interop test, a clean-SQLite-error-becomes-InterpreterError test, the
+no-interpolation and no-constraint-enforcement documentation tests, the `<=`
+round-trip-caveat test), and two real-`/debug`-endpoint end-to-end tests. Updated
+`test_advisor.py` (rewrote the now-false "magic-number sees inside INSERT" test into one
+asserting the new, narrower boundary; added standalone-SELECT select-star coverage),
+`test_explainer.py` (all `table`-field fixtures rebuilt as `sql`-field fixtures),
+`test_report_endpoint.py` (asserts `SqlStatement`/raw SQL text instead of the retired
+per-statement node-type names), `test_parser.py` (one updated assertion). Regenerated
+golden fixtures (`UPDATE_GOLDENS=1 pytest`): `ManageInventory.json` changed (new
+statement shape and `IF NOT EXISTS`/`OR REPLACE` text), new `InventoryValueReport.json`
+added -- both diffs reviewed by hand before accepting. Backend suite: 505 passing (up
+from 491), zero regressions.
+
+**`HelpPage.jsx` (graded user manual) and `AboutPage.jsx` (grammar reference) rewritten**
+in every section describing the Debugger page, the "Debug" button, cursor data source, or
+supported grammar, to accurately describe the merged page, the "Run" button, the real
+persistent database, and the new SQL passthrough statements. `AboutPage.jsx` also had a
+genuinely pre-existing (not caused by this session) false claim corrected in passing,
+since it was directly touched anyway: "table statements not supported at all" -- they
+were, even before this session, via the now-retired simulation; `CALL`/`CASE`/`LOOP`/
+`LEAVE` were also incorrectly listed there as unsupported. Did not attempt a full audit/
+rewrite of `AboutPage.jsx`'s entire grammar reference beyond what this session's own
+changes made newly or still inaccurate -- out of scope.
+
+**Verification.** `npm run lint`/`npm run build` clean. Live-checked via the scratchpad's
+raw-CDP driver against an already-running dev backend+frontend (found both already
+serving current code, used directly): nav shows exactly one "SQL Console" entry (no
+"Debugger"); navigating to `/debugger` redirects to `/sql-console`; a full procedure
+(`CalculateTotal`, then a hand-written one combining CREATE TABLE/INSERT/UPDATE/cursor)
+renders the debugger UI correctly in both dark and light mode, including the new `sql`
+step panel (screenshotted mid-trace on the CREATE TABLE step, showing the table/keyword/
+rows-affected/empty-snapshot correctly); a bare `CREATE TABLE`/`SELECT` input ALSO
+correctly renders the debugger UI (confirming the "consequence" noted above is real, not
+just reasoned about) with correct SQL step content; a `DROP TABLE` input correctly renders
+the flat SQL Console results panel; input matching neither shows the combined clear error
+naming both why it didn't parse and that it doesn't look like SQL; the Compare page still
+runs two procedures side by side and reports "no divergence" correctly; the sample
+selector still loads a sample's code into the editor correctly. Timing: `/debug` ~26-33ms,
+`/sql/execute` ~13-25ms, both comfortably under the 2s NFR (up from sub-millisecond
+pre-this-session for the interpreter path specifically, now doing real SQLite file I/O
+per write instead of a pure Python dict mutation -- still 2-3 orders of magnitude under
+budget, logged as a new `docs/schema.md` performance-table row per that file's own
+convention). Cleaned up real history rows AND real stray tables (`inventory`, `stock`)
+this session's own verification and an ad-hoc in-process benchmarking script (run outside
+pytest, so not covered by `conftest.py`'s isolation) left in the real, already-running dev
+backend's databases -- confirmed both back to baseline afterward, and noted the "measure
+through pytest, not a bespoke script" lesson in `HANDOFF.md`'s gotchas.
+
+`docs/schema.md` updated (the `sql` field's full shape, a note that it replaces `table`,
+a new performance-table row + a corrected "no measurable overhead" claim). `docs/
+features.md` gained a new "Merged Debugger/SQL Console page + SQL passthrough statements"
+section (and a superseded-by note on the previous session's own section). `CLAUDE.md` §2
+updated (shipped-features bullet rewritten, backend/frontend file maps, the "execution is
+simulated" and "SQLite backs three things" bullets both corrected). `HANDOFF.md` rewritten
+with this session's status, including a note in "Immediate next steps" flagging that
+several frontend files were already showing as modified/uncommitted at this session's own
+start, from unrelated prior work this session did not touch (except `AboutPage.jsx`,
+noted explicitly) -- worth reviewing separately before committing.
+
+---
+
+## 25. Full functional audit (no new features)
+
+**Date:** 2026-09-17
+
+**Prompt (verbatim):**
+
+> Run a full functional audit of the current app and report a clear pass/fail list --
+> do not make speculative fixes; if you find a genuine bug, note it and fix only that
+> specific thing, then re-verify. The goal is a complete, trustworthy status list, not
+> new features.
+>
+> [full checklist covering: procedure debugging via the merged page's debug path
+> (DECLARE/SET arithmetic, IF/ELSE, WHILE, LOOP/LEAVE incl. labeled nested LEAVE, CASE
+> status unknown, cursor lifecycle, NOT_FOUND/DIVISION_BY_ZERO handlers, SELECT...INTO
+> status unknown, CALL + call stack, IN/OUT/INOUT syntax verification, breakpoints/
+> continue/restart); plain SQL via the direct-execute path (CREATE TABLE, INSERT,
+> multi-statement-block behavior unconfirmed, UPDATE, DELETE, SELECT, a deliberate
+> syntax error); merge routing correctness; cross-cutting persistence (a table/row
+> created via direct SQL visible to a cursor afterward, including after a DROP+reseed
+> cycle); mandatory course sections (Learn tab, Help tab staleness, Developed By,
+> Download in all 3 formats, Day/Night on the merged page); innovation features not
+> regressed (Advisor, Compare, Quiz/Predict Mode, TTS); non-functional (re-time /debug
+> and /sql/execute, report the current test count vs, the last known baseline) --
+> output as a PASS/FAIL/PARTIAL list grouped by section, plus "bugs found and fixed"
+> and "needs a decision from the student" sections.]
+
+**What I did.** Exercised every item live -- via the existing 505-test backend suite where
+coverage already existed, and directly against the already-running dev backend/frontend
+(confirmed up via `curl` before touching anything) everywhere it didn't: raw `curl`/`python`
+one-liners against `/debug` and `/sql/execute` for CASE, nested labeled LOOP/LEAVE, cursor+
+NOT_FOUND, DIVISION_BY_ZERO, CALL+call-stack, IN/OUT/INOUT syntax, multi-statement SQL
+blocks, a deliberate syntax error, cross-cutting persistence (including a DROP+reseed
+cycle), the Anti-Pattern Advisor, and all three report formats (validated PDF magic bytes,
+DOCX zip structure, TXT content -- not just a 200 status); grep/read-based inspection of
+`SqlConsolePage.jsx`'s actual routing logic, `HelpPage.jsx`, `DevelopedByModal.jsx`,
+`LearnPage.jsx`, `ComparePage.jsx`, `QuizPage.jsx` for the frontend-only items; a live
+`/quiz/generate` call for Quiz. Two real findings: (1) `SELECT ... INTO` genuinely doesn't
+exist in the grammar (only `FETCH cursor INTO var` does) -- reported as an absence, not
+built in this pass, per the prompt's own instruction; (2) `>=`/`<=`/`<>` are completely
+absent from the documented comparison grammar (`parser.py`'s own
+`comparison := term (('>' | '<' | '=' | '!=') term)*`), not merely a raw-SQL round-trip
+caveat as a previous session's docs implied -- confirmed by testing `CASE WHEN score >= 90`
+and getting a genuine `ParserError`. Both became this session's next prompt's scope. Also
+discovered (not a bug, a correction to stale HANDOFF status) that the Developed By photo
+and Learn tab video/references, both previously flagged as placeholders, are now real --
+from unrelated prior work already on disk at session start.
+
+**One real mistake, caught and fixed within the same pass:** an Advisor test used
+`DELETE FROM products` with no WHERE clause against the REAL, live seeded `products`
+table -- it executed for real and emptied it. Caught immediately via a follow-up SELECT,
+reseeded the exact original 3 rows (`Widget/10, Gadget/25, Gizmo/15`) per `user_db.py`'s
+own seed data, confirmed restored. All other live-verification side effects (11 history
+rows total across the session) were also cleaned up, confirmed back to the pre-audit
+baseline (`/history` top id 445).
+
+**Result:** a full PASS/FAIL/PARTIAL list delivered to the user (not reproduced here --
+see the conversation itself); 505/505 backend tests passing (no regression from the prior
+session's count), `npm run lint`/`npm run build` both clean.
+
+---
+
+## 26. Comparison operators (`>=`/`<=`/`<>`) + `SELECT ... INTO`
+
+**Date:** 2026-09-17–18 · **Not yet committed** (see `HANDOFF.md`)
+
+**Prompt (verbatim):**
+
+> Two focused grammar/interpreter fixes, verified independently, no unrelated changes.
+>
+> FIX 1 — comparison operators:
+> Extend the procedural comparison rule (currently comparison := term (('>' | '<' | '=' |
+> '!=') term)*) to also accept >=, <=, and <>. Applies everywhere procedural conditions
+> are evaluated — IF, WHILE, CASE. Watch tokenizer ordering: >= must be lexed before a
+> bare >, same for <= before <, so this touches the tokenizer as well as the parser rule.
+>
+> FIX 2 — SELECT...INTO:
+> Add SELECT col1, col2, ... INTO var1, var2, ... FROM table WHERE condition; as a
+> procedure-body statement, distinct from the existing cursor mechanism (DECLARE CURSOR/
+> OPEN/FETCH/CLOSE, which stays unchanged). Parser: capture the SQL after INTO as raw
+> text (same raw-passthrough approach used elsewhere) plus the INTO variable list.
+> Interpreter: run it against the persistent database, expect exactly one row, assign
+> columns to the INTO variables in order. Zero rows: raise the same NOT_FOUND condition
+> cursor FETCH already raises, so an existing DECLARE CONTINUE HANDLER FOR NOT_FOUND
+> catches it — don't add a new error path. More than one row: raise a clear distinct
+> error. Add a DebugStep entry showing the query and resulting assignments (reuse the
+> existing raw-SQL step shape if one already exists for CRUD-in-procedures).
+>
+> Add one test sample per fix: a condition using >=/<=/<> together, and a single-row
+> lookup with both the found and NOT_FOUND cases covered.
+>
+> Verify: full backend suite passing (505 baseline), new unit tests for both fixes
+> covering found/not-found/multi-row and all three new operators, live-check both in the
+> merged SQL Console page. Report the new total test count.
+
+**What I did.** **Fix 1**: `app/tokenizer.py`'s `_TOKEN_SPEC` gained `GTE`(`>=`)/`LTE`(`<=`)
+patterns ordered before the bare `OPERATOR` pattern; `NEQ` widened to `!=|<>`.
+`app/parser.py`'s `COMPARISON_OPERATORS` gained the three values -- since IF/WHILE/CASE all
+share `_parse_comparison`/`_evaluate_binary`, one change covered all three constructs.
+`app/interpreter.py`'s `_evaluate_binary` gained `>=`/`<=`/`<>` branches. Caught and fixed a
+real bug this surfaced: `app/explainer.py`'s deterministic template fallback had its own
+condition-phrasing regex (`(>|<|!=|=)`) that would have mis-split `score >= 90` into
+`score > = 90` -- reordered the alternation, added the new operators to
+`_COMPARISON_PHRASES`. **Fix 2**: new `SelectIntoStatement` AST node
+(`app/parser.py`'s `_parse_select_into`, dispatched via a new `_select_has_into` lookahead
+that tells it apart from a bare-SELECT `SqlStatement`), new `_exec_select_into` in
+`app/interpreter.py` reusing `execute_sql_on_connection` and the exact same
+`_condition_error_info("NOT_FOUND", ...)`/`_run_handler_if_triggered` machinery an
+exhausted cursor FETCH already uses for its own zero-row case -- no new error path. A
+column-count mismatch and a multi-row result are both distinct, immediately-fatal
+`InterpreterError`s, never routed through a handler. New `sql.into` DebugStep field
+(`docs/schema.md` updated). `app/advisor.py`'s `_touched_names` now tracks
+`SelectIntoStatement.targets` as writes (same as `FetchCursorNode`, needed for the
+dead-store check's correctness). `app/explainer.py` and `SqlConsolePage.jsx` (a new
+"Assigned: var = value" / "No row matched ... left unchanged" line in the existing SQL
+step panel) both gained cases recognizing `sql.into`. Two new samples,
+`OperatorShowcase` and `LookupOnePlayer`, added to `samples.js` + `testCaseExpectations.js`
+per the prompt's own instruction (one per fix; `LookupOnePlayer` covers both found and
+NOT_FOUND in a single run, per the prompt's explicit ask).
+
+**Tests.** One existing test rewritten (it had documented the round-trip bug Fix 1 fixed
+as a side effect). Two new files: `test_comparison_operators.py` (25 tests) and
+`test_select_into.py` (20 tests, including two real `/debug`-endpoint end-to-end cases --
+caught along the way that `found`/`notfound` are reserved KEYWORDs in this grammar, so an
+OUT param literally named `found` fails to parse; renamed to `was_found`). Two new golden
+fixtures generated (`UPDATE_GOLDENS=1`), the other 19 confirmed byte-for-byte unchanged.
+Backend suite: **552 passing** (up from the 505 baseline the prompt named), zero
+regressions.
+
+**Verification.** `npm run lint`/`npm run build` clean. Neither dev server was already
+running this session (unlike most prior sessions) -- started both fresh, live-checked via
+the scratchpad's `cdp.js` driver: hand-typed raw source using all three new operators
+directly (not just the sample) parsed, ran, and stepped to a hand-verified final value
+(`r = 111`); `LookupOnePlayer`'s step log showed both SELECT INTO steps, the NOT_FOUND one
+tagged inline; the new SQL step panel correctly showed "Assigned: foundScore = 95" for the
+found case and the "left unchanged" message plus the pre-existing NOT_FOUND error banner
+for the miss, confirmed in both themes (screenshots in the scratchpad). Cleaned up 8 real
+history rows and a real `players` table this session's own live verification created on
+the real `user_data.db`, confirmed back to baseline afterward.
+
+`docs/features.md` gained a new "Comparison operators + SELECT...INTO" section (and fixed
+a now-stale round-trip-caveat claim in its "Backend grammar extension" section from two
+sessions ago). `docs/schema.md`'s `sql` field documentation extended for `into`.
+`CLAUDE.md` §2's shipped-features bullet extended. `HANDOFF.md` rewritten with this
+session's status, including this audit's finding that the Developed By/Learn tab
+placeholder gaps a much earlier HANDOFF had flagged are actually already resolved.

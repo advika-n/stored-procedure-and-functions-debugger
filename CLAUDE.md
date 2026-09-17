@@ -33,13 +33,18 @@ Documentation (5), Innovation (5).
   wire contract every frontend feature reads; full shape in `docs/schema.md`.
 - **Execution is simulated, not a real DB engine** — the interpreter evaluates
   DECLARE/SET/IF/WHILE/CASE/LOOP/cursors/handlers/CREATE TABLE/INSERT/UPDATE/DELETE
-  itself, entirely in Python; only cursor `SELECT` queries hit real SQLite, against a
-  small fixed auto-seeded dataset (`demo_db.py`: `products(name, price)`, 3 rows). A
-  procedure's own user-created tables (`Interpreter.tables`) are a separate, simulated-
-  only mechanism — never real SQLite, and never queryable from a cursor's SELECT.
-- **SQLite has two unrelated jobs**: `history.py` (on-disk, persists the 50 most recent
-  successful `/debug` runs) vs. `demo_db.py` (ephemeral `:memory:` per request, cursor
-  queries only).
+  itself, entirely in Python; cursor `SELECT` queries AND standalone SQL passthrough
+  statements (CREATE TABLE/INSERT/UPDATE/DELETE/SELECT, see below) both hit real SQLite,
+  against `user_db.py`'s persistent database. There is no longer a separate simulated
+  table mechanism — an earlier phase's `Interpreter.tables` (pure Python, never real
+  SQLite, never queryable from a cursor's SELECT) was retired and replaced; see
+  `docs/features.md`'s "Merged Debugger/SQL Console page + SQL passthrough statements".
+- **SQLite backs three unrelated things**: `history.py` (on-disk, persists the 50 most
+  recent successful `/debug` runs) · `user_db.py` (on-disk, persistent, `backend/data/
+  user_data.db` — the real database cursor OPEN/FETCH, SQL passthrough statements, and
+  the SQL Console all read/write, seeded once with `products`) · `demo_db.py` (ephemeral
+  `:memory:`, no longer wired into `/debug` — kept only as a seeded-connection fixture
+  for interpreter unit tests).
 
 **Shipped features** (full rationale in `docs/features.md`): Breakpoints +
 Continue/Restart · SQL Anti-Pattern Advisor (`advisor.py`, ten AST checks, rides on
@@ -47,29 +52,49 @@ Continue/Restart · SQL Anti-Pattern Advisor (`advisor.py`, ten AST checks, ride
 (`/debug/report`, PDF/DOCX/TXT) · `CALL` support (procedure-calling-procedure) ·
 Function calls in expressions (`FunctionCallExpr`, reuses `CALL`'s scope isolation) ·
 CASE statement (reuses IF's `branch` field) · LOOP / LEAVE (optionally labeled, reuses
-WHILE's iteration guard + `loop` field) · User-created tables (CREATE TABLE / INSERT /
-UPDATE / DELETE, simulated in-memory per run, global across a CALL chain like the
-`products` demo table; new `table` DebugStep field, new Tables UI panel).
+WHILE's iteration guard + `loop` field) · Persistent user database (`user_db.py`'s
+on-disk `products` DB — what cursors read from, seeded once) · Merged Debugger/SQL
+Console page (one route, `/sql-console`, one Monaco editor, one Run button that detects
+whether the input is a procedure/function or plain SQL and renders the right UI; `/debugger`
+redirects there) + SQL passthrough statements (`SqlStatement` AST node — CREATE TABLE /
+INSERT / UPDATE / DELETE / SELECT, all raw SQL run for real against `user_db.py`'s
+persistent database, no simulation, no variable interpolation; new `sql` DebugStep field,
+**replacing** an earlier phase's simulated CREATE TABLE/INSERT/UPDATE/DELETE feature
+[`Interpreter.tables`, the old `table` DebugStep field] entirely, not adding alongside it
+— a cursor's SELECT can now see a table a procedure just CREATEd/INSERTed into, in the
+same run) · Comparison operators `>=`/`<=`/`<>` (valid everywhere a condition is
+evaluated — IF/WHILE/CASE — via one shared `COMPARISON_OPERATORS` set/`_evaluate_binary`,
+plus fixed the SQL-passthrough round-trip caveat as a side effect) · `SELECT ... INTO`
+single-row lookup (`SelectIntoStatement` AST node, distinct from both the cursor mechanism
+and the standalone-SELECT `SqlStatement` above — zero rows reuses cursor FETCH's own
+NOT_FOUND condition rather than a new error path; new `sql.into` DebugStep field).
 
 ### Backend file map (`backend/app/`)
 `tokenizer.py` text→tokens · `parser.py` tokens→AST · `interpreter.py` AST→`DebugStep`s
 · `advisor.py` static Advisor (`analyze(ast)`) · `explainer.py` Gemini client + `/explain`
-+ `/ask` · `quiz.py` MCQ quiz gen · `demo_db.py` ephemeral cursor dataset · `history.py`
-persistent run history · `report.py` PDF/DOCX/TXT export · `main.py` FastAPI routes ·
-`tests/` one `test_*.py` per module/route.
++ `/ask` · `quiz.py` MCQ quiz gen · `user_db.py` persistent on-disk user database (cursors
++ SQL passthrough statements + the SQL Console's shared source of truth) ·
+`sql_console.py` raw-SQL-passthrough execution logic, shared by `POST /sql/execute` AND
+`interpreter.py`'s `SqlStatement` handling · `demo_db.py` ephemeral `:memory:` test
+fixture only (see above) · `history.py` persistent run history · `report.py` PDF/DOCX/TXT
+export · `main.py` FastAPI routes · `tests/` one `test_*.py` per module/route.
 
 ### Endpoints
 `GET /health` · `POST /debug` · `POST /debug/report` · `POST /explain` · `POST /ask` ·
-`POST /quiz/generate` · `GET|DELETE /history[/{id}]`
+`POST /quiz/generate` · `POST /sql/execute` · `GET|DELETE /history[/{id}]`
 
 ### Frontend file map (`frontend/src/`)
 `App.jsx` routes · `Layout.jsx` header/nav · `ThemeContext.jsx` Day/Night (§3) ·
 `theme.css`/`App.css` styling · `mermaidColors.js` JS-mirrored theme hex (Mermaid can't
 read CSS vars) · `cfg.js` AST→Mermaid flowchart · `svgToPng.js` flowchart rasterization
 for Download · `compareTraces.js` pure trace diff · `samples.js` sample library ·
-`pages/DebuggerPage.jsx` main UI · `pages/ComparePage.jsx`, `QuizPage.jsx`,
-`TestRunnerPage.jsx`, `HistoryPage.jsx`, `HelpPage.jsx`, `LearnPage.jsx` — one per route
-· `Theory.jsx`/`theoryContent.jsx` `/theory` (distinct from Learn: no video/references).
+`pages/SqlConsolePage.jsx` the merged Debugger + SQL Console (`/sql-console`, one editor,
+one Run button — see `docs/features.md`; formerly two separate pages/files,
+`DebuggerPage.jsx` and a standalone `SqlConsolePage.jsx`) · `pages/ComparePage.jsx`,
+`QuizPage.jsx`, `TestRunnerPage.jsx`, `HistoryPage.jsx`, `HelpPage.jsx`, `LearnPage.jsx` —
+one per route · `theoryContent.jsx`/`theoryTopics.js` the former standalone Theory tab's
+per-construct write-ups, merged into `LearnPage.jsx`'s "Deep Dive" panel (no more
+separate `/theory` route).
 
 ### Known repo cruft
 `New/` at the project root is a stray, fully-duplicated snapshot of an earlier

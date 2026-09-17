@@ -282,16 +282,19 @@ def test_report_endpoint_handles_a_call_based_trace_across_all_formats():
             assert response.content.startswith(b"%PDF-")
 
 
-def test_report_endpoint_handles_a_table_based_trace():
-    """ManageInventory's steps include the `table` field (CREATE TABLE/
-    INSERT/UPDATE/DELETE, per docs/schema.md) -- confirms that field's
-    presence doesn't break report building even though report.py never
-    reads it, and that the real statement types/row data still appear."""
+def test_report_endpoint_handles_a_sql_passthrough_trace():
+    """ManageInventory's steps include the `sql` field (CREATE TABLE/
+    INSERT/UPDATE/DELETE, per docs/schema.md -- raw SQL passthrough,
+    one shared `SqlStatement` nodeType, not four separate ones) --
+    confirms that field's presence doesn't break report building even
+    though report.py never reads it, and that the real statement text/
+    row data still appear."""
     response = _debug_and_report(MANAGE_INVENTORY, "ManageInventory", "txt")
     text = response.text
-    assert "InsertStatement" in text
-    assert "UpdateStatement" in text
-    assert "DeleteStatement" in text
+    assert "SqlStatement" in text
+    assert "INSERT INTO inventory" in text
+    assert "UPDATE inventory" in text
+    assert "DELETE FROM inventory" in text
     assert "Widget" in text
 
 

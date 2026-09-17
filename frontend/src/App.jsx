@@ -1,9 +1,8 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './Layout'
-import Theory from './Theory'
 import HomePage from './pages/HomePage'
-import DebuggerPage from './pages/DebuggerPage'
 import ComparePage from './pages/ComparePage'
+import SqlConsolePage from './pages/SqlConsolePage'
 import TestRunnerPage from './pages/TestRunnerPage'
 import HistoryPage from './pages/HistoryPage'
 import QuizPage from './pages/QuizPage'
@@ -14,15 +13,6 @@ import { ThemeProvider } from './ThemeContext'
 import './theme.css'
 import './App.css'
 
-function TheoryPage() {
-  return (
-    <section className="theory-page">
-      <h1>Theory</h1>
-      <Theory />
-    </section>
-  )
-}
-
 function App() {
   return (
     <ThemeProvider>
@@ -30,10 +20,14 @@ function App() {
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<HomePage />} />
-            <Route path="/debugger" element={<DebuggerPage />} />
+            {/* The Debugger and SQL Console pages merged into one --
+                see SqlConsolePage.jsx's own module comment. /debugger
+                redirects rather than 404ing, for anyone with an old
+                bookmark/link. */}
+            <Route path="/debugger" element={<Navigate to="/sql-console" replace />} />
             <Route path="/compare" element={<ComparePage />} />
+            <Route path="/sql-console" element={<SqlConsolePage />} />
             <Route path="/tests" element={<TestRunnerPage />} />
-            <Route path="/theory" element={<TheoryPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/quiz" element={<QuizPage />} />
             <Route path="/about" element={<AboutPage />} />

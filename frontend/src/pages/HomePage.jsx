@@ -32,7 +32,7 @@ function HomePage() {
           Step through a small procedural-SQL subset one statement at a time -- variables, branches, loops,
           cursors, and exception handlers -- and watch exactly what happened and why.
         </p>
-        <Link to="/debugger" className="home-cta">
+        <Link to="/sql-console" className="home-cta">
           Launch Debugger
         </Link>
       </div>

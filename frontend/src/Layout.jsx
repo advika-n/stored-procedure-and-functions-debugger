@@ -5,13 +5,18 @@ import DevelopedByModal from './DevelopedByModal'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Home', end: true },
-  { to: '/debugger', label: 'Debugger' },
+  // The Debugger and SQL Console pages merged into one -- see
+  // SqlConsolePage.jsx's own module comment. One tab, one editor, one
+  // Run button that detects which of the two the input actually is.
+  { to: '/sql-console', label: 'SQL Console' },
   { to: '/compare', label: 'Compare' },
   // Tests intentionally hidden from the nav (kept as a real route --
   // /tests, TestRunnerPage.jsx, and its logic are all untouched -- just
   // no visible/clickable nav entry for it anymore). Same pattern as
   // History above.
-  { to: '/theory', label: 'Theory' },
+  // Theory was merged into Learn (see LearnPage.jsx's "Deep Dive" panel,
+  // per professor's instruction) -- no standalone /theory route or nav
+  // entry anymore.
   // History intentionally hidden from the nav (kept as a real route --
   // /history, HistoryPage.jsx, and the backend's history.py logging are
   // all untouched -- just no visible/clickable nav entry for it anymore).

@@ -111,8 +111,9 @@ def test_debug_endpoint_reports_interpreter_error_with_line():
 
 def test_debug_endpoint_supports_cursors_against_the_seeded_demo_products_table():
     # No db_connection is passed explicitly here -- this proves the
-    # endpoint itself seeds one (see app/demo_db.py), not just that
-    # app.interpreter.run() supports cursors when a test hands it one.
+    # endpoint itself opens + seeds one (see app/user_db.py), not just
+    # that app.interpreter.run() supports cursors when a test hands it
+    # one.
     code = """\
 DECLARE total NUMBER DEFAULT 0;
 DECLARE item_name STRING DEFAULT '';

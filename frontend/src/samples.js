@@ -1,8 +1,10 @@
 // A small library of sample procedures and functions for the picker.
-// Each uses only the supported grammar (DECLARE / SET / IF-ELSE / WHILE
-// -- no >=, <=, since the tokenizer/parser don't support those) and is
-// fully self-contained via DECLARE ... DEFAULT, so any sample can be
-// loaded and run with no extra setup.
+// Each uses only the supported grammar (DECLARE / SET / IF-ELSE / WHILE)
+// and is fully self-contained via DECLARE ... DEFAULT, so any sample can
+// be loaded and run with no extra setup. `>=`/`<=`/`<>` ARE supported
+// (added alongside SELECT...INTO -- see OperatorShowcase/
+// LookupOnePlayer below) -- this comment used to say otherwise; that was
+// a real, since-fixed tokenizer/parser limitation, not a style choice.
 //
 // Every entry carries a `kind`, either 'PROCEDURE' or 'FUNCTION' --
 // purely a picker label (see the sample-kind-tag next to each name in
@@ -17,7 +19,7 @@
 // their values via DECLARE ... DEFAULT; the frontend always sends
 // params: {} today, so none of them could have relied on externally
 // supplied params anyway) -- and it makes the sample library visually
-// consistent with the syntax the Theory tab actually teaches, instead
+// consistent with the syntax the Learn tab's Deep Dive panel actually teaches, instead
 // of contradicting it. The bare, wrapper-less form is NOT gone: it's
 // the permanent backward-compatibility path (see backend/app/parser.py's
 // module docstring), still fully supported, still what every History
@@ -37,20 +39,30 @@
 // function, just because it's the only form guaranteed to run without
 // a params-collection UI that doesn't exist yet.
 //
-// The cursor-based samples run their queries against a small, fixed,
-// auto-seeded demo table -- products(name, price), 3 rows -- that
-// every /debug request gets for free (see backend/app/demo_db.py);
-// there's no schema-editing feature FOR CURSORS, so a cursor-based
-// procedure you write yourself must query that same `products` table
-// (or `WHERE` filters over it) to have any rows to work with.
+// The cursor-based samples run their queries against a real, persistent,
+// on-disk database (backend/app/user_db.py) every /debug request opens --
+// seeded once with products(name, price), 3 rows, on first use. A
+// cursor-based procedure you write yourself can query that same
+// `products` table (or `WHERE` filters over it), OR any table a
+// CREATE TABLE statement (see below) has created in that same database.
 //
-// Separately, CREATE TABLE / INSERT / UPDATE / DELETE (see
-// backend/app/interpreter.py's "User-created tables" section) let a
-// procedure define and mutate its OWN table entirely in-memory, for
-// the life of one run -- ManageInventory below is the sample for that.
-// The two systems don't talk to each other: a cursor's embedded SELECT
-// still only ever sees the fixed `products` table, never a table a
-// procedure creates for itself with CREATE TABLE.
+// CREATE TABLE / INSERT / UPDATE / DELETE / SELECT (see
+// backend/app/interpreter.py's "SQL passthrough statements" section) are
+// raw SQL, executed for real against that exact same persistent database
+// -- no separate in-memory simulation, and critically no variable
+// interpolation (a DECLAREd variable's NAME inside one of these means a
+// literal SQL identifier, never a substitution of its value -- only
+// literal values work). Because it's the same real database, a table a
+// procedure CREATEs and INSERTs into is immediately queryable by a
+// cursor's SELECT later in that same run -- ManageInventory demonstrates
+// CREATE TABLE/INSERT/UPDATE/DELETE on their own; InventoryValueReport
+// (below) demonstrates that same interoperability with a cursor.
+//
+// CREATE TABLE/INSERT here use `IF NOT EXISTS`/`OR REPLACE` specifically
+// so both samples stay safely re-runnable against the real, persistent
+// database (unlike a one-shot script, clicking Debug on the same sample
+// twice must not fail with a real SQLite "table already exists"/UNIQUE
+// constraint error).
 
 export const SAMPLES = [
   {
@@ -509,10 +521,14 @@ BEGIN
 END
 `,
   },
-  // Added for the user-created tables phase (CREATE TABLE / INSERT /
-  // UPDATE / DELETE) -- exercises all four together against one table,
-  // not just one in isolation. Hand-traced (and cross-checked against a
-  // real interpreter run -- see testCaseExpectations.js): three rows are
+  // Added for the SQL passthrough statements phase (CREATE TABLE /
+  // INSERT / UPDATE / DELETE, raw SQL against the real persistent
+  // database -- see backend/app/interpreter.py's section of the same
+  // name) -- exercises all four together against one table, not just
+  // one in isolation. `IF NOT EXISTS`/`OR REPLACE` keep this safely
+  // re-runnable against the real database (see this file's own header
+  // comment above). Hand-traced (and cross-checked against a real
+  // interpreter run -- see testCaseExpectations.js): three rows are
   // INSERTed (Widget/8/10, Gadget/0/25, Gizmo/15/15); the first UPDATE
   // restocks every item with qty < 10 by +5 (Widget: 8->13; Gadget: 0->5;
   // Gizmo's 15 is untouched); the second UPDATE discounts price by 2 on
@@ -524,16 +540,121 @@ END
     name: 'ManageInventory',
     kind: 'PROCEDURE',
     description:
-      'CREATE TABLE + INSERT + UPDATE + DELETE together against one user-created table -- restocks low-quantity items, discounts high-priced ones, then discontinues a product by id. Step through to watch the Tables panel show the row set change after each statement.',
+      'CREATE TABLE + INSERT + UPDATE + DELETE together, raw SQL against the real persistent database -- restocks low-quantity items, discounts high-priced ones, then discontinues a product by id. Step through to watch the SQL panel show the row set change after each statement.',
     code: `CREATE PROCEDURE ManageInventory()
 BEGIN
-    CREATE TABLE inventory (id NUMBER PRIMARY KEY, item TEXT NOT NULL, qty NUMBER, price NUMBER);
-    INSERT INTO inventory VALUES (1, 'Widget', 8, 10);
-    INSERT INTO inventory VALUES (2, 'Gadget', 0, 25);
-    INSERT INTO inventory VALUES (3, 'Gizmo', 15, 15);
+    CREATE TABLE IF NOT EXISTS inventory (id NUMBER PRIMARY KEY, item TEXT NOT NULL, qty NUMBER, price NUMBER);
+    INSERT OR REPLACE INTO inventory VALUES (1, 'Widget', 8, 10);
+    INSERT OR REPLACE INTO inventory VALUES (2, 'Gadget', 0, 25);
+    INSERT OR REPLACE INTO inventory VALUES (3, 'Gizmo', 15, 15);
     UPDATE inventory SET qty = qty + 5 WHERE qty < 10;
     UPDATE inventory SET price = price - 2 WHERE price > 12;
     DELETE FROM inventory WHERE id = 2;
+END
+`,
+  },
+  // Added for the merged Debugger/SQL Console phase -- the flagship demo
+  // of the two now sharing one real database: CREATE TABLE + INSERT +
+  // UPDATE (raw SQL passthrough) followed by a CURSOR that reads back
+  // the exact rows those statements just wrote, all inside one run. This
+  // could NOT have worked under the earlier simulated CREATE TABLE/
+  // INSERT/UPDATE/DELETE feature (Interpreter.tables never touched real
+  // SQLite, so a cursor's embedded SELECT could never see it) -- see
+  // backend/app/parser.py's "SQL passthrough statements" section for the
+  // retirement/replacement writeup. Hand-traced (and cross-checked
+  // against a real interpreter run -- see testCaseExpectations.js):
+  // three rows are INSERTed (Widget/4/10, Gadget/2/25, Gizmo/6/15); the
+  // UPDATE restocks every item with qty < 5 by +10 (Widget: 4->14;
+  // Gadget: 2->12; Gizmo's 6 is untouched); the cursor then sums
+  // qty * price over all three rows in insertion order:
+  // 14*10 + 12*25 + 6*15 = 140 + 300 + 90 = 530.
+  {
+    name: 'InventoryValueReport',
+    kind: 'PROCEDURE',
+    description:
+      'CREATE TABLE + INSERT + UPDATE (raw SQL) followed by a CURSOR that reads back those exact rows -- the merged flow end to end: the table a procedure just built is immediately queryable, because both now share one real database.',
+    code: `CREATE PROCEDURE InventoryValueReport()
+BEGIN
+    DECLARE totalValue NUMBER DEFAULT 0;
+    DECLARE itemName STRING DEFAULT '';
+    DECLARE itemQty NUMBER DEFAULT 0;
+    DECLARE itemPrice NUMBER DEFAULT 0;
+    CREATE TABLE IF NOT EXISTS stock (id NUMBER PRIMARY KEY, name TEXT, qty NUMBER, price NUMBER);
+    INSERT OR REPLACE INTO stock VALUES (1, 'Widget', 4, 10);
+    INSERT OR REPLACE INTO stock VALUES (2, 'Gadget', 2, 25);
+    INSERT OR REPLACE INTO stock VALUES (3, 'Gizmo', 6, 15);
+    UPDATE stock SET qty = qty + 10 WHERE qty < 5;
+    DECLARE stock_cursor CURSOR FOR SELECT name, qty, price FROM stock;
+    OPEN stock_cursor;
+    WHILE stock_cursor%FOUND DO
+        FETCH stock_cursor INTO itemName, itemQty, itemPrice;
+        SET totalValue = totalValue + itemQty * itemPrice;
+    END WHILE;
+    CLOSE stock_cursor;
+END
+`,
+  },
+  // OperatorShowcase demonstrates all three comparison operators added
+  // alongside SELECT...INTO (>=, <=, <>) in one procedure, nested inside
+  // ordinary IF/ELSE (this grammar has no ELSEIF sugar, so a grade
+  // ladder nests one IF per rung inside the previous ELSE). score=82:
+  // <> 100 is true (isPerfect=0); >= 90 is false; >= 75 is true (grade
+  // ='B'); the <= 40 branch is never reached this run but is still real
+  // grammar, not a placeholder -- change `score`'s DEFAULT and re-run to
+  // see it.
+  {
+    name: 'OperatorShowcase',
+    kind: 'PROCEDURE',
+    description:
+      'Uses >=, <=, and <> together in one procedure -- the three comparison operators added alongside SELECT...INTO (this tokenizer used to only support >, <, =, !=).',
+    code: `CREATE PROCEDURE OperatorShowcase(OUT grade STRING, OUT isPerfect NUMBER)
+BEGIN
+    DECLARE score NUMBER DEFAULT 82;
+    IF score <> 100 THEN
+        SET isPerfect = 0;
+    ELSE
+        SET isPerfect = 1;
+    END IF;
+    IF score >= 90 THEN
+        SET grade = 'A';
+    ELSE
+        IF score >= 75 THEN
+            SET grade = 'B';
+        ELSE
+            IF score <= 40 THEN
+                SET grade = 'F';
+            ELSE
+                SET grade = 'C';
+            END IF;
+        END IF;
+    END IF;
+END
+`,
+  },
+  // LookupOnePlayer demonstrates SELECT...INTO's two real outcomes in
+  // one procedure: a lookup that finds its row (foundScore=95, Ada's
+  // real score) and one that doesn't (a NOT_FOUND CONTINUE HANDLER
+  // catches it, setting missingHandled=1 -- foundScore is left exactly
+  // as the first lookup set it, since a NOT_FOUND SELECT INTO touches no
+  // target variable, same as an exhausted cursor FETCH already doesn't).
+  // CREATE TABLE IF NOT EXISTS + a leading DELETE keep this safely
+  // re-runnable against the real, persistent database.
+  {
+    name: 'LookupOnePlayer',
+    kind: 'PROCEDURE',
+    description:
+      'SELECT...INTO single-row lookup -- both outcomes in one run: a match (assigns real columns to variables) and a miss (NOT_FOUND, caught by a CONTINUE HANDLER, no crash).',
+    code: `CREATE PROCEDURE LookupOnePlayer(OUT foundScore NUMBER, OUT missingHandled NUMBER)
+BEGIN
+    DECLARE notFoundFlag NUMBER DEFAULT 0;
+    DECLARE CONTINUE HANDLER FOR NOT_FOUND SET notFoundFlag = 1;
+    CREATE TABLE IF NOT EXISTS players (id NUMBER PRIMARY KEY, name TEXT, score NUMBER);
+    DELETE FROM players;
+    INSERT INTO players VALUES (1, 'Ada', 95);
+    INSERT INTO players VALUES (2, 'Grace', 88);
+    SELECT score INTO foundScore FROM players WHERE name = 'Ada';
+    SELECT score INTO foundScore FROM players WHERE name = 'Nonexistent';
+    SET missingHandled = notFoundFlag;
 END
 `,
   },

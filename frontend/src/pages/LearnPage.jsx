@@ -1,9 +1,24 @@
 // Learn tab -- mandatory, graded course requirement (concept explanation +
-// video + references). Three always-visible sections rather than an
-// accordion (unlike the Help page): this is graded content meant to be
-// read in order, not a reference to jump around in.
+// video + references). Also absorbs the former standalone Theory tab as a
+// "Deep Dive" panel, per professor's instruction to merge the two: Theory's
+// per-construct write-ups (Variables/Control Flow/Cursors/Exception
+// Handling/Putting It Together) now live here, between Concept Explanation
+// and References. Theory's own "Stored Procedures & Functions" topic was
+// dropped entirely -- it duplicated this page's Concept Explanation section.
+// Four always-visible sections rather than an accordion (unlike the Help
+// page): this is graded content meant to be read in order, not a reference
+// to jump around in -- except Deep Dive, which is itself a tab-switcher
+// (reusing the old Theory page's nav/content pattern) since its topics are
+// independent of each other and not meant to be read strictly in sequence.
+
+import { useState } from 'react'
+import { THEORY_TOPICS } from '../theoryTopics'
 
 function LearnPage() {
+  const [activeTopicId, setActiveTopicId] = useState(THEORY_TOPICS[0].id)
+  const activeTopic = THEORY_TOPICS.find((topic) => topic.id === activeTopicId) ?? THEORY_TOPICS[0]
+  const ActiveContent = activeTopic.Content
+
   return (
     <section className="learn-page">
       <h1>Learn</h1>
@@ -13,7 +28,29 @@ function LearnPage() {
       </p>
 
       {/* ---------------------------------------------------------------- */}
-      {/* a. CONCEPT EXPLANATION                                            */}
+      {/* a. ANIMATED VIDEO                                                 */}
+      {/* ---------------------------------------------------------------- */}
+      <div className="panel learn-panel">
+        <span className="panel-tab">VIDEO</span>
+
+        <p className="learn-video-caption">
+          "Advanced SQL Tutorial | Stored Procedures + Use Cases" by Alex The Analyst — walks through
+          creating and using stored procedures with practical examples.
+        </p>
+
+        <div className="learn-video-wrap">
+          <iframe
+            className="learn-video-iframe"
+            src="https://www.youtube.com/embed/NrBJmtD0kEw"
+            title="Advanced SQL Tutorial | Stored Procedures + Use Cases — Alex The Analyst"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+          />
+        </div>
+      </div>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* b. CONCEPT EXPLANATION                                            */}
       {/* ---------------------------------------------------------------- */}
       <div className="panel learn-panel">
         <span className="panel-tab">CONCEPT EXPLANATION</span>
@@ -124,29 +161,32 @@ function LearnPage() {
       </div>
 
       {/* ---------------------------------------------------------------- */}
-      {/* b. ANIMATED VIDEO                                                 */}
+      {/* c. DEEP DIVE -- former standalone Theory tab, merged in here.     */}
       {/* ---------------------------------------------------------------- */}
       <div className="panel learn-panel">
-        <span className="panel-tab">VIDEO</span>
+        <span className="panel-tab">DEEP DIVE</span>
 
-        <p className="learn-video-caption">
-          "Advanced SQL Tutorial | Stored Procedures + Use Cases" by Alex The Analyst — walks through
-          creating and using stored procedures with practical examples.
-        </p>
-
-        <div className="learn-video-wrap">
-          <iframe
-            className="learn-video-iframe"
-            src="https://www.youtube.com/embed/NrBJmtD0kEw"
-            title="Advanced SQL Tutorial | Stored Procedures + Use Cases — Alex The Analyst"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-          />
+        <div className="theory-layout">
+          <nav className="theory-nav">
+            {THEORY_TOPICS.map((topic) => (
+              <button
+                key={topic.id}
+                className={topic.id === activeTopicId ? 'theory-nav-item theory-nav-item-active' : 'theory-nav-item'}
+                onClick={() => setActiveTopicId(topic.id)}
+              >
+                {topic.title}
+              </button>
+            ))}
+          </nav>
+          <article className="theory-content">
+            <h2>{activeTopic.title}</h2>
+            <ActiveContent />
+          </article>
         </div>
       </div>
 
       {/* ---------------------------------------------------------------- */}
-      {/* c. REFERENCES -- verified real sources per required category.    */}
+      {/* d. REFERENCES -- verified real sources per required category.    */}
       {/* ---------------------------------------------------------------- */}
       <div className="panel learn-panel">
         <span className="panel-tab">REFERENCES</span>

@@ -1718,6 +1718,34 @@ h2 {
   color: var(--accent-coral);
 }
 
+/* -- SQL Console -----------------------------------------------------------
+   Deliberately plain: a .panel for the editor, a .panel for the result,
+   reusing .editor-shell/.status/.error-banner/.cursor-table wholesale
+   rather than inventing page-specific equivalents. Only the bits those
+   don't already cover -- the Execute row's hint text and a horizontal
+   scroll wrapper for a result set wider than the panel -- get their own
+   rules below. */
+
+.sql-console-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.85rem 0 0;
+}
+
+.sql-console-hint {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.sql-console-results-panel {
+  margin-bottom: 1.5rem;
+}
+
+.sql-console-table-scroll {
+  overflow-x: auto;
+}
+
 /* -- SQL Anti-Pattern Advisor ---------------------------------------------
    A static-analysis results list, not a live/execution panel -- styled
    as flat hairline-bordered cards with a colored left-edge accent bar
@@ -2175,7 +2203,8 @@ h2 {
 }
 
 /* ==========================================================================
-   Theory page
+   Theory tab-switcher (formerly its own standalone page; now the Learn
+   page's "Deep Dive" panel -- see LearnPage.jsx)
    ========================================================================== */
 
 .theory-layout {

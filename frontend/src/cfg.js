@@ -45,13 +45,6 @@ function renderExpr(node) {
   }
 }
 
-function renderColumnDef(column) {
-  let text = `${column.name} ${column.col_type}`
-  if (column.not_null) text += ' NOT NULL'
-  if (column.primary_key) text += ' PRIMARY KEY'
-  return text
-}
-
 function renderStatementHeader(node) {
   switch (node.type) {
     case 'DeclareStatement': {
@@ -91,21 +84,12 @@ function renderStatementHeader(node) {
       return node.label ? `${node.label}: LOOP` : 'LOOP'
     case 'LeaveStatement':
       return node.label ? `LEAVE ${node.label};` : 'LEAVE;'
-    case 'CreateTableStatement':
-      return `CREATE TABLE ${node.name} (${node.columns.map(renderColumnDef).join(', ')});`
-    case 'InsertStatement': {
-      const columns = node.columns ? ` (${node.columns.join(', ')})` : ''
-      return `INSERT INTO ${node.table}${columns} VALUES (${node.values.map(renderExpr).join(', ')});`
-    }
-    case 'UpdateStatement': {
-      const assignments = node.assignments.map((a) => `${a.column} = ${renderExpr(a.value)}`).join(', ')
-      const where = node.where !== null ? ` WHERE ${renderExpr(node.where)}` : ''
-      return `UPDATE ${node.table} SET ${assignments}${where};`
-    }
-    case 'DeleteStatement': {
-      const where = node.where !== null ? ` WHERE ${renderExpr(node.where)}` : ''
-      return `DELETE FROM ${node.table}${where};`
-    }
+    case 'SqlStatement':
+      // `sql` already IS the full statement text (see
+      // backend/app/parser.py's "SQL passthrough statements" section) --
+      // nothing to reconstruct, just close it with ';' like every other
+      // case here does.
+      return `${node.sql};`
     default:
       return node.type
   }
@@ -153,11 +137,10 @@ function emitBlock(statements, entryTails, nodes, edges, loopStack = []) {
       // in renderMermaidDefinition -- to read as "execution ends here".
       nodes.push({ id: nodeId, label: renderStatementHeader(stmt), shape: 'stadium', line: stmt.line, kind: stmt.type })
     } else {
-      // User-created tables (CreateTableStatement/InsertStatement/
-      // UpdateStatement/DeleteStatement) fall through to this plain
-      // rect-node case too -- none of them branch or loop, so they need
-      // no special shape/edge handling below, same as SetStatement/
-      // DeclareStatement/CallStatement already didn't.
+      // SqlStatement (CREATE TABLE/INSERT/UPDATE/DELETE/SELECT) falls
+      // through to this plain rect-node case too -- it never branches or
+      // loops, so it needs no special shape/edge handling below, same as
+      // SetStatement/DeclareStatement/CallStatement already didn't.
       nodes.push({ id: nodeId, label: renderStatementHeader(stmt), shape: 'rect', line: stmt.line, kind: stmt.type })
     }
 

@@ -338,15 +338,17 @@ def test_create_procedure_wrapper_now_parses_to_a_procedure_node():
 
 
 def test_bare_create_table_is_not_a_definition_chain_error_it_is_a_valid_statement():
-    # Superseded by CREATE TABLE support (see test_table_crud.py for the
-    # dedicated coverage): a solitary leading `CREATE TABLE ...;` used to
-    # be the go-to example of "CREATE followed by neither FUNCTION nor
-    # PROCEDURE" and raised a ParserError -- it's now a genuinely valid
-    # bare-form statement instead (see parser.py's module docstring's
-    # "User-created tables" section, "Top-level dispatch note").
+    # Superseded by CREATE TABLE support (see test_sql_passthrough_
+    # statement.py for the dedicated coverage): a solitary leading
+    # `CREATE TABLE ...;` used to be the go-to example of "CREATE
+    # followed by neither FUNCTION nor PROCEDURE" and raised a
+    # ParserError -- it's now a genuinely valid bare-form statement
+    # instead (see parser.py's module docstring's "SQL passthrough
+    # statements" section, "Top-level dispatch note").
     ast = parse(tokenize("CREATE TABLE Foo (x NUMBER);"))
     assert ast["type"] == "Procedure"
-    assert ast["body"][0]["type"] == "CreateTableStatement"
+    assert ast["body"][0]["type"] == "SqlStatement"
+    assert ast["body"][0]["keyword"] == "CREATE"
 
 
 def test_create_with_neither_function_nor_procedure_raises_a_clear_error():

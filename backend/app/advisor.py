@@ -181,7 +181,10 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 
+from app.sql_console import extract_table_name
+
 _SELECT_STAR_RE = re.compile(r"select\s+\*", re.IGNORECASE)
+_WHERE_RE = re.compile(r"\bwhere\b", re.IGNORECASE)
 _TRIVIAL_NUMBERS = {0, 1}
 _ACCUMULATOR_OPERATORS = {"+", "-", "*", "/"}
 
@@ -286,23 +289,15 @@ def _statement_exprs(stmt: dict) -> Iterator[dict]:
             yield from _iter_exprs(clause["when"])
     elif kind == "ReturnNode":
         yield from _iter_exprs(stmt["value"])
-    elif kind == "InsertStatement":
-        # User-created tables (see app.parser's section of the same
-        # name -- added in a later phase than the checks above): every
-        # VALUES expression counts as this statement's own expressions,
-        # same as a SetStatement's `value` does, so magic-number/unused-
-        # variable/never-read-variable/missing-error-handling all see a
-        # variable or division literal used only inside an INSERT.
-        for value in stmt["values"]:
-            yield from _iter_exprs(value)
-    elif kind == "UpdateStatement":
-        for assignment in stmt["assignments"]:
-            yield from _iter_exprs(assignment["value"])
-        if stmt["where"] is not None:
-            yield from _iter_exprs(stmt["where"])
-    elif kind == "DeleteStatement":
-        if stmt["where"] is not None:
-            yield from _iter_exprs(stmt["where"])
+    # SqlStatement (CREATE TABLE/INSERT/UPDATE/DELETE/SELECT -- see
+    # app.parser's "SQL passthrough statements" section) deliberately has
+    # NO case here: its `sql` is raw text, not an expression tree, so
+    # magic-number/unused-variable/never-read-variable/missing-error-
+    # handling cannot see inside it -- the same scope boundary a cursor's
+    # own embedded query (CursorDeclNode.query, also raw text) already
+    # has and was never given a case here either. SelectIntoStatement
+    # (see app.parser's "SELECT ... INTO" section) gets the identical
+    # omission for the identical reason -- its `query` is raw text too.
 
 
 def _iter_statement_lists(statements: list[dict]) -> Iterator[list[dict]]:
@@ -417,6 +412,26 @@ def _check_select_star(statements: list[dict], issues: list[dict]) -> None:
                         "List only the columns this cursor's FETCH targets actually need (e.g. "
                         "SELECT name, price instead of SELECT *) -- it documents intent and won't "
                         "silently pick up columns added to the table later."
+                    ),
+                )
+            )
+        # SqlStatement (see app.parser's "SQL passthrough statements"
+        # section, added in a later phase than the original six checks
+        # above) can ALSO be a standalone SELECT, not just a cursor's
+        # embedded one -- same anti-pattern, same regex-on-raw-text
+        # detection, just a different statement shape and wording.
+        elif stmt["type"] == "SqlStatement" and stmt["keyword"] == "SELECT" and _SELECT_STAR_RE.search(stmt["sql"]):
+            issues.append(
+                _issue(
+                    category="select-star",
+                    severity="suggestion",
+                    title="SELECT * in query",
+                    line=stmt["line"],
+                    message="This SELECT reads every column with SELECT * instead of naming the columns it actually uses.",
+                    suggestion=(
+                        "List only the columns this statement actually needs (e.g. SELECT name, "
+                        "price instead of SELECT *) -- it documents intent and won't silently pick "
+                        "up columns added to the table later."
                     ),
                 )
             )
@@ -868,13 +883,15 @@ def _read_names_in_statement(stmt: dict) -> set[str]:
     """Every variable name this ONE statement reads (not writes), not
     recursing into a nested statement's own body -- combine with
     `_iter_statements` for that, as `_all_read_names` below does. A
-    SET's own `target` (the LHS) and a FETCH's `targets` are writes, not
-    reads, and are deliberately excluded here; a SET's `value`
-    expression (including a self-reference, e.g. `SET x = x + 1;` --
-    accumulating into a variable is a legitimate read of it, not a
-    spurious "never read"), an IF/WHILE `condition`, a RETURN's
-    `value`, a DECLARE's own `default` expression, and a CALL's `args`
-    all count as reads."""
+    SET's own `target` (the LHS), a FETCH's `targets`, and a
+    SelectIntoStatement's own `targets` are writes, not reads, and are
+    deliberately excluded here (`_statement_exprs` has no case for
+    SelectIntoStatement for exactly this reason -- see its own comment);
+    a SET's `value` expression (including a self-reference, e.g.
+    `SET x = x + 1;` -- accumulating into a variable is a legitimate
+    read of it, not a spurious "never read"), an IF/WHILE `condition`, a
+    RETURN's `value`, a DECLARE's own `default` expression, and a
+    CALL's `args` all count as reads."""
     names: set[str] = set()
     for expr in _statement_exprs(stmt):
         for sub in _iter_exprs(expr):
@@ -951,6 +968,12 @@ def _touched_names(stmt: dict) -> set[str]:
                         names.add(sub["name"])
         elif kind == "FetchCursorNode":
             names.update(inner["targets"])
+        elif kind == "SelectIntoStatement":
+            # Same treatment as FetchCursorNode's own `targets` just
+            # above -- a write, not a read (see `_read_names_in_statement`
+            # below), but still something this conservative "might touch
+            # it" barrier needs to know about.
+            names.update(inner["targets"])
     return names
 
 
@@ -1026,12 +1049,23 @@ def _check_never_read_variables(statements: list[dict], issues: list[dict]) -> N
 
 
 def _check_missing_where_clause(statements: list[dict], issues: list[dict]) -> None:
+    # `stmt["where"]` no longer exists (SqlStatement carries raw `sql`
+    # text, not a parsed WHERE expression -- see app.parser's "SQL
+    # passthrough statements" section), so this is now a regex over the
+    # raw text rather than an `is None` check -- the same "detect it
+    # from the text, don't parse it" approach `_check_select_star`
+    # already uses for a cursor's embedded query. A WHERE appearing
+    # anywhere in the text (there's no sub-clause to confuse it with,
+    # since this grammar's passthrough statements have nothing after a
+    # WHERE that could itself contain the word) is good enough to avoid
+    # a false positive.
     for stmt in _iter_statements(statements):
-        if stmt["type"] not in ("UpdateStatement", "DeleteStatement"):
+        if stmt["type"] != "SqlStatement" or stmt["keyword"] not in ("UPDATE", "DELETE"):
             continue
-        if stmt["where"] is not None:
+        if _WHERE_RE.search(stmt["sql"]):
             continue
-        verb = "UPDATE" if stmt["type"] == "UpdateStatement" else "DELETE"
+        verb = stmt["keyword"]
+        table_name = extract_table_name(verb, stmt["sql"]) or "?"
         issues.append(
             _issue(
                 category="missing-where-clause",
@@ -1039,7 +1073,7 @@ def _check_missing_where_clause(statements: list[dict], issues: list[dict]) -> N
                 title=f"{verb} with no WHERE clause",
                 line=stmt["line"],
                 message=(
-                    f"This {verb} on table '{stmt['table']}' has no WHERE clause, so it "
+                    f"This {verb} on table '{table_name}' has no WHERE clause, so it "
                     "touches every row currently in the table."
                 ),
                 suggestion=(

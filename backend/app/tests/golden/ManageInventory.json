@@ -8,247 +8,260 @@
   },
   {
     "line": 3,
-    "nodeType": "CreateTableStatement",
-    "statementText": "CREATE TABLE inventory (id NUMBER PRIMARY KEY, item TEXT NOT NULL, qty NUMBER, price NUMBER);",
-    "stepNumber": 2,
-    "table": {
-      "columns": [
-        "id",
-        "item",
-        "qty",
-        "price"
-      ],
-      "name": "inventory",
-      "operation": "CREATE",
-      "row": null,
-      "rows": [],
-      "rowsAffected": 0
+    "nodeType": "SqlStatement",
+    "sql": {
+      "description": "CREATE statement executed successfully.",
+      "keyword": "CREATE",
+      "kind": "write",
+      "rowsAffected": 0,
+      "snapshot": {
+        "columns": [
+          "id",
+          "item",
+          "qty",
+          "price"
+        ],
+        "rows": []
+      },
+      "statement": "CREATE TABLE IF NOT EXISTS inventory ( id NUMBER PRIMARY KEY, item TEXT NOT NULL, qty NUMBER, price NUMBER )",
+      "tableName": "inventory"
     },
+    "statementText": "CREATE TABLE IF NOT EXISTS inventory ( id NUMBER PRIMARY KEY, item TEXT NOT NULL, qty NUMBER, price NUMBER );",
+    "stepNumber": 2,
     "variables": {}
   },
   {
     "line": 4,
-    "nodeType": "InsertStatement",
-    "statementText": "INSERT INTO inventory VALUES (1, 'Widget', 8, 10);",
-    "stepNumber": 3,
-    "table": {
-      "columns": [
-        "id",
-        "item",
-        "qty",
-        "price"
-      ],
-      "name": "inventory",
-      "operation": "INSERT",
-      "row": {
-        "id": 1,
-        "item": "Widget",
-        "price": 10,
-        "qty": 8
+    "nodeType": "SqlStatement",
+    "sql": {
+      "description": "INSERT affected 1 row.",
+      "keyword": "INSERT",
+      "kind": "write",
+      "rowsAffected": 1,
+      "snapshot": {
+        "columns": [
+          "id",
+          "item",
+          "qty",
+          "price"
+        ],
+        "rows": [
+          [
+            1,
+            "Widget",
+            8,
+            10
+          ]
+        ]
       },
-      "rows": [
-        {
-          "id": 1,
-          "item": "Widget",
-          "price": 10,
-          "qty": 8
-        }
-      ],
-      "rowsAffected": 1
+      "statement": "INSERT OR REPLACE INTO inventory VALUES ( 1, 'Widget', 8, 10 )",
+      "tableName": "inventory"
     },
+    "statementText": "INSERT OR REPLACE INTO inventory VALUES ( 1, 'Widget', 8, 10 );",
+    "stepNumber": 3,
     "variables": {}
   },
   {
     "line": 5,
-    "nodeType": "InsertStatement",
-    "statementText": "INSERT INTO inventory VALUES (2, 'Gadget', 0, 25);",
-    "stepNumber": 4,
-    "table": {
-      "columns": [
-        "id",
-        "item",
-        "qty",
-        "price"
-      ],
-      "name": "inventory",
-      "operation": "INSERT",
-      "row": {
-        "id": 2,
-        "item": "Gadget",
-        "price": 25,
-        "qty": 0
+    "nodeType": "SqlStatement",
+    "sql": {
+      "description": "INSERT affected 1 row.",
+      "keyword": "INSERT",
+      "kind": "write",
+      "rowsAffected": 1,
+      "snapshot": {
+        "columns": [
+          "id",
+          "item",
+          "qty",
+          "price"
+        ],
+        "rows": [
+          [
+            1,
+            "Widget",
+            8,
+            10
+          ],
+          [
+            2,
+            "Gadget",
+            0,
+            25
+          ]
+        ]
       },
-      "rows": [
-        {
-          "id": 1,
-          "item": "Widget",
-          "price": 10,
-          "qty": 8
-        },
-        {
-          "id": 2,
-          "item": "Gadget",
-          "price": 25,
-          "qty": 0
-        }
-      ],
-      "rowsAffected": 1
+      "statement": "INSERT OR REPLACE INTO inventory VALUES ( 2, 'Gadget', 0, 25 )",
+      "tableName": "inventory"
     },
+    "statementText": "INSERT OR REPLACE INTO inventory VALUES ( 2, 'Gadget', 0, 25 );",
+    "stepNumber": 4,
     "variables": {}
   },
   {
     "line": 6,
-    "nodeType": "InsertStatement",
-    "statementText": "INSERT INTO inventory VALUES (3, 'Gizmo', 15, 15);",
-    "stepNumber": 5,
-    "table": {
-      "columns": [
-        "id",
-        "item",
-        "qty",
-        "price"
-      ],
-      "name": "inventory",
-      "operation": "INSERT",
-      "row": {
-        "id": 3,
-        "item": "Gizmo",
-        "price": 15,
-        "qty": 15
+    "nodeType": "SqlStatement",
+    "sql": {
+      "description": "INSERT affected 1 row.",
+      "keyword": "INSERT",
+      "kind": "write",
+      "rowsAffected": 1,
+      "snapshot": {
+        "columns": [
+          "id",
+          "item",
+          "qty",
+          "price"
+        ],
+        "rows": [
+          [
+            1,
+            "Widget",
+            8,
+            10
+          ],
+          [
+            2,
+            "Gadget",
+            0,
+            25
+          ],
+          [
+            3,
+            "Gizmo",
+            15,
+            15
+          ]
+        ]
       },
-      "rows": [
-        {
-          "id": 1,
-          "item": "Widget",
-          "price": 10,
-          "qty": 8
-        },
-        {
-          "id": 2,
-          "item": "Gadget",
-          "price": 25,
-          "qty": 0
-        },
-        {
-          "id": 3,
-          "item": "Gizmo",
-          "price": 15,
-          "qty": 15
-        }
-      ],
-      "rowsAffected": 1
+      "statement": "INSERT OR REPLACE INTO inventory VALUES ( 3, 'Gizmo', 15, 15 )",
+      "tableName": "inventory"
     },
+    "statementText": "INSERT OR REPLACE INTO inventory VALUES ( 3, 'Gizmo', 15, 15 );",
+    "stepNumber": 5,
     "variables": {}
   },
   {
     "line": 7,
-    "nodeType": "UpdateStatement",
+    "nodeType": "SqlStatement",
+    "sql": {
+      "description": "UPDATE affected 2 rows.",
+      "keyword": "UPDATE",
+      "kind": "write",
+      "rowsAffected": 2,
+      "snapshot": {
+        "columns": [
+          "id",
+          "item",
+          "qty",
+          "price"
+        ],
+        "rows": [
+          [
+            1,
+            "Widget",
+            13,
+            10
+          ],
+          [
+            2,
+            "Gadget",
+            5,
+            25
+          ],
+          [
+            3,
+            "Gizmo",
+            15,
+            15
+          ]
+        ]
+      },
+      "statement": "UPDATE inventory SET qty = qty + 5 WHERE qty < 10",
+      "tableName": "inventory"
+    },
     "statementText": "UPDATE inventory SET qty = qty + 5 WHERE qty < 10;",
     "stepNumber": 6,
-    "table": {
-      "columns": [
-        "id",
-        "item",
-        "qty",
-        "price"
-      ],
-      "name": "inventory",
-      "operation": "UPDATE",
-      "row": null,
-      "rows": [
-        {
-          "id": 1,
-          "item": "Widget",
-          "price": 10,
-          "qty": 13
-        },
-        {
-          "id": 2,
-          "item": "Gadget",
-          "price": 25,
-          "qty": 5
-        },
-        {
-          "id": 3,
-          "item": "Gizmo",
-          "price": 15,
-          "qty": 15
-        }
-      ],
-      "rowsAffected": 2
-    },
     "variables": {}
   },
   {
     "line": 8,
-    "nodeType": "UpdateStatement",
+    "nodeType": "SqlStatement",
+    "sql": {
+      "description": "UPDATE affected 2 rows.",
+      "keyword": "UPDATE",
+      "kind": "write",
+      "rowsAffected": 2,
+      "snapshot": {
+        "columns": [
+          "id",
+          "item",
+          "qty",
+          "price"
+        ],
+        "rows": [
+          [
+            1,
+            "Widget",
+            13,
+            10
+          ],
+          [
+            2,
+            "Gadget",
+            5,
+            23
+          ],
+          [
+            3,
+            "Gizmo",
+            15,
+            13
+          ]
+        ]
+      },
+      "statement": "UPDATE inventory SET price = price - 2 WHERE price > 12",
+      "tableName": "inventory"
+    },
     "statementText": "UPDATE inventory SET price = price - 2 WHERE price > 12;",
     "stepNumber": 7,
-    "table": {
-      "columns": [
-        "id",
-        "item",
-        "qty",
-        "price"
-      ],
-      "name": "inventory",
-      "operation": "UPDATE",
-      "row": null,
-      "rows": [
-        {
-          "id": 1,
-          "item": "Widget",
-          "price": 10,
-          "qty": 13
-        },
-        {
-          "id": 2,
-          "item": "Gadget",
-          "price": 23,
-          "qty": 5
-        },
-        {
-          "id": 3,
-          "item": "Gizmo",
-          "price": 13,
-          "qty": 15
-        }
-      ],
-      "rowsAffected": 2
-    },
     "variables": {}
   },
   {
     "line": 9,
-    "nodeType": "DeleteStatement",
+    "nodeType": "SqlStatement",
+    "sql": {
+      "description": "DELETE affected 1 row.",
+      "keyword": "DELETE",
+      "kind": "write",
+      "rowsAffected": 1,
+      "snapshot": {
+        "columns": [
+          "id",
+          "item",
+          "qty",
+          "price"
+        ],
+        "rows": [
+          [
+            1,
+            "Widget",
+            13,
+            10
+          ],
+          [
+            3,
+            "Gizmo",
+            15,
+            13
+          ]
+        ]
+      },
+      "statement": "DELETE FROM inventory WHERE id = 2",
+      "tableName": "inventory"
+    },
     "statementText": "DELETE FROM inventory WHERE id = 2;",
     "stepNumber": 8,
-    "table": {
-      "columns": [
-        "id",
-        "item",
-        "qty",
-        "price"
-      ],
-      "name": "inventory",
-      "operation": "DELETE",
-      "row": null,
-      "rows": [
-        {
-          "id": 1,
-          "item": "Widget",
-          "price": 10,
-          "qty": 13
-        },
-        {
-          "id": 3,
-          "item": "Gizmo",
-          "price": 13,
-          "qty": 15
-        }
-      ],
-      "rowsAffected": 1
-    },
     "variables": {}
   }
 ]

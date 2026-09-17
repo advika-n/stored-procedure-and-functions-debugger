@@ -18,8 +18,9 @@ function AboutPage() {
         <ul className="about-list">
           <li>
             <strong>Backend</strong> -- Python, FastAPI, a hand-written tokenizer/parser/interpreter, SQLite
-            (via stdlib <code>sqlite3</code>, no ORM) for both persisted run history and cursor query
-            execution.
+            (via stdlib <code>sqlite3</code>, no ORM) for persisted run history, and a separate persistent
+            SQLite database for cursor queries and SQL passthrough statements (also reachable directly via
+            the SQL Console).
           </li>
           <li>
             <strong>AI</strong> -- Google Gemini (<code>gemini-flash-lite-latest</code>) for per-step
@@ -68,8 +69,16 @@ function AboutPage() {
             <strong>Cursors</strong> (MySQL-style) -- <code>DECLARE cur CURSOR FOR SELECT ...;</code>,{' '}
             <code>OPEN</code>/<code>FETCH ... INTO ...</code>/<code>CLOSE</code>, plus{' '}
             <code>cur%FOUND</code> / <code>cur%NOTFOUND</code>. The embedded query is captured as raw text
-            and run against a small, fixed, auto-seeded demo table (<code>products(name, price)</code>, 3
-            rows) every debug run gets for free -- there's no schema-editing feature.
+            and run against a real, persistent SQLite database, seeded with a small demo table
+            (<code>products(name, price)</code>, 3 rows) on first use.
+          </li>
+          <li>
+            <strong>SQL passthrough statements</strong> -- standalone <code>CREATE TABLE</code>/
+            <code>INSERT</code>/<code>UPDATE</code>/<code>DELETE</code>/<code>SELECT</code>, valid anywhere
+            any other statement is. Captured as raw text (like a cursor's embedded query above) and run for
+            real against that same persistent database -- no simulation, no variable interpolation, only
+            literal values. A table one of these statements <code>CREATE</code>s or <code>INSERT</code>s
+            into is immediately queryable by a cursor's <code>SELECT</code> later in that same run.
           </li>
           <li>
             <strong>Exception handling</strong> -- <code>DECLARE CONTINUE HANDLER FOR condition
@@ -81,12 +90,12 @@ function AboutPage() {
           </li>
         </ul>
         <p className="about-note">
-          Not supported at all: <code>CALL</code>, <code>CASE</code>, <code>LOOP</code>/<code>LEAVE</code>,
-          cursor parameters, transactions, table statements (<code>UPDATE</code>/<code>INSERT</code>/...),
-          and anything not listed above. See the in-app Theory tab for runnable examples of each supported
-          piece. Every sample in the library now uses the full <code>CREATE PROCEDURE</code> wrapper, for
-          consistency with what the Theory tab teaches -- the bare form is still fully supported, it's just
-          the backward-compatibility path rather than what a new sample demonstrates.
+          Not supported at all: cursor parameters, transactions, and anything not listed above. See the
+          in-app Learn tab's Deep Dive panel for runnable examples
+          of each supported piece. Every sample in the library now uses the full{' '}
+          <code>CREATE PROCEDURE</code> wrapper, for consistency with what Deep Dive teaches -- the bare
+          form is still fully supported, it's just the backward-compatibility path rather than what a new
+          sample demonstrates.
         </p>
       </div>
 
@@ -95,7 +104,11 @@ function AboutPage() {
         <ul className="about-list">
           <li>Single-user, local run history -- no login/accounts, by design.</li>
           <li>Only successful debug runs are saved to History; failed attempts are not silently logged.</li>
-          <li>Cursor data lives in one fixed demo table, not a user-editable schema.</li>
+          <li>
+            Cursor data and SQL passthrough statements share one real, persistent database -- not a
+            per-request simulation, and not a user-facing schema-authoring UI (the schema is whatever{' '}
+            <code>CREATE TABLE</code> statements you've run have built up).
+          </li>
         </ul>
       </div>
     </section>

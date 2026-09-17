@@ -1,0 +1,888 @@
+[
+  {
+    "line": 1,
+    "nodeType": "ProcedureNode",
+    "statementText": "CREATE PROCEDURE InventoryValueReport()",
+    "stepNumber": 1,
+    "variables": {}
+  },
+  {
+    "line": 3,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE totalValue NUMBER DEFAULT 0;",
+    "stepNumber": 2,
+    "variables": {
+      "totalValue": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 4,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE itemName STRING DEFAULT '';",
+    "stepNumber": 3,
+    "variables": {
+      "itemName": {
+        "changed": true,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 5,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE itemQty NUMBER DEFAULT 0;",
+    "stepNumber": 4,
+    "variables": {
+      "itemName": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "itemQty": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 6,
+    "nodeType": "DeclareStatement",
+    "statementText": "DECLARE itemPrice NUMBER DEFAULT 0;",
+    "stepNumber": 5,
+    "variables": {
+      "itemName": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "itemPrice": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "itemQty": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 7,
+    "nodeType": "SqlStatement",
+    "sql": {
+      "description": "CREATE statement executed successfully.",
+      "keyword": "CREATE",
+      "kind": "write",
+      "rowsAffected": 0,
+      "snapshot": {
+        "columns": [
+          "id",
+          "name",
+          "qty",
+          "price"
+        ],
+        "rows": []
+      },
+      "statement": "CREATE TABLE IF NOT EXISTS stock ( id NUMBER PRIMARY KEY, name TEXT, qty NUMBER, price NUMBER )",
+      "tableName": "stock"
+    },
+    "statementText": "CREATE TABLE IF NOT EXISTS stock ( id NUMBER PRIMARY KEY, name TEXT, qty NUMBER, price NUMBER );",
+    "stepNumber": 6,
+    "variables": {
+      "itemName": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "itemPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "itemQty": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 8,
+    "nodeType": "SqlStatement",
+    "sql": {
+      "description": "INSERT affected 1 row.",
+      "keyword": "INSERT",
+      "kind": "write",
+      "rowsAffected": 1,
+      "snapshot": {
+        "columns": [
+          "id",
+          "name",
+          "qty",
+          "price"
+        ],
+        "rows": [
+          [
+            1,
+            "Widget",
+            4,
+            10
+          ]
+        ]
+      },
+      "statement": "INSERT OR REPLACE INTO stock VALUES ( 1, 'Widget', 4, 10 )",
+      "tableName": "stock"
+    },
+    "statementText": "INSERT OR REPLACE INTO stock VALUES ( 1, 'Widget', 4, 10 );",
+    "stepNumber": 7,
+    "variables": {
+      "itemName": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "itemPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "itemQty": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 9,
+    "nodeType": "SqlStatement",
+    "sql": {
+      "description": "INSERT affected 1 row.",
+      "keyword": "INSERT",
+      "kind": "write",
+      "rowsAffected": 1,
+      "snapshot": {
+        "columns": [
+          "id",
+          "name",
+          "qty",
+          "price"
+        ],
+        "rows": [
+          [
+            1,
+            "Widget",
+            4,
+            10
+          ],
+          [
+            2,
+            "Gadget",
+            2,
+            25
+          ]
+        ]
+      },
+      "statement": "INSERT OR REPLACE INTO stock VALUES ( 2, 'Gadget', 2, 25 )",
+      "tableName": "stock"
+    },
+    "statementText": "INSERT OR REPLACE INTO stock VALUES ( 2, 'Gadget', 2, 25 );",
+    "stepNumber": 8,
+    "variables": {
+      "itemName": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "itemPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "itemQty": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 10,
+    "nodeType": "SqlStatement",
+    "sql": {
+      "description": "INSERT affected 1 row.",
+      "keyword": "INSERT",
+      "kind": "write",
+      "rowsAffected": 1,
+      "snapshot": {
+        "columns": [
+          "id",
+          "name",
+          "qty",
+          "price"
+        ],
+        "rows": [
+          [
+            1,
+            "Widget",
+            4,
+            10
+          ],
+          [
+            2,
+            "Gadget",
+            2,
+            25
+          ],
+          [
+            3,
+            "Gizmo",
+            6,
+            15
+          ]
+        ]
+      },
+      "statement": "INSERT OR REPLACE INTO stock VALUES ( 3, 'Gizmo', 6, 15 )",
+      "tableName": "stock"
+    },
+    "statementText": "INSERT OR REPLACE INTO stock VALUES ( 3, 'Gizmo', 6, 15 );",
+    "stepNumber": 9,
+    "variables": {
+      "itemName": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "itemPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "itemQty": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 11,
+    "nodeType": "SqlStatement",
+    "sql": {
+      "description": "UPDATE affected 2 rows.",
+      "keyword": "UPDATE",
+      "kind": "write",
+      "rowsAffected": 2,
+      "snapshot": {
+        "columns": [
+          "id",
+          "name",
+          "qty",
+          "price"
+        ],
+        "rows": [
+          [
+            1,
+            "Widget",
+            14,
+            10
+          ],
+          [
+            2,
+            "Gadget",
+            12,
+            25
+          ],
+          [
+            3,
+            "Gizmo",
+            6,
+            15
+          ]
+        ]
+      },
+      "statement": "UPDATE stock SET qty = qty + 10 WHERE qty < 5",
+      "tableName": "stock"
+    },
+    "statementText": "UPDATE stock SET qty = qty + 10 WHERE qty < 5;",
+    "stepNumber": 10,
+    "variables": {
+      "itemName": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "itemPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "itemQty": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": null,
+      "hasMore": false,
+      "name": "stock_cursor",
+      "rowIndex": 0
+    },
+    "line": 12,
+    "nodeType": "CursorDeclNode",
+    "statementText": "DECLARE stock_cursor CURSOR FOR SELECT name, qty, price FROM stock;",
+    "stepNumber": 11,
+    "variables": {
+      "itemName": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "itemPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "itemQty": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": null,
+      "hasMore": true,
+      "name": "stock_cursor",
+      "rowIndex": 0
+    },
+    "line": 13,
+    "nodeType": "OpenCursorNode",
+    "statementText": "OPEN stock_cursor;",
+    "stepNumber": 12,
+    "variables": {
+      "itemName": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "itemPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "itemQty": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 14,
+    "loop": {
+      "condition": "stock_cursor%FOUND",
+      "iteration": 1,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE stock_cursor%FOUND DO",
+    "stepNumber": 13,
+    "variables": {
+      "itemName": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": ""
+      },
+      "itemPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "itemQty": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": {
+        "name": "Widget",
+        "price": 10,
+        "qty": 14
+      },
+      "hasMore": true,
+      "name": "stock_cursor",
+      "rowIndex": 0
+    },
+    "line": 15,
+    "nodeType": "FetchCursorNode",
+    "statementText": "FETCH stock_cursor INTO itemName, itemQty, itemPrice;",
+    "stepNumber": 14,
+    "variables": {
+      "itemName": {
+        "changed": true,
+        "isOutput": false,
+        "type": "string",
+        "value": "Widget"
+      },
+      "itemPrice": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      },
+      "itemQty": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 14
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 0
+      }
+    }
+  },
+  {
+    "line": 16,
+    "nodeType": "SetStatement",
+    "statementText": "SET totalValue = totalValue + itemQty * itemPrice;",
+    "stepNumber": 15,
+    "variables": {
+      "itemName": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Widget"
+      },
+      "itemPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      },
+      "itemQty": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 14
+      },
+      "totalValue": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 140
+      }
+    }
+  },
+  {
+    "line": 14,
+    "loop": {
+      "condition": "stock_cursor%FOUND",
+      "iteration": 2,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE stock_cursor%FOUND DO",
+    "stepNumber": 16,
+    "variables": {
+      "itemName": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Widget"
+      },
+      "itemPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 10
+      },
+      "itemQty": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 14
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 140
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": {
+        "name": "Gadget",
+        "price": 25,
+        "qty": 12
+      },
+      "hasMore": true,
+      "name": "stock_cursor",
+      "rowIndex": 1
+    },
+    "line": 15,
+    "nodeType": "FetchCursorNode",
+    "statementText": "FETCH stock_cursor INTO itemName, itemQty, itemPrice;",
+    "stepNumber": 17,
+    "variables": {
+      "itemName": {
+        "changed": true,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gadget"
+      },
+      "itemPrice": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 25
+      },
+      "itemQty": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 12
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 140
+      }
+    }
+  },
+  {
+    "line": 16,
+    "nodeType": "SetStatement",
+    "statementText": "SET totalValue = totalValue + itemQty * itemPrice;",
+    "stepNumber": 18,
+    "variables": {
+      "itemName": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gadget"
+      },
+      "itemPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 25
+      },
+      "itemQty": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 12
+      },
+      "totalValue": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 440
+      }
+    }
+  },
+  {
+    "line": 14,
+    "loop": {
+      "condition": "stock_cursor%FOUND",
+      "iteration": 3,
+      "result": true
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE stock_cursor%FOUND DO",
+    "stepNumber": 19,
+    "variables": {
+      "itemName": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gadget"
+      },
+      "itemPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 25
+      },
+      "itemQty": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 12
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 440
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": {
+        "name": "Gizmo",
+        "price": 15,
+        "qty": 6
+      },
+      "hasMore": false,
+      "name": "stock_cursor",
+      "rowIndex": 2
+    },
+    "line": 15,
+    "nodeType": "FetchCursorNode",
+    "statementText": "FETCH stock_cursor INTO itemName, itemQty, itemPrice;",
+    "stepNumber": 20,
+    "variables": {
+      "itemName": {
+        "changed": true,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "itemPrice": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "itemQty": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 440
+      }
+    }
+  },
+  {
+    "line": 16,
+    "nodeType": "SetStatement",
+    "statementText": "SET totalValue = totalValue + itemQty * itemPrice;",
+    "stepNumber": 21,
+    "variables": {
+      "itemName": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "itemPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "itemQty": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "totalValue": {
+        "changed": true,
+        "isOutput": false,
+        "type": "number",
+        "value": 530
+      }
+    }
+  },
+  {
+    "line": 14,
+    "loop": {
+      "condition": "stock_cursor%FOUND",
+      "iteration": 4,
+      "result": false
+    },
+    "nodeType": "WhileStatement",
+    "statementText": "WHILE stock_cursor%FOUND DO",
+    "stepNumber": 22,
+    "variables": {
+      "itemName": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "itemPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "itemQty": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 530
+      }
+    }
+  },
+  {
+    "cursor": {
+      "currentRow": null,
+      "hasMore": false,
+      "name": "stock_cursor",
+      "rowIndex": 3
+    },
+    "line": 18,
+    "nodeType": "CloseCursorNode",
+    "statementText": "CLOSE stock_cursor;",
+    "stepNumber": 23,
+    "variables": {
+      "itemName": {
+        "changed": false,
+        "isOutput": false,
+        "type": "string",
+        "value": "Gizmo"
+      },
+      "itemPrice": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 15
+      },
+      "itemQty": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 6
+      },
+      "totalValue": {
+        "changed": false,
+        "isOutput": false,
+        "type": "number",
+        "value": 530
+      }
+    }
+  }
+]

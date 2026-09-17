@@ -288,16 +288,33 @@ CLOSE cur;
         pytest.param("DECLARE x NUMBER DEFAULT 0;\nSET x = 1", id="missing-after-set-at-eof"),
         pytest.param("IF 1 = 1 THEN SET x = 1; END IF", id="missing-after-end-if"),
         pytest.param("WHILE 1 = 1 DO SET x = 1; END WHILE", id="missing-after-end-while"),
-        pytest.param(
-            "CREATE TABLE t (a NUMBER)\nINSERT INTO t VALUES (1);",
-            id="missing-after-create-table",
-        ),
-        pytest.param("INSERT INTO t VALUES (1)", id="missing-after-insert"),
+        pytest.param("INSERT INTO t VALUES (1)", id="missing-after-insert-at-eof"),
     ],
 )
 def test_missing_semicolon_is_a_clear_parser_error(code):
     with pytest.raises(ParserError):
         parse(tokenize(code))
+
+
+def test_missing_semicolon_after_a_sql_passthrough_statement_does_not_raise():
+    # A real, documented gap -- NOT the same "clear ParserError" every
+    # other missing-semicolon case above gets. SqlStatement's raw-token
+    # capture (see app.parser's "SQL passthrough statements" section)
+    # just collects tokens up to the next top-level ';' with no
+    # understanding of statement boundaries beyond that, exactly like a
+    # cursor's embedded query capture already works -- a missing ';'
+    # here doesn't fail to parse at all, it silently merges with
+    # whatever statement follows into one nonsensical `sql` string,
+    # which then fails at INTERPRET time instead (a real SQLite syntax
+    # error), not at parse time. Verified directly rather than assumed,
+    # since this is a real behavior difference from the retired
+    # structured CreateTableStatement grammar, which DID close its own
+    # ')' and require an explicit ';' right after.
+    ast = parse(tokenize("CREATE TABLE t (a NUMBER)\nINSERT INTO t VALUES (1);"))
+    stmt = ast["body"][0]
+    assert stmt["type"] == "SqlStatement"
+    assert stmt["sql"] == "CREATE TABLE t ( a NUMBER ) INSERT INTO t VALUES ( 1 )"
+    assert len(ast["body"]) == 1  # the INSERT was swallowed into the same statement, not parsed separately
 
 
 # -- mismatched BEGIN/END ----------------------------------------------------

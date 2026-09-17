@@ -6,7 +6,8 @@ import { computeDivergence, formatValue } from '../compareTraces'
 
 // Side-by-Side Run Comparison -- the second of the four Innovation
 // features (see HANDOFF.md). Reuses the exact POST /debug data contract
-// the main Debugger page and the Anti-Pattern Advisor already rely on
+// the SQL Console page (the merged Debugger + SQL Console -- see
+// SqlConsolePage.jsx) and the Anti-Pattern Advisor already rely on
 // (backend/app/main.py) -- each pane calls it independently and this
 // page never re-parses/re-interprets anything itself. No backend change
 // was needed: /debug is already stateless per request, so two panes
