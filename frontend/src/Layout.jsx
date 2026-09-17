@@ -7,9 +7,14 @@ const NAV_ITEMS = [
   { to: '/', label: 'Home', end: true },
   { to: '/debugger', label: 'Debugger' },
   { to: '/compare', label: 'Compare' },
-  { to: '/tests', label: 'Tests' },
+  // Tests intentionally hidden from the nav (kept as a real route --
+  // /tests, TestRunnerPage.jsx, and its logic are all untouched -- just
+  // no visible/clickable nav entry for it anymore). Same pattern as
+  // History above.
   { to: '/theory', label: 'Theory' },
-  { to: '/history', label: 'History' },
+  // History intentionally hidden from the nav (kept as a real route --
+  // /history, HistoryPage.jsx, and the backend's history.py logging are
+  // all untouched -- just no visible/clickable nav entry for it anymore).
   { to: '/quiz', label: 'Quiz' },
   { to: '/about', label: 'About' },
   // Course requirement: the Learn tab must be "prominent" and "positioned

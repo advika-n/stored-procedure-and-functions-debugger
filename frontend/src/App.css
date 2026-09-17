@@ -99,8 +99,12 @@ h2 {
 }
 
 .site-header-inner {
-  max-width: 1400px;
-  margin: 0 auto;
+  /* No max-width/auto-margin centering here (unlike #page-content below
+     it) -- the brand sits flush left and .site-header-right (nav +
+     utility cluster) flush right against the actual header bar's own
+     edges on any viewport width, rather than both edges of a
+     1400px-capped inner box that leaves dead space beyond it on wider
+     screens. */
   padding: 0.9rem 1.5rem;
   display: flex;
   align-items: center;
