@@ -7,8 +7,7 @@ import { SAMPLES } from '../samples'
 import { writeLastProcedure } from '../lastProcedure'
 import { useTheme } from '../ThemeContext'
 import { getMermaidPalette } from '../mermaidColors'
-import { rasterizeSvgToPng } from '../svgToPng'
-import VariableTimeline from '../VariableTimeline'
+import { rasterizeDiagramElementToPng } from '../svgToPng'
 
 // This page merges what used to be two separate routes/pages: the
 // step-through Debugger (/debugger) and the standalone SQL Console
@@ -504,13 +503,15 @@ function SqlConsolePage() {
   // re-running anything: the backend's /debug/report is stateless and
   // just formats whatever DebugStep trace this page already has (see
   // backend/app/report.py). The flowchart is rasterized to a PNG
-  // client-side (see svgToPng.js) from the Mermaid SVG this page has
-  // already rendered, since that SVG can't be handed to the backend
-  // directly and re-rendering it server-side isn't a reliable option.
+  // client-side (see svgToPng.js) from the live `.diagram-svg` DOM node
+  // this page has already rendered (via `diagramContainerRef` below),
+  // since that SVG can't be handed to the backend directly and
+  // re-rendering it server-side isn't a reliable option.
   const [isReportMenuOpen, setIsReportMenuOpen] = useState(false)
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
   const [reportError, setReportError] = useState(null)
   const reportMenuRef = useRef(null)
+  const diagramContainerRef = useRef(null)
 
   // Dismiss the format picker the same three ways the Developed By modal
   // already establishes as this app's convention: outside click, Escape,
@@ -543,7 +544,9 @@ function SqlConsolePage() {
       // Only PDF/Document can embed an image at all -- skip the
       // rasterization entirely for a Text download.
       const flowchartImage =
-        (format === 'pdf' || format === 'docx') && diagramSvg ? await rasterizeSvgToPng(diagramSvg) : null
+        (format === 'pdf' || format === 'docx') && diagramContainerRef.current
+          ? await rasterizeDiagramElementToPng(diagramContainerRef.current)
+          : null
 
       const res = await fetch('/debug/report', {
         method: 'POST',
@@ -1780,18 +1783,9 @@ function SqlConsolePage() {
           {diagramRenderError && <p className="status status-error">Diagram error: {diagramRenderError}</p>}
           {flowchartGraph && diagramSvg && (
             // eslint-disable-next-line react/no-danger -- mermaid's own SVG output, not user input
-            <div className="diagram-svg" dangerouslySetInnerHTML={{ __html: diagramSvg }} />
+            <div ref={diagramContainerRef} className="diagram-svg" dangerouslySetInnerHTML={{ __html: diagramSvg }} />
           )}
         </div>
-      </div>
-
-      <div className="panel panel-timeline">
-        <span className="panel-tab">VARIABLE TIMELINE</span>
-        <p className="page-subtitle">
-          Every variable's value across the <em>whole</em> run so far, not just the current step -- click a
-          sparkline (or hover, then click) to jump straight to that step.
-        </p>
-        <VariableTimeline steps={steps} currentStepIndex={currentStepIndex} onStepSelect={setCurrentStepIndex} />
       </div>
 
       <div className="panel panel-steplog">

@@ -8,8 +8,8 @@
 // Reports a pass/fail summary plus, for any failure, exactly which
 // field(s) diverged and by how much.
 //
-// Deliberately self-contained, same reasoning as VariableTimeline.jsx:
-// this component takes no required props -- it owns its own sample
+// Deliberately self-contained: this component takes no required props --
+// it owns its own sample
 // list, expectations, run state, and rendering, so a future redesign
 // only ever needs to touch the thin wrapper around it (today,
 // pages/TestRunnerPage.jsx), never this file's pass/fail logic itself.

@@ -610,7 +610,7 @@ flagged rather than silently ignored: the field is still called
 CALLed) even though it may now hold a *function's* name -- deliberately
 NOT renamed, since `DebugStep` is this app's central wire contract
 (see CLAUDE.md SS4) and a field rename ripples through every consumer
-(the Call Stack panel, the Variable Timeline, Download reports, ...)
+(the Call Stack panel, Download reports, ...)
 for a purely cosmetic gain; the value itself (whichever definition is
 currently executing) is exactly what every existing consumer already
 wants, and a future caller that specifically needs to know "is this

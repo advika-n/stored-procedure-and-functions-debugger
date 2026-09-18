@@ -66,16 +66,67 @@ def test_build_report_processing_steps_matches_real_trace():
     assert table.rows[0][3] == steps[0]["statementText"]
 
 
-def test_build_report_intermediate_results_reflects_variable_changes():
+def _step_with_error(handler):
+    """A minimal, hand-built DebugStep carrying just enough for
+    `_step_details` to render its `error` field -- the handled-vs-
+    unhandled distinction below doesn't need a real interpreter run, just
+    the exact `error` dict shape `docs/schema.md` documents."""
+    return {
+        "stepNumber": 1,
+        "line": 5,
+        "nodeType": "FetchCursorNode",
+        "statementText": "FETCH cur INTO x;",
+        "variables": {},
+        "error": {"condition": "NOT_FOUND", "message": "Cursor 'cur' has no more rows to fetch", "handler": handler},
+    }
+
+
+def test_step_details_labels_a_caught_error_as_handled_not_error():
+    """Regression test for a real bug: a step caught by a declared
+    CONTINUE HANDLER used to render as "ERROR [...] ... caught by X
+    handler" in the Processing Steps Details column -- reading as a
+    failure when it's actually expected, handled behavior. Confirms the
+    fix ("Handled: ..." wording) and that the literal word "ERROR" never
+    appears for a caught condition."""
+    meta, sections = report.build_report(
+        code="x", params={}, procedure_name="x", steps=[_step_with_error("NOT_FOUND handler")], flowchart_png_bytes=None
+    )
+    details = next(s for s in sections if s.title == "Processing Steps").blocks[1].rows[0][4]
+    assert "Handled:" in details
+    assert "caught by NOT_FOUND handler" in details
+    assert "ERROR" not in details
+
+
+def test_step_details_no_handler_declared_condition_is_not_labeled_error_either():
+    """The other half of the same bug: NOT_FOUND with no CONTINUE HANDLER
+    declared at all is STILL non-fatal by the interpreter's own design
+    (see interpreter.py's module docstring) -- /debug (and therefore this
+    endpoint) only ever sees steps from a run that completed, so a per-step
+    `error` here is never the "genuinely unhandled/fatal, halted execution"
+    case either; confirms this doesn't get the "ERROR" label."""
+    meta, sections = report.build_report(
+        code="x", params={}, procedure_name="x", steps=[_step_with_error("unhandled")], flowchart_png_bytes=None
+    )
+    details = next(s for s in sections if s.title == "Processing Steps").blocks[1].rows[0][4]
+    assert "ERROR" not in details
+    assert "no handler declared" in details
+
+
+def test_build_report_has_no_intermediate_results_section():
+    """Regression test: an "Intermediate Results" section (one row per
+    variable per step) used to sit between Processing Steps and Final
+    Output -- deliberately removed as too granular to be useful in a
+    written report (see PROMPT_LOG.md). Confirms it's gone AND that the
+    remaining four sections are exactly what's left, in order -- not just
+    that the removed title is absent (which a typo could satisfy without
+    actually testing anything)."""
     _, steps = _real_steps()
     meta, sections = report.build_report(
         code=CALCULATE_DISCOUNT, params={}, procedure_name="x", steps=steps, flowchart_png_bytes=None
     )
-    intermediate = next(s for s in sections if s.title == "Intermediate Results")
-    table = next(b for b in intermediate.blocks if b.kind == "table")
-    # "total" is declared, then reassigned twice -- expect at least 3 rows for it.
-    total_rows = [r for r in table.rows if r[1] == "total"]
-    assert len(total_rows) >= 3
+    titles = [s.title for s in sections]
+    assert "Intermediate Results" not in titles
+    assert titles == ["User Inputs", "Processing Steps", "Final Output", "Graphs, Tables & Figures"]
 
 
 def test_build_report_final_output_uses_last_steps_final_value():
@@ -89,6 +140,25 @@ def test_build_report_final_output_uses_last_steps_final_value():
     # price*quantity = 120 -> >100 branch -> discount 10% -> total = 108.0, the
     # exact same value test_debug_endpoint.py asserts against the real interpreter.
     assert total_row[1] == "108.0"
+
+
+def test_final_output_no_handler_declared_does_not_say_execution_stopped():
+    """Same underlying bug as the two `_step_details` tests above, in the
+    Final Output section's own separate rendering: a run's LAST step
+    carrying `error.handler == "unhandled"` used to be described as
+    "Execution stopped with an unhandled error" -- but `/debug` never
+    returns a `steps` list for a run that actually halted (an
+    InterpreterError aborts before producing any steps at all), so this
+    only ever fires when a non-fatal, no-handler-declared condition (e.g.
+    NOT_FOUND) simply happened to be the run's last recorded step, not
+    because anything stopped."""
+    step = _step_with_error("unhandled")
+    step["variables"] = {"x": {"value": None, "type": "null", "changed": False}}
+    meta, sections = report.build_report(code="x", params={}, procedure_name="x", steps=[step], flowchart_png_bytes=None)
+    final = next(s for s in sections if s.title == "Final Output")
+    text = next(b.text for b in final.blocks if b.kind == "paragraph")
+    assert "stopped" not in text.lower()
+    assert "non-fatal" in text.lower()
 
 
 def test_build_report_graphs_section_notes_missing_image_honestly():
@@ -212,6 +282,38 @@ def test_generate_report_pdf_embeds_a_real_flowchart_image():
     # (bigger than the no-image case) is the practical signal the image
     # was actually embedded rather than skipped.
     assert len(content) > 2000
+
+
+def test_generate_report_pdf_scales_a_tall_narrow_image_to_fit_the_page():
+    """Regression test for a real bug, found live: the image block used
+    to scale ONLY by width (`content_width / image_width`), so a tall,
+    narrow image -- exactly what a long, vertically-stacked flowchart
+    rasterizes to -- could still come out taller than an entire fresh
+    page's own frame height after that scaling. reportlab refuses to lay
+    out a flowable that doesn't fit at all rather than shrink or split it
+    (a "Flowable ... too large ... in frame" exception), which failed the
+    WHOLE PDF download with a 500, not just a missing image. Uses a real
+    Pillow-generated PNG at a 20:1 aspect ratio -- much taller, relative
+    to its width, than LETTER's own content area -- to reproduce the
+    original failure if the height-based scale factor were ever removed
+    again."""
+    from PIL import Image as PILImage
+
+    buf = io.BytesIO()
+    PILImage.new("RGB", (200, 4000), color=(20, 30, 60)).save(buf, format="PNG")
+    tall_png_bytes = buf.getvalue()
+
+    _, steps = _real_steps()
+    content, _, _ = report.generate_report(
+        fmt="pdf",
+        code=CALCULATE_DISCOUNT,
+        params={},
+        procedure_name="Calculate Discount",
+        steps=steps,
+        flowchart_png_bytes=tall_png_bytes,
+    )
+    assert content.startswith(b"%PDF-")
+    assert content.rstrip().endswith(b"%%EOF")
 
 
 def test_cap_table_rows_leaves_small_tables_untouched():

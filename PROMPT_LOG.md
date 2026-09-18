@@ -2959,3 +2959,301 @@ expanded rail (hover), and full page layout in both Day and Night mode.
 
 `HANDOFF.md` rewritten with this session's status (its own convention: fully rewritten,
 not appended to).
+
+---
+
+## 29. Sidebar row overflow, YouTube video centering, remove Variable Timeline (frontend-only)
+
+**Date:** 2026-09-18 · **Not yet committed**
+
+**Prompt (verbatim):**
+
+> PHASE: Sidebar row overflow, YouTube video centering, remove Variable Timeline
+>
+> 1. Sample list rows (SqlConsolePage.jsx/App.css): rows with 3-line names
+>    overflow their card boundary. Fix so row height auto-grows to fit wrapped
+>    text (no fixed/min-height clipping), consistent spacing/padding preserved
+>    for 1/2/3-line names alike.
+>
+> 2. Learn page video embed: currently left-aligned, center it (embed +
+>    caption/attribution block) within its container.
+>
+> 3. Remove "Variable Timeline" feature entirely: the card/panel, its section
+>    in the Debugger page, and any nav/toggle entry point to it. Check
+>    overview.md-equivalent docs (HANDOFF.md) for wherever it's listed as an
+>    innovation feature and mark it dropped, matching how Live Parameter Tuning
+>    was already handled. Leave sparkline-adjacent Variables table (from the
+>    density-pass phase) untouched — that's separate.
+>
+> Verify: lint/build clean; Puppeteer check of sidebar at long names, Learn
+> page centering, and Debugger page layout without the removed card, Day/Night;
+> backend suite unchanged; update HANDOFF.md/PROMPT_LOG.md.
+
+**What I did.** Three independent fixes, all in `frontend/src/` (`App.css`,
+`SqlConsolePage.jsx`, plus deleting `VariableTimeline.jsx` outright).
+
+**1. Sample-row overflow — root-caused with a Puppeteer probe, not patched by guessing.**
+Measured every flyout row's `getBoundingClientRect()` height against its
+`.sample-card-name`'s actual content height before touching any CSS: **every** row,
+1-line names included, was locked at exactly `.sample-card`'s `min-height: 40px`
+regardless of how much text it actually held. Root cause: `.sample-list` (the flex column
+these rows sit in) is shorter than its combined row content once ~21 samples are listed,
+and `.sample-card`'s default `flex-shrink: 1` was squeezing *every* row down to its
+`min-height` floor trying to make them all fit — a floor that happens to match 1-line
+content exactly (so those rows looked fine) but clips a 2- or 3-line wrapped name (e.g.
+`StaticAnalysisShowcase`, whose name needed 51px of content height but was being forced
+into a 40px box). Fixed with `flex-shrink: 0` on `.sample-card` (and defensively on
+`.rail-item`, the rail's own rows, which share the identical flex-column-in-a-capped-
+height-container pattern even though initials never currently wrap). Re-measured
+post-fix: the 3-line row now reports `cardHeight: 67.375px`, `overflows: false` — grown to
+fit, not clipped — while 1-/2-line rows stayed exactly as tall as their own content (40px
+/ ~50px), confirming the fix didn't over-grow rows that were already correct.
+Screenshotted the previously-overflowing row scrolled into view to confirm visually too.
+
+**2. Learn page video centering.** `.learn-video-wrap` (the 720px-capped 16:9 iframe
+container) had `width: 100%; max-width: 720px` but no horizontal auto margins, so on any
+panel wider than 720px (every real viewport) it sat flush against the panel's left edge.
+`.learn-video-caption` (the attribution text directly above the embed) had the same
+problem. Added `margin: 0 auto` to `.learn-video-wrap`, and `max-width: 720px; margin: 0
+auto 1rem; text-align: center` to `.learn-video-caption` — both now center as one visual
+unit rather than the video centering while its own caption stayed pinned left above it (a
+mismatch the prompt's "embed + caption/attribution block" wording specifically called
+out). Verified in Puppeteer by measuring both elements' left/right gap to the panel's own
+edge: 316px/316px on both sides at a 1500px viewport, in both Day and Night theme — not
+just eyeballed.
+
+**3. Variable Timeline removed entirely**, per the prompt's explicit instruction:
+- `frontend/src/VariableTimeline.jsx` deleted outright (the whole sparkline component).
+- Its panel (`<div className="panel panel-timeline">…<VariableTimeline .../></div>`,
+  sitting between Control Flow and Step Log on the Debugger page) and its import both
+  removed from `SqlConsolePage.jsx`.
+- Its entire CSS block in `App.css` (`.var-timeline` through `.var-timeline-hover-caption
+  code`, ~130 lines, everything under the "Variable Timeline" section comment) removed.
+- Three lingering prose references that would otherwise now describe a nonexistent
+  feature: a code comment in `backend/app/interpreter.py` ("...the Call Stack panel, the
+  Variable Timeline, Download reports...") trimmed to drop the dangling mention; a
+  comment in `frontend/src/TestCaseRunner.jsx` ("same reasoning as VariableTimeline.jsx")
+  reworded to stand on its own. Deliberately left `docs/features.md`'s own historical
+  phase narrative alone — it's a record of what a past phase actually designed and
+  reasoned through at the time (including a "Variable Timeline: needed zero changes"
+  verification note specific to that phase), the same treatment every other past-tense
+  design decision in that file already gets; rewriting it to erase a feature that phase
+  genuinely shipped would falsify the history, not just clean it up.
+- `HANDOFF.md`'s Innovation line changed from "3/4 done, 1 dropped" to "2/4 done, 2
+  dropped," explicitly distinguishing Variable Timeline (shipped, then dropped/removed
+  this session) from Live Parameter Tuning (dropped, never started) rather than treating
+  both the same way.
+- Confirmed via Puppeteer against the live page: `document.querySelector('.panel-timeline')`
+  returns null, and the page's `.panel-tab` sequence reads straight from `"CONTROL FLOW"`
+  to `"STEP LOG — THIS RUN"` with no gap where `"VARIABLE TIMELINE"` used to sit —
+  screenshotted the resulting Debugger page layout in both Day and Night mode to confirm
+  no leftover empty space or broken flow.
+
+Left the sparkline-adjacent Variables table (Name/Type/Value columns, from the #27
+density-pass phase) completely untouched, per the prompt's explicit instruction — it's a
+different, unrelated panel that happens to sit near where Variable Timeline used to.
+
+**Verification.** `npm run lint` (same two pre-existing warnings as every recent session,
+unrelated: a `SqlConsolePage.jsx` exhaustive-deps warning and a `ThemeContext.jsx`
+fast-refresh warning) and `npm run build` both clean. Backend suite re-run specifically to
+confirm frontend-only: **552 passing**, unchanged. Both dev servers were already running.
+Live-checked via Puppeteer (reused an existing scratchpad's `node_modules` + local
+Chrome): the sample-row fix (measured + screenshotted), the Learn-page centering
+measurement (both themes), and the Debugger page's panel sequence + full-page screenshot
+with the Variable Timeline card gone (both themes). None of this session's own
+verification scripts clicked Run or otherwise called `/debug`, so no
+`debug_history.db`/`user_data.db` cleanup was needed afterward (confirmed by checking
+`GET /history` afterward — the only recent rows are pre-existing `OperatorShowcase` runs
+from the prior #28 session, not new ones).
+
+`HANDOFF.md` rewritten with this session's status (its own convention: fully rewritten,
+not appended to).
+
+---
+
+## 30. Fix Download Report generation (all formats — PDF/Document/Text)
+
+**Date:** 2026-09-18 · **Not yet committed**
+
+**Prompt (verbatim):**
+
+> PHASE: Fix Download Report generation (all formats — PDF/Document/Text)
+>
+> Context: Report generator (wherever /debug download builds PDF/docx/txt) has
+> 3 bugs, confirmed via LookupOnePlayer sample, but NOT sample-specific — check
+> report-building code path, not sample data:
+>
+> 1. Intermediate Results table — remove entirely from all three formats. Too
+> granular, not useful; drop the section and its heading.
+>
+> 2. "ERROR" mislabeling — steps caught by a CONTINUE/handler (e.g. NOT_FOUND
+> caught normally) are shown as "ERROR [...] ... caught by X handler" in the
+> Processing Steps Details column. This reads as a failure when it's expected,
+> handled behavior. Distinguish handled vs. unhandled: caught steps should
+> read something like "Handled: NOT_FOUND (caught by handler)" without the
+> ERROR label; reserve "ERROR" for genuinely unhandled/fatal errors that
+> halted execution. Apply the same distinction everywhere this status renders
+> in the report (and check the in-app step view for the same mislabeling —
+> fix there too if present).
+>
+> 3. Control-flow diagram missing — "Graphs, Tables & Figures" page shows only
+> a heading + caption ("Control-flow diagram, as rendered in the Debugger.")
+> with no actual diagram image, in every sample tested. Root-cause why the
+> Mermaid flowchart isn't being rendered/embedded (e.g. server-side Mermaid
+> render step failing silently, image not attached to the PDF/docx builder,
+> or txt correctly skipping images but PDF/docx incorrectly matching). Fix
+> so the real diagram is embedded as an image in PDF and Document formats;
+> for Text format, either omit this section cleanly (no dangling caption) or
+> substitute a simple text-based step-flow summary — your call.
+>
+> "Steps by statement type" table: keep as-is, seems useful and correct.
+>
+> Verify: regenerate reports for 3-4 varied samples (include one with a handler/
+> caught-error case, one with CALL, one plain) across all 3 formats; confirm no
+> Intermediate Results section, no false ERROR labels on handled steps, and a
+> real diagram image present in PDF/Document output. lint/build clean; backend
+> suite unchanged unless report logic is backend-side (note count either way).
+> Update HANDOFF.md/PROMPT_LOG.md.
+
+**What I did.** All three bugs lived in `backend/app/report.py`'s shared, format-agnostic
+`build_report()`/`_step_details()` — confirmed by reading the module before touching
+anything: one `build_report()` call produces one intermediate representation that all
+three renderers (`render_text`/`render_docx`/`render_pdf`) share, so a fix there applies
+to all three formats at once, exactly as the prompt expected.
+
+**1. Intermediate Results removed.** Deleted the whole section (one row per variable per
+step) from `build_report()` — `sections` now has four entries instead of five (`User
+Inputs`, `Processing Steps`, `Final Output`, `Graphs, Tables & Figures`), left a comment
+in its place explaining what used to be there and why it's gone.
+
+**2. "ERROR" mislabeling — root-caused, not just reworded.** Before changing any text,
+traced *why* `error.handler == "unhandled"` doesn't actually mean "this halted
+execution" in this data: `/debug` only ever returns a `steps` list for a run that
+completed — a genuinely fatal `InterpreterError` aborts with a 400 *before* producing any
+steps, and `/debug/report` only ever receives a prior `/debug` response's own `steps`, so
+this endpoint structurally can never see a step from a run that actually halted.
+Cross-checked against `interpreter.py`'s own design and its existing test
+(`test_not_found_without_a_handler_is_unhandled_but_still_non_fatal`): NOT_FOUND is
+unconditionally non-fatal, handler declared or not. Conclusion: a per-step `error` in
+this endpoint's data is **always** non-fatal, so "ERROR" should never appear on it at
+all, in either branch. Fixed `_step_details()`: caught-by-handler now reads `"Handled:
+NOT_FOUND -- <message> (caught by NOT_FOUND handler)"`; no-handler-declared-but-still-
+non-fatal reads `"Note: NOT_FOUND -- <message> (no handler declared; non-fatal, execution
+continued)"`. Found and fixed the same misconception in a second place the prompt asked
+to check ("apply the same distinction everywhere this status renders"): Final Output's
+own separate rendering said "Execution stopped with an unhandled error" for the exact
+same non-fatal case, just because it happened to be the run's last step — reworded to
+"Execution completed after N step(s) ... this condition is non-fatal by design and did
+not halt execution." **Checked the in-app step view per the prompt's explicit
+instruction — the mislabeling isn't present there**: `SqlConsolePage.jsx`'s error banner
+(`error-banner-handled`/`error-banner-unhandled` classes, "Caught by: X" / "No handler
+caught this — unhandled." text) and step-log flag both already render the raw
+`condition`/`message` with no literal "ERROR" anywhere; `explainer.py`'s Gemini-prompt
+builder and template fallback were already correct too (`"caught by the X"` /
+`"unhandled"` phrasing, no "ERROR" label). This bug was isolated to `report.py`.
+
+**3. Control-flow diagram — the real work this session, four stacked bugs found live in
+order, each hiding the next.** Started by reproducing the exact symptom through the real
+UI via Puppeteer (intercepting the actual `/debug/report` POST body a real Download PDF
+click sends), not guessing from reading code:
+
+- **Bug 1, sizing**: `svgToPng.js`'s old width/height detection regex-scanned the ENTIRE
+  svg string for the first `width="..."`/`height="..."` match, not just the root `<svg>`
+  tag. Mermaid's actual root tag sets `width="100%"` (a percentage, no height attribute
+  at all) with the real pixel size only in its `viewBox` — confirmed by dumping the live
+  rendered SVG's own markup. That whole-string scan skipped the root tag (percentage
+  doesn't match the regex) and landed on the first `width="0"`/`height="0"` it found
+  deeper in the markup (an internal marker/defs element), silently producing a 1×1-pixel
+  canvas — confirmed by decoding the actual captured PNG bytes' own IHDR chunk (width=1,
+  height=1). This matches the reported symptom exactly: a caption WAS showing (meaning a
+  real image, however tiny, was already being embedded), just invisible. Fixed by scoping
+  the match to the root `<svg ...>` tag only and preferring its `viewBox`.
+- **Bug 2, canvas tainting**: once the image was the right size, `canvas.toDataURL()`
+  started throwing `SecurityError: Tainted canvases may not be exported` — reproduced
+  directly in-page via Puppeteer (not just inferred from a stack trace), confirmed on
+  every sample tried. Any SVG containing a `<foreignObject>` (exactly how Mermaid renders
+  node/edge labels) permanently taints a canvas once drawn via `<img>` + `drawImage`, a
+  hard browser restriction. Tried Mermaid's own `flowchart.htmlLabels: false` via an
+  inline `%%{init: ...}%%` directive (which should avoid `<foreignObject>` entirely) —
+  confirmed live it did NOT actually suppress `<foreignObject>` in this Mermaid version
+  (`hasForeignObject: true` on the rendered output even with the directive applied), then
+  confirmed via a web search of Mermaid's own issue tracker that this is a known,
+  documented upstream limitation, not a config mistake on this app's part.
+- **Bug 3, html2canvas tried and rejected**: installed `html2canvas` (sidesteps the taint
+  issue by walking the live DOM instead of decoding an `<img>`) and wired it up — it ran
+  without throwing, and produced a correctly-sized PNG, but sampling the resulting
+  canvas's own pixel data directly (not just eyeballing a screenshot) showed 100% pure
+  white, zero non-white pixels across 5.4 million of them: html2canvas silently failed to
+  paint any of this SVG's content, a known gap in its nested-SVG support. Removed again
+  (`npm uninstall html2canvas`) once this was confirmed — the frontend has no new
+  dependency as a result of this session.
+- **The fix that actually works**: rewrote `svgToPng.js` to convert every
+  `<foreignObject>` label in a cloned copy of the live diagram SVG to a plain SVG
+  `<text>`/`<tspan>` (`foreignObjectsToSvgText`) before rasterizing through the same
+  `<img>` + `<canvas>` path bug 1 already fixed the sizing for — a `<foreignObject>`-free
+  SVG carries none of bug 2's restriction. Verified this actually produces a real,
+  legible image by decoding the rasterized PNG and viewing it directly (not just
+  checking file size): a `CalculateTotal` trace rendered as a fully readable flowchart on
+  the first attempt, but with the two longest DECLARE statement labels' text visibly
+  overflowing their node boxes on both sides — a second real bug, fixed with
+  `shrinkTextNodesToFit` (temporarily attaches the cloned SVG off-screen, since
+  `getComputedTextLength()` needs real layout and returns 0 on a detached node, then
+  shrinks any label that measures wider than the box Mermaid originally sized for it).
+  Testing next against `GradeClassifier` (a branching sample, to exercise edge/condition
+  labels — "then"/"else" — which `CalculateTotal` doesn't have) surfaced a THIRD bug:
+  those edge labels rendered as invisible near-white text on the white report page
+  (correct on screen, against the app's own dark canvas; wrong once transplanted). Fixed
+  with a dark, page-safe fallback specifically for `.edgeLabel`-rooted labels (detected
+  via `fo.closest('.edgeLabel')`), leaving node labels on their existing near-white
+  default (correct, since they always sit on their own node's dark shape fill). Setting
+  that fallback via a bare `fill="..."` **attribute** didn't actually work either —
+  confirmed live it was silently overridden by the diagram's own embedded `<style>`
+  block's `#flowchart-1{fill:#edeff4}` rule (an SVG presentation attribute is the
+  *weakest* possible CSS origin) — fixed by setting `text.style.fill` (inline style)
+  instead, which does outrank an embedded, non-`!important` stylesheet rule.
+- **A fourth, separate bug, found only once the diagram was finally correct**: generating
+  a real PDF for `GradeClassifier` (a taller, narrower diagram than `CalculateTotal`)
+  returned a 500. The actual error, read directly from the response body rather than
+  assumed: reportlab's `"Flowable ... too large ... in frame"` — `render_pdf()`'s image
+  block used to scale ONLY by width, so a tall, narrow image could still come out taller
+  than an entire fresh page's own frame height, which reportlab refuses to lay out at all
+  (not shrink, not split) rather than error gracefully. Fixed by also computing a
+  height-based scale factor and taking the `min()` of both width- and height-based
+  ratios — the exact fix that made the diagram finally appear would have silently
+  re-broken PDF specifically, for any sufficiently tall diagram, without this.
+- **Wiring**: `SqlConsolePage.jsx` gained a `diagramContainerRef` (attached to the live
+  `.diagram-svg` div) and `handleDownloadReport` now calls
+  `rasterizeDiagramElementToPng(diagramContainerRef.current)` instead of the old
+  `rasterizeSvgToPng(diagramSvg)` call over the raw SVG string.
+
+**Testing added.** `test_report.py`: `test_build_report_has_no_intermediate_results_
+section` (replaces the old intermediate-results test), `test_step_details_labels_a_
+caught_error_as_handled_not_error`, `test_step_details_no_handler_declared_condition_is_
+not_labeled_error_either`, `test_final_output_no_handler_declared_does_not_say_execution_
+stopped`, `test_generate_report_pdf_scales_a_tall_narrow_image_to_fit_the_page` (a real
+200×4000 Pillow PNG, reproducing the exact reportlab failure if the height-based scale
+factor is ever removed). `test_report_endpoint.py`:
+`test_report_endpoint_handles_a_caught_handler_trace_without_false_error_label` (the same
+fix, end to end through the real `/debug` → `/debug/report` pipeline with a genuine
+cursor+handler procedure, not a hand-built step dict).
+
+**Verification.** Backend suite: **557 passing** (was 552; +5 net), 0 xfailed. `npm run
+lint`/`npm run build` both clean (same two pre-existing warnings). Regenerated reports
+for four varied samples end to end through the real UI (driven live via Puppeteer, not
+direct API calls) — `GradeClassifier` (plain branching), `OrderTotal` (`CALL`),
+`SafeAverageWithHandlers` (cursor + NOT_FOUND handler + DIVISION_BY_ZERO handler),
+`ClassifyOrder` (`CASE`) — across all three formats: confirmed no "Intermediate Results"
+section anywhere; `"Handled:"`/`"Note:"` wording with zero occurrences of the literal
+word "ERROR" for any caught/non-fatal condition (txt: grepped directly; docx: read via
+python-docx); a real diagram image in PDF (valid `%PDF-`/`%%EOF`, `/Image` XObject
+markers present) and DOCX (extracted the actual `word/media/image1.png` from inside the
+generated `.docx` and viewed it directly — a fully legible, correctly-colored,
+correctly-sized flowchart, not just "a file exists"). Both dev servers went down mid-
+session (a context reset landed between two verification steps) — restarted both
+directly rather than assuming either was still up. `backend/data/debug_history.db`'s 44
+test rows from this session (ids 512–555, across many Puppeteer-driven `/debug` calls)
+deleted afterward via `DELETE /history/{id}`; no `user_data.db` writes this session
+(every sample used was read-only against it).
+
+`HANDOFF.md` rewritten with this session's status (its own convention: fully rewritten,
+not appended to).

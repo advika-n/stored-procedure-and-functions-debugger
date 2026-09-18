@@ -133,8 +133,24 @@ def _step_details(step: dict) -> str:
         )
     error = step.get("error")
     if error:
-        caught = "unhandled" if error["handler"] == "unhandled" else f"caught by {error['handler']}"
-        parts.append(f"ERROR [{error['condition']}] {error['message']} ({caught})")
+        # NOT genuinely fatal, in either branch -- `/debug` only ever hands
+        # this module a `steps` list from a run that completed (an
+        # InterpreterError aborts with a 400 before producing any steps at
+        # all -- see build_report()'s Final Output comment for the same
+        # point), so a per-step `error` here is always non-fatal: either a
+        # declared CONTINUE HANDLER caught it, or (NOT_FOUND only) the
+        # condition is unconditionally non-fatal by the interpreter's own
+        # design even with no handler declared. Neither case is a failure,
+        # so neither gets the "ERROR" label -- that word previously showed
+        # up on ordinary, expected control flow (e.g. a cursor running out
+        # of rows) and read as something having gone wrong when it hadn't.
+        if error["handler"] == "unhandled":
+            parts.append(
+                f"Note: {error['condition']} -- {error['message']} "
+                "(no handler declared; non-fatal, execution continued)"
+            )
+        else:
+            parts.append(f"Handled: {error['condition']} -- {error['message']} (caught by {error['handler']})")
     return "; ".join(parts) if parts else "—"
 
 
@@ -218,42 +234,13 @@ def build_report(
         )
     )
 
-    # -- c. Intermediate Results (variable state at every step) ---------
-    var_rows = []
-    for step in steps:
-        for name, entry in (step.get("variables") or {}).items():
-            var_rows.append(
-                [
-                    str(step["stepNumber"]),
-                    name,
-                    _fmt_value(entry["value"]),
-                    entry["type"],
-                    "yes" if entry["changed"] else "",
-                    "yes" if entry.get("isOutput") else "",
-                ]
-            )
-    sections.append(
-        ReportSection(
-            "Intermediate Results",
-            [
-                ReportBlock(
-                    kind="paragraph",
-                    text=(
-                        'Variable state captured at every step ("Changed" marks the step that set that '
-                        'exact value; "Output" marks an OUT/INOUT parameter):'
-                    ),
-                ),
-                ReportBlock(
-                    kind="table",
-                    headers=["Step", "Variable", "Value", "Type", "Changed", "Output"],
-                    rows=var_rows,
-                    col_ratios=[0.08, 0.20, 0.24, 0.16, 0.16, 0.16],
-                ),
-            ],
-        )
-    )
-
-    # -- d. Final Output ---------------------------------------------------
+    # -- c. Final Output ---------------------------------------------------
+    # (There used to be an "Intermediate Results" section here -- one row per
+    # variable per step, i.e. the full `variables` snapshot repeated at every
+    # step -- deliberately removed: too granular to be useful in a written
+    # report, and the Processing Steps section's own "Details" column plus
+    # this section's own "Final variable state" table already cover what a
+    # reader of the report actually needs.)
     last_step = steps[-1] if steps else None
     final_blocks: list[ReportBlock] = []
     if last_step is None:
@@ -269,12 +256,25 @@ def build_report(
                 )
             )
         elif error is not None and error["handler"] == "unhandled":
+            # NOT "execution stopped" -- `/debug` only ever returns a `steps`
+            # list for a run that ran to completion (an InterpreterError
+            # aborts with a 400 before any steps exist at all, so this
+            # endpoint never even sees a genuinely fatal, execution-halting
+            # error). A per-step `error.handler == "unhandled"` here means
+            # only "no CONTINUE HANDLER was declared for this condition" --
+            # e.g. NOT_FOUND, which is non-fatal by design either way (see
+            # `_step_details`'s own comment) -- so this branch fires only
+            # when that happened to be the run's LAST recorded step, not
+            # because anything halted.
             final_blocks.append(
                 ReportBlock(
                     kind="paragraph",
                     text=(
-                        f"Execution stopped with an unhandled error at step {last_step['stepNumber']} "
-                        f"(line {last_step['line']}): [{error['condition']}] {error['message']}"
+                        f"Execution completed after {len(steps)} step(s). The final step (step "
+                        f"{last_step['stepNumber']}, line {last_step['line']}) encountered the "
+                        f"{error['condition']} condition with no handler declared for it "
+                        f"({error['message']}); this condition is non-fatal by design and did not "
+                        "halt execution."
                     ),
                 )
             )
@@ -301,7 +301,7 @@ def build_report(
             )
     sections.append(ReportSection("Final Output", final_blocks))
 
-    # -- e. Graphs, Tables & Figures -------------------------------------
+    # -- d. Graphs, Tables & Figures -------------------------------------
     graph_blocks: list[ReportBlock] = []
     if flowchart_png_bytes:
         graph_blocks.append(
@@ -476,6 +476,20 @@ def render_pdf(meta: dict, sections: list[ReportSection]) -> bytes:
         bottomMargin=bottom_margin,
     )
     content_width = LETTER[0] - left_margin - right_margin
+    # Real bug, found live (see PROMPT_LOG.md): the image block below used
+    # to scale ONLY by width (`content_width / image_width`), so a tall,
+    # narrow image -- exactly what a long, vertically-stacked flowchart
+    # rasterizes to -- could still come out taller than an entire fresh
+    # page's own frame height after that scaling, which reportlab refuses
+    # outright ("Flowable ... too large ... in frame") rather than shrink
+    # or split it -- the whole PDF export failed with a 500, not just a
+    # missing image. `content_height` below is this same margin-derived
+    # page height, minus a little headroom for the image's own caption
+    # line sharing that page above it, so the image's height-based scale
+    # factor (taken as the min alongside the existing width-based one)
+    # guarantees it fits a single page on its own, however tall the
+    # diagram is.
+    content_height = LETTER[1] - top_margin - bottom_margin - 0.5 * inch
 
     styles = getSampleStyleSheet()
     body_style = styles["Normal"]
@@ -526,7 +540,9 @@ def render_pdf(meta: dict, sections: list[ReportSection]) -> bytes:
                 if block.caption:
                     story.append(Paragraph(f"<i>{esc(block.caption)}</i>", body_style))
                 image_width, image_height = ImageReader(io.BytesIO(block.image_bytes)).getSize()
-                scale = min(1.0, content_width / image_width) if image_width else 1.0
+                width_scale = content_width / image_width if image_width else 1.0
+                height_scale = content_height / image_height if image_height else 1.0
+                scale = min(1.0, width_scale, height_scale)
                 story.append(Image(io.BytesIO(block.image_bytes), width=image_width * scale, height=image_height * scale))
                 story.append(Spacer(1, 0.15 * inch))
         story.append(Spacer(1, 0.1 * inch))

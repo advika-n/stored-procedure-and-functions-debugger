@@ -250,6 +250,28 @@ END
 """
 
 
+SAFE_AVERAGE = """\
+CREATE PROCEDURE SafeAverageOfExpensive()
+BEGIN
+    DECLARE total NUMBER DEFAULT 0;
+    DECLARE count NUMBER DEFAULT 0;
+    DECLARE done NUMBER DEFAULT 0;
+    DECLARE item_price NUMBER DEFAULT 0;
+    DECLARE CONTINUE HANDLER FOR NOT_FOUND SET done = 1;
+    DECLARE cur CURSOR FOR SELECT price FROM products WHERE price > 1000;
+    OPEN cur;
+    WHILE done = 0 DO
+        FETCH cur INTO item_price;
+        IF done = 0 THEN
+            SET total = total + item_price;
+            SET count = count + 1;
+        END IF;
+    END WHILE;
+    CLOSE cur;
+END
+"""
+
+
 def _debug_and_report(code, name, fmt="txt"):
     debug_response = client.post("/debug", json={"code": code, "params": {}, "name": name})
     assert debug_response.status_code == 200
@@ -318,6 +340,23 @@ def test_report_endpoint_handles_a_case_statement_trace():
     text = response.text
     assert "Branch:" in text
     assert "162" in text
+
+
+def test_report_endpoint_handles_a_caught_handler_trace_without_false_error_label():
+    """Regression test for a real bug, found live: a step caught by a
+    declared CONTINUE HANDLER (here, the cursor's own NOT_FOUND once it
+    runs out of rows) used to render as "ERROR [...] ... caught by X
+    handler" in the Processing Steps Details column -- reading as a
+    failure when it's actually expected, handled behavior. Runs the real
+    /debug -> /debug/report pipeline end to end (not a hand-built step
+    dict, unlike test_report.py's own unit-level coverage of the same
+    fix) and confirms "Handled:" wording appears with no "ERROR" label
+    anywhere in the report."""
+    response = _debug_and_report(SAFE_AVERAGE, "SafeAverageOfExpensive", "txt")
+    text = response.text
+    assert "Handled:" in text
+    assert "NOT_FOUND" in text
+    assert "ERROR" not in text
 
 
 def test_report_endpoint_large_trace_stays_fast():
