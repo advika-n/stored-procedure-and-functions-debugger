@@ -65,9 +65,11 @@ export default defineConfig({
         bypass: bypassNavigations,
       },
       // Same collision as '/debug'/'/debugger' and '/history' above:
-      // '/quiz' is both the Quiz page's own route and a prefix of the
-      // '/quiz/generate' API path, so it needs the same bypass guard.
-      '/quiz': {
+      // '/practice' is both the AI Practice page's own route and a
+      // prefix of the '/practice/generate' API path, so it needs the
+      // same bypass guard. (Replaces the old '/quiz' entry -- the Quiz
+      // page and /quiz/generate are both gone, see HANDOFF.md.)
+      '/practice': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         bypass: bypassNavigations,

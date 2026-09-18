@@ -27,7 +27,7 @@ Documentation (5), Innovation (5).
 - **Backend**: Python, FastAPI (`backend/app/main.py`), SQLite for persistence.
 - **Frontend**: React 19 + Vite, Monaco Editor, Mermaid.js (flowcharts), React Router.
 - **AI**: Google Gemini (`gemini-flash-lite-latest`), with a deterministic template
-  fallback. Client wiring lives once in `explainer.py`, reused by `quiz.py`.
+  fallback. Client wiring lives once in `explainer.py`, reused by `practice.py`.
 - **Core pipeline**: `tokenizer.py` → `parser.py` (hand-rolled recursive-descent) → AST
   (plain dicts) → `interpreter.py` (tree-walking) → a `DebugStep` trace — the central
   wire contract every frontend feature reads; full shape in `docs/schema.md`.
@@ -67,21 +67,32 @@ evaluated — IF/WHILE/CASE — via one shared `COMPARISON_OPERATORS` set/`_eval
 plus fixed the SQL-passthrough round-trip caveat as a side effect) · `SELECT ... INTO`
 single-row lookup (`SelectIntoStatement` AST node, distinct from both the cursor mechanism
 and the standalone-SELECT `SqlStatement` above — zero rows reuses cursor FETCH's own
-NOT_FOUND condition rather than a new error path; new `sql.into` DebugStep field).
+NOT_FOUND condition rather than a new error path; new `sql.into` DebugStep field) ·
+AI Practice (`/practice`, replacing the old standalone Quiz page/`/quiz` entirely — route,
+component, nav entry, and the old `quiz.py`/`/quiz/generate` backend all removed, not kept
+alongside) — a general-purpose competitive-exam practice tool, not tied to any sample or
+trace: pick a difficulty (Easy/Medium/Hard) and question count (1-15), Gemini generates
+that many GATE-DBMS-PYQ/placement-style MCQs (`practice.py`, same client wiring as
+`explainer.py`), falling back to a hardcoded per-difficulty question bank (never a bare
+502, unlike the old `/quiz/generate`) if Gemini fails; one question at a time with a
+two-attempt retry flow (a first wrong answer doesn't count yet, a second does) and a score
+screen with a first-try/retry/incorrect breakdown.
 
 ### Backend file map (`backend/app/`)
 `tokenizer.py` text→tokens · `parser.py` tokens→AST · `interpreter.py` AST→`DebugStep`s
 · `advisor.py` static Advisor (`analyze(ast)`) · `explainer.py` Gemini client + `/explain`
-+ `/ask` · `quiz.py` MCQ quiz gen · `user_db.py` persistent on-disk user database (cursors
-+ SQL passthrough statements + the SQL Console's shared source of truth) ·
-`sql_console.py` raw-SQL-passthrough execution logic, shared by `POST /sql/execute` AND
-`interpreter.py`'s `SqlStatement` handling · `demo_db.py` ephemeral `:memory:` test
-fixture only (see above) · `history.py` persistent run history · `report.py` PDF/DOCX/TXT
-export · `main.py` FastAPI routes · `tests/` one `test_*.py` per module/route.
++ `/ask` · `practice.py` Gemini-backed AI Practice question gen + fallback bank (see
+Shipped features above; replaced `quiz.py`) · `user_db.py` persistent on-disk user
+database (cursors + SQL passthrough statements + the SQL Console's shared source of
+truth) · `sql_console.py` raw-SQL-passthrough execution logic, shared by
+`POST /sql/execute` AND `interpreter.py`'s `SqlStatement` handling · `demo_db.py`
+ephemeral `:memory:` test fixture only (see above) · `history.py` persistent run history
+· `report.py` PDF/DOCX/TXT export · `main.py` FastAPI routes · `tests/` one `test_*.py`
+per module/route.
 
 ### Endpoints
 `GET /health` · `POST /debug` · `POST /debug/report` · `POST /explain` · `POST /ask` ·
-`POST /quiz/generate` · `POST /sql/execute` · `GET|DELETE /history[/{id}]`
+`POST /practice/generate` · `POST /sql/execute` · `GET|DELETE /history[/{id}]`
 
 ### Frontend file map (`frontend/src/`)
 `App.jsx` routes · `Layout.jsx` header/nav · `ThemeContext.jsx` Day/Night (§3) ·
@@ -91,10 +102,11 @@ for Download · `compareTraces.js` pure trace diff · `samples.js` sample librar
 `pages/SqlConsolePage.jsx` the merged Debugger + SQL Console (`/sql-console`, one editor,
 one Run button — see `docs/features.md`; formerly two separate pages/files,
 `DebuggerPage.jsx` and a standalone `SqlConsolePage.jsx`) · `pages/ComparePage.jsx`,
-`QuizPage.jsx`, `TestRunnerPage.jsx`, `HistoryPage.jsx`, `HelpPage.jsx`, `LearnPage.jsx` —
-one per route · `theoryContent.jsx`/`theoryTopics.js` the former standalone Theory tab's
-per-construct write-ups, merged into `LearnPage.jsx`'s "Deep Dive" panel (no more
-separate `/theory` route).
+`PracticePage.jsx` (`/practice`, replaced `QuizPage.jsx`), `TestRunnerPage.jsx`,
+`HistoryPage.jsx`, `HelpPage.jsx`, `LearnPage.jsx` — one per route ·
+`theoryContent.jsx`/`theoryTopics.js` the former standalone Theory tab's per-construct
+write-ups, merged into `LearnPage.jsx`'s "Deep Dive" panel (no more separate `/theory`
+route).
 
 ### Known repo cruft
 `New/` at the project root is a stray, fully-duplicated snapshot of an earlier

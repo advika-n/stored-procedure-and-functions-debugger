@@ -3257,3 +3257,157 @@ deleted afterward via `DELETE /history/{id}`; no `user_data.db` writes this sess
 
 `HANDOFF.md` rewritten with this session's status (its own convention: fully rewritten,
 not appended to).
+
+## 31. AI Practice — Competitive Exam Practice Generator (replaces standalone Quiz page)
+
+**Date:** 2026-09-18 · **Not yet committed**
+
+**Prompt (verbatim):**
+
+> PHASE: AI Practice — Competitive Exam Practice Generator (replaces standalone Quiz page)
+>
+> ## Remove: standalone Quiz page
+> - Remove the standalone Quiz page/tab and its nav entry entirely (route,
+>   component, any Quiz-specific backend endpoint(s) used only by it)
+> - Do NOT touch Predict Mode — it is a separate, inline, in-debugger feature
+>   and must be left fully intact
+> - Check for and clean up any now-dead references: imports, nav config,
+>   route definitions, any shared Gemini quiz-generation backend code that
+>   only the Quiz page used (leave it if Predict Mode or anything else
+>   depends on it)
+> - Update HANDOFF.md / HELP tab content if either references the Quiz page
+>
+> ## Add: "AI Practice" tab
+>
+> Add a new "AI Practice" tab to the app (nav placement: alongside Learn/Help,
+> NOT inside the debugger flow — this is a standalone practice tool, not tied
+> to any sample or trace). This replaces the old Quiz page in the nav.
+>
+> ## Backend
+>
+> New endpoint: POST /practice/generate
+> - Request body: { difficulty: "easy" | "medium" | "hard", numQuestions: int (1-15) }
+> - Use the Gemini API (same client/pattern as the existing AI explainer) to
+>   generate `numQuestions` MCQ questions about stored procedures, functions,
+>   cursors, exception handling, and control flow in SQL/PL-SQL, styled like
+>   competitive/placement exam questions (GATE DBMS PYQ style and campus
+>   placement SQL rounds), at the requested difficulty.
+> - Prompt Gemini for strict JSON output: array of objects with
+>   { question, options: [4 strings], correctIndex, explanation }.
+> - Validate the JSON response (correct shape, correctIndex in range, exactly
+>   4 options) before returning it. If Gemini fails or returns malformed JSON,
+>   fall back to a hardcoded bank of pre-written questions (mirror the existing
+>   template-fallback pattern used elsewhere) — split the bank by difficulty,
+>   at least 5 questions per difficulty level, and sample `numQuestions` from it.
+> - No persistence needed — this is stateless, generate-and-serve.
+>
+> ## Frontend — new page, e.g. PracticePage.jsx, route /practice
+>
+> ### Setup screen
+> - Difficulty selector: Easy / Medium / Hard as large selectable cards (not a
+>   dropdown) — use the amber/teal/coral accent trio to color-code the three
+>   difficulty levels
+> - Number of questions: stepper or slider, 1-15
+> - "Generate Practice Set" button — loading state while Gemini responds
+>   (skeleton loaders or an animated caret consistent with the gutter caret
+>   motif elsewhere in the app, not a generic spinner)
+>
+> ### Question flow (one question at a time, not a scroll-through list)
+> - Progress indicator (e.g. "Question 3 of 10")
+> - Question text + 4 options as selectable cards
+> - On selecting an answer:
+>   - If correct: immediate green/teal success state, reveal the explanation,
+>     "Next Question" button
+>   - If wrong: DO NOT immediately mark it wrong. Show a "not quite — try
+>     again" state, let the user pick again. Only on the SECOND wrong attempt,
+>     mark it wrong (count it against the score), reveal the correct answer
+>     highlighted + the explanation, then "Next Question" button
+>   - Track first-attempt-correct vs. wrong-after-retry vs. wrong distinctly
+>     so the score screen can show nuance, not just right/wrong
+> - Smooth transitions between questions (fade/slide, not a hard reload) —
+>   this page should feel noticeably more alive/interactive than the rest of
+>   the site, which has been flagged as visually flat elsewhere
+>
+> ### Score screen (after last question)
+> - Score out of total, with a breakdown: correct on first try / correct on
+>   retry / incorrect
+> - Per-question review list (collapsed by default, expandable) showing the
+>   question, the user's answer(s), correct answer, and explanation
+> - "Try Another Set" button that returns to the setup screen (keep difficulty
+>   selection but let them change it)
+>
+> ## Design system compliance
+> - Follow the existing "Debugger Notebook" system: dark navy palette,
+>   IBM Plex Mono + Space Grotesk fonts, amber/teal/coral accents
+> - Must be fully theme-aware (Day/Night mode toggle already exists app-wide —
+>   do not hardcode colors, use the existing theme tokens/CSS variables)
+> - Should work down to ~400px width (existing nav overflow bug was already
+>   fixed at this breakpoint — don't reintroduce it)
+>
+> ## Out of scope for this phase
+> - No persistence of past practice sessions/history (flag as a possible
+>   future addition, don't build it)
+> - No integration with Predict Mode — this is a fully separate,
+>   general-purpose practice tool
+>
+> ## Verification
+> - Add basic backend tests for /practice/generate: valid request shape,
+>   fallback path when Gemini is mocked to fail, malformed-JSON handling
+> - Confirm no test references the removed Quiz page break the suite; remove/
+>   update any that do
+> - Confirm lint/build clean
+> - Live-verify via headless Chrome: full flow (setup → generate → answer with
+>   one deliberate wrong-then-right retry → reach score screen) in both themes,
+>   and confirm the Quiz nav entry is gone while Predict Mode still works
+
+**What I did.** Full rationale: `docs/features.md`'s "AI Practice (replaces the standalone
+Quiz page)" section. Summary:
+
+**Removed**, entirely (not deprecated/hidden): `backend/app/quiz.py`,
+`backend/app/tests/test_quiz.py`, `backend/app/tests/test_quiz_endpoint.py`, `POST
+/quiz/generate` + its `QuizGenerateRequest` model in `main.py`, `frontend/src/pages/
+QuizPage.jsx`, its `/quiz` route + nav entry, and `frontend/src/lastProcedure.js` (its
+only consumer was the old Quiz page's "This Procedure" option — nothing else referenced
+it). Confirmed Predict Mode (`SqlConsolePage.jsx`, internally still named `quiz-*` in its
+own state/class names) untouched throughout — checked before and after.
+
+**Added**: `backend/app/practice.py` (Gemini generation + hardcoded fallback bank, reusing
+`app/explainer.py`'s client wiring) and `POST /practice/generate`; `frontend/src/pages/
+PracticePage.jsx` (`/practice`, nav entry "AI Practice" in the same top-level nav list the
+old Quiz entry sat in) implementing the full setup → one-question-at-a-time-with-retry →
+score-screen flow from the prompt, plus a matching `App.css` section
+(difficulty cards, stepper, generating-caret/skeleton, option states, score chips, review
+accordion).
+
+**Two real bugs found and fixed during live verification** (not caught by lint/build):
+(1) a `str.format`/literal-brace collision in the shared JSON-shape prompt text (fixed via
+a `__COUNT__` marker + `str.replace`); (2) a CSS specificity bug where the global
+`button:disabled` rule silently beat the new single-class `.practice-option-correct/
+-wrong/-tried` modifiers on every answered (disabled) option, confirmed via
+`getComputedStyle` and fixed with compound selectors. Also caught and fixed a dead/missing
+`vite.config.js` dev-proxy entry (`/quiz` → `/practice`, same path-prefix-collision pattern
+the file already documents for `/debug`/`/history`/`/sql`) — missing it 404'd the whole
+feature in dev, caught live, not statically.
+
+**Testing added.** `backend/app/tests/test_practice.py` + `test_practice_endpoint.py` —
+JSON-shape validation, fallback-bank sampling (with/without replacement), Gemini-mocked
+success/retry/fallback paths, pydantic bounds validation, a real end-to-end no-key
+fallback test. Backend suite: **568 passing** (was 552 before `quiz.py`'s ~30 tests were
+removed and `practice.py`'s ~30 added), 0 xfailed. `npm run lint`/`npm run build` both
+clean (same two pre-existing warnings).
+
+**Verification.** Live-verified via headless Chrome (Puppeteer-core + local Chrome, fresh
+`node_modules` in this session's scratchpad — none was reused from a prior session, all
+had been cleaned up) against freshly started dev backend+frontend (neither was already
+running): nav shows "AI Practice", no "Quiz" entry; direct-navigating the old `/quiz` URL
+renders no quiz UI; Predict Mode confirmed still present/functional on the SQL Console
+page; full setup → real-Gemini-generated question → a genuine wrong-then-correct retry
+(and, across repeated runs, a genuine wrong-then-wrong-again final-incorrect path) → score
+screen → expandable review → "Try Another Set" (difficulty kept) flow, in both Day and
+Night mode; confirmed no horizontal overflow at 400px. `getComputedStyle`-verified exact
+accent colors for all three answered-option states post-fix. Neither `debug_history.db`
+nor `user_data.db` touched this session (`/practice/generate` has no history/user-db side
+effects at all).
+
+`HANDOFF.md` rewritten with this session's status (its own convention: fully rewritten,
+not appended to).

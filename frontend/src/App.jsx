@@ -5,7 +5,7 @@ import ComparePage from './pages/ComparePage'
 import SqlConsolePage from './pages/SqlConsolePage'
 import TestRunnerPage from './pages/TestRunnerPage'
 import HistoryPage from './pages/HistoryPage'
-import QuizPage from './pages/QuizPage'
+import PracticePage from './pages/PracticePage'
 import AboutPage from './pages/AboutPage'
 import HelpPage from './pages/HelpPage'
 import LearnPage from './pages/LearnPage'
@@ -29,7 +29,7 @@ function App() {
             <Route path="/sql-console" element={<SqlConsolePage />} />
             <Route path="/tests" element={<TestRunnerPage />} />
             <Route path="/history" element={<HistoryPage />} />
-            <Route path="/quiz" element={<QuizPage />} />
+            <Route path="/practice" element={<PracticePage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/help" element={<HelpPage />} />
             <Route path="/learn" element={<LearnPage />} />

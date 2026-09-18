@@ -1,7 +1,7 @@
 // Full user manual -- a mandatory, graded course requirement (see
 // CLAUDE.md §5). Every control described below was read directly off
 // Layout.jsx and SqlConsolePage.jsx (the merged Debugger/SQL Console
-// page -- plus History.jsx/QuizPage.jsx for the "other pages" section)
+// page -- plus History.jsx/PracticePage.jsx for the "other pages" section)
 // rather than invented, so this stays accurate as the actual source of
 // truth. Uses <details>/<summary> for the accordion sections -- native,
 // keyboard/screen-reader accessible, no extra JS state needed -- styled
@@ -144,13 +144,14 @@ function HelpPage() {
         <p>Top navigation and header, present on every page:</p>
         <ul className="help-control-list">
           <li>
-            <strong>Home / SQL Console / Compare / Quiz / About</strong> (top nav), plus{' '}
+            <strong>Home / SQL Console / Compare / AI Practice / About</strong> (top nav), plus{' '}
             <strong>Help</strong> and <strong>🎓 Learn</strong> (top-right cluster) -- the page tabs.
             SQL Console is the main tool (the merged step-through debugger and plain-SQL runner); Compare
             runs two procedures side by side and steps through both together; Learn's Deep Dive panel has
-            concept write-ups with runnable examples; Quiz is a standalone AI-generated multiple-choice
-            quiz. Your saved run history is still there (see section 7) even though it has no nav tab of
-            its own.
+            concept write-ups with runnable examples; AI Practice is a standalone, Gemini-generated
+            competitive-exam-style question set (GATE DBMS PYQ / placement style), not tied to any
+            procedure. Your saved run history is still there (see section 7) even though it has no nav tab
+            of its own.
           </li>
           <li>
             <strong>🌙 / ☀️ toggle</strong> (top-right header cluster) -- switches between Night (dark) and
@@ -382,9 +383,17 @@ function HelpPage() {
             editor) and steps through both traces together, flagging the first point where they diverge.
           </li>
           <li>
-            <strong>Quiz</strong> -- a standalone 5-question AI-generated multiple-choice quiz, either on
-            general procedural-SQL theory or based on whichever procedure you last had loaded on the SQL
-            Console page. This is separate from Predict Mode there.
+            <strong>AI Practice</strong> -- a standalone, general-purpose competitive-exam practice tool
+            (not tied to any sample or trace). Pick a difficulty (Easy/Medium/Hard, as large color-coded
+            cards) and a question count (1-15), then <strong>Generate Practice Set</strong> asks Gemini for
+            that many GATE-DBMS-PYQ-and-placement-style multiple-choice questions on procedures, functions,
+            cursors, exception handling, and control flow (falling back to a built-in question bank if
+            Gemini is unavailable). Questions are shown one at a time: picking the right answer immediately
+            shows the explanation and a Next button; picking wrong the <em>first</em> time shows "not quite
+            -- try again" and lets you pick again without counting against your score -- only a second wrong
+            answer on the same question counts as incorrect and reveals the correct one. The final score
+            screen breaks down correct-on-first-try / correct-on-retry / incorrect, plus an expandable
+            per-question review. This is separate from Predict Mode on the SQL Console page.
           </li>
           <li>
             <strong>Learn</strong> -- concept explanation, an instructional video, a Deep Dive panel with

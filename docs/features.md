@@ -648,3 +648,111 @@ themes. Cleaned up the real, already-running dev backend's `debug_history.db` ro
 from this session's own live verification) and dropped the real `players` table that
 verification created, confirming `user_data.db` was back to just its one seeded `products`
 table afterward.
+
+## AI Practice (replaces the standalone Quiz page)
+
+Removed the standalone Quiz page entirely (`frontend/src/pages/QuizPage.jsx`, its `/quiz`
+route + nav entry, `backend/app/quiz.py`, the `POST /quiz/generate` endpoint, and
+`frontend/src/lastProcedure.js` — the last of these existed solely to let the old Quiz
+page's "This Procedure" option read whatever was loaded on the SQL Console page; nothing
+else referenced it, so it was deleted rather than left dangling) and replaced it with a
+new, deliberately more general "AI Practice" tab (`/practice`,
+`frontend/src/pages/PracticePage.jsx`) — a standalone competitive-exam practice tool, not
+tied to any sample or trace, styled like GATE DBMS PYQs and campus placement SQL rounds
+rather than the old page's plain 5-question theory/procedure quiz. **Not** the same
+feature as the in-debugger **Predict Mode** toggle (`SqlConsolePage.jsx`, internally still
+named `quiz-*` in its own state/class names per that file's own long-standing comment) —
+Predict Mode was explicitly left untouched; it shares no code, state, or backend endpoint
+with either the old Quiz page or this new one.
+
+**Backend (`app/practice.py`, new — replaced `app/quiz.py`, deleted)**: same Gemini client
+wiring as `app/explainer.py`/the old `app/quiz.py` (`_get_gemini_client`/`_GEMINI_MODEL`,
+reused not duplicated), same "ask for raw JSON, strip an accidental fence, retry once at
+temperature 0 on a parse failure" two-strikes pattern the old quiz generator used. The
+meaningful behavior change: **`generate_practice_questions` always returns something.**
+The old `/quiz/generate` had no fallback at all — any Gemini failure (missing/invalid key,
+network, both parse attempts still malformed) surfaced as a 502 straight to the user. This
+endpoint instead falls back to a hardcoded, hand-written question bank
+(`_FALLBACK_BANK`, split by difficulty, at least 5–8 questions per level, covering
+procedures/functions, cursors, exception handling, and control flow) and samples
+`numQuestions` from it — without replacement when the bank is large enough, with
+replacement (`random.choices`) when more are requested than the bank holds at that
+difficulty (up to 15 can be asked for). This is the same "never leave the user with a bare
+failure for a nice-to-have AI feature" principle `app/explainer.py`'s template fallback
+already follows for `/explain` — just applied here for the first time to what used to be a
+Gemini-or-nothing endpoint. `POST /practice/generate` takes `{difficulty, numQuestions}`
+(`numQuestions` bounds-checked 1–15 via a pydantic `Field`, `difficulty` checked against
+`"easy"|"medium"|"hard"` in the route); the `count` placeholder in the shared JSON-shape
+instructions is substituted via a literal `__COUNT__` marker + `str.replace`, not
+`str.format` — the instructions text itself contains real `{`/`}` characters (the JSON
+example), which `str.format` would try to interpret as fields and crash on (`KeyError`),
+caught live while wiring this up, not by inspection.
+
+**Frontend (`PracticePage.jsx`, new — replaced `QuizPage.jsx`, deleted)**: a three-phase
+state machine (`setup` → `question` → `score`, plain `useState`, no router/global state).
+Setup: three large difficulty cards (not a dropdown), color-coded with the existing
+amber/teal/coral accent trio (teal=easy, amber=medium, coral=hard — the same trio the rest
+of the app already uses for success/caution/danger, not a new mapping) via
+`.practice-difficulty-card-{easy,medium,hard}`; a stepper (±buttons + a synced range
+slider, either alone drives the same state) for 1–15 questions; Generate shows an animated
+amber caret (`▸▸▸`, same motif as the editor's own gutter caret, not a spinner) plus
+shimmering skeleton bars while waiting.
+
+**The two-attempt retry flow** (the one genuinely new interaction pattern here, not
+present in the old Quiz page): `attempts` accumulates the option indices picked for the
+*current* question only, reset on every question change. A first wrong pick shows an
+amber "not quite — try again" banner and disables just that option (`.practice-option-
+tried`) without counting against the score; the user picks again among the rest. Only a
+*second* wrong pick on the same question is final — it's the moment a result actually gets
+pushed onto `results` with `outcome: "incorrect"`, the correct option is revealed
+(teal-highlighted), and the explanation shown. A first-try or retry-recovered correct pick
+pushes `outcome: "first-try"`/`"retry"` instead. The score screen's breakdown
+(`firstTryCount`/`retryCount`/`incorrectCount`) and its expandable per-question review
+(`<details>`, native/accessible, same pattern `HelpPage.jsx`'s accordion already uses) both
+read straight off this `results` array — nothing is recomputed differently between the two
+displays. "Try Another Set" clears `questions`/`results`/`currentIndex` but deliberately
+*keeps* `difficulty`/`numQuestions` (separate state), per spec.
+
+**A real CSS specificity bug found and fixed during live verification, not by
+inspection**: the app's global `button:disabled { border-color: var(--border-hairline);
+color: var(--text-muted); ... }` rule (App.css, top of file) is a type-selector +
+pseudo-class selector — specificity `(0,1,1)` — which silently beat the new single-class
+`.practice-option-correct`/`-wrong`/`-tried` modifiers (specificity `(0,1,0)`) on every
+option that was disabled, i.e. every option that had just been answered. Confirmed live via
+`getComputedStyle` before assuming the fix worked (first attempt still showed
+`border-hairline`, not the intended accent color) — not caught by the build or lint, since
+both are specificity/cascade behavior, not a syntax error. Fixed by making the three
+modifier rules compound selectors (`.practice-option.practice-option-correct`, etc. —
+specificity `(0,2,0)`, now correctly outranking `button:disabled`) rather than reaching for
+`!important` (unused anywhere else in this codebase). Re-verified via `getComputedStyle`
+for all three states (correct/wrong/tried) after the fix, in both themes, before
+considering this done.
+
+**Wiring cleanup this phase also had to catch** (the kind of dead reference the prompt
+explicitly asked to check for): `frontend/vite.config.js`'s dev proxy had a `/quiz` entry
+(needed because Vite's proxy matches path *prefixes*, and `/quiz` is a prefix of
+`/quiz/generate` while also colliding with the old page's own `/quiz` client route — see
+that file's own long-standing comment on this exact collision pattern for `/debug`,
+`/history`, `/sql`). Missing the equivalent `/practice` entry after adding the new page/
+endpoint caused a very literal, easy-to-miss failure: `POST /practice/generate` 404'd from
+the dev server (unproxied), caught by the live-verification pass, not lint/build (a proxy
+config typo has no static signal either tool checks).
+
+**Verification**: new `backend/app/tests/test_practice.py` (JSON-shape parsing/validation,
+fallback-bank sampling with and without replacement, Gemini-mocked success/retry/
+double-failure-into-fallback paths, input validation) and
+`test_practice_endpoint.py` (request shape, a real end-to-end no-key → fallback path
+through the actual endpoint, a malformed-Gemini-response → fallback path, pydantic bounds
+validation) — backend suite **568 passing** (up from 552 before `quiz.py`'s tests were
+removed and `practice.py`'s added), 0 xfailed. `npm run lint`/`npm run build` both clean
+(same two pre-existing warnings as every recent session). Live-verified end to end via
+headless Chrome against a freshly started dev backend+frontend (both had to be started
+fresh — see Live gotchas in `HANDOFF.md`): nav shows "AI Practice" and no "Quiz" entry;
+direct-navigating the old `/quiz` URL no longer renders any quiz UI; Predict Mode's own
+"Predict Mode" label and functionality on the SQL Console page confirmed still present and
+untouched; full setup → real-Gemini-generated question → a genuine wrong-then-correct
+retry AND (across repeated runs) a genuine wrong-then-wrong-again final-incorrect path →
+score screen → expand a review item → "Try Another Set" (difficulty selection confirmed
+kept) flow, in both Day and Night mode; confirmed no horizontal overflow at 400px width.
+`getComputedStyle`-verified exact accent colors (not just "looks about right") for all
+three answered-option states post-fix, per above.

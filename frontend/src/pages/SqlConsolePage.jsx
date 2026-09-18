@@ -4,7 +4,6 @@ import Editor from '@monaco-editor/react'
 import mermaid from 'mermaid'
 import { buildFlowchartGraph, computeDiagramState, renderMermaidDefinition } from '../cfg'
 import { SAMPLES } from '../samples'
-import { writeLastProcedure } from '../lastProcedure'
 import { useTheme } from '../ThemeContext'
 import { getMermaidPalette } from '../mermaidColors'
 import { rasterizeDiagramElementToPng } from '../svgToPng'
@@ -230,21 +229,14 @@ function SqlConsolePage() {
   const [autoReadExplanations, setAutoReadExplanations] = useState(false)
 
   // -- Predict Mode (labeled "Quiz Mode" internally in these variable/class
-  // names -- renamed in the UI only, to stay distinct from the separate
-  // /quiz page): predict a step's effect before it's revealed. Off by
-  // default (see resetRunState/restartTrace for where the score resets).
+  // names -- renamed "Predict Mode" in the UI only, kept distinct from the
+  // unrelated standalone AI Practice page): predict a step's effect before
+  // it's revealed. Off by default (see resetRunState/restartTrace for
+  // where the score resets).
   const [quizMode, setQuizMode] = useState(false)
   const [quizScore, setQuizScore] = useState({ correct: 0, total: 0 })
   const [quizGuess, setQuizGuess] = useState('') // the value-prediction text input
   const [quizFeedback, setQuizFeedback] = useState(null) // last { correct, guessDisplay, actualDisplay }
-
-  // Lets the standalone /quiz page's "This Procedure" option know what's
-  // currently in the editor, without a global state store -- see
-  // lastProcedure.js. Fires on every code/selection change, same as the
-  // Monaco editor itself; sessionStorage writes are cheap and local.
-  useEffect(() => {
-    writeLastProcedure(code, selectedSampleName)
-  }, [code, selectedSampleName])
 
   useEffect(() => {
     fetch('/health')

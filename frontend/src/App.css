@@ -2586,69 +2586,263 @@ h2 {
 }
 
 /* ==========================================================================
-   Quiz page (/quiz) -- a standalone 5-question conceptual quiz, distinct
-   from the Debugger's inline "Predict Mode" toggle (see DebuggerPage.jsx).
-   Same panel/tab treatment as every other page; its own "quiz-page-"
-   prefixed classes so nothing collides with Predict Mode's own (still
-   internally named "quiz-*") classes above.
+   AI Practice page (/practice) -- a standalone, general-purpose
+   competitive-exam practice tool, replacing the old standalone Quiz page.
+   Distinct from the Debugger's inline "Predict Mode" toggle (still
+   internally named "quiz-*" in SqlConsolePage.jsx -- see that file's own
+   comment). Same panel/tab treatment as every other page; its own
+   "practice-" prefixed classes so nothing collides with Predict Mode's.
+   Noticeably more animated than the rest of the site by design (the
+   per-question fade-in, the retry/correct/wrong state transitions, the
+   generating caret) -- see PracticePage.jsx's own module comment for the
+   phase/state-machine this drives.
    ========================================================================== */
 
-.quiz-page h1 {
-  margin-bottom: 1.2rem;
+.practice-page h1 {
+  margin-bottom: 0.4rem;
 }
 
-.quiz-page-blurb {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  line-height: 1.6;
-  margin: 0 0 1rem;
+.practice-section-heading {
+  margin: 1.1rem 0 0.6rem;
 }
 
-.quiz-page-source-picker {
+.practice-setup-panel .practice-section-heading:first-of-type {
+  margin-top: 0.2rem;
+}
+
+/* -- difficulty cards -- large, selectable, one of the three semantic
+   accents per level (teal = easy, amber = medium, coral = hard) rather
+   than a dropdown, per the spec. */
+.practice-difficulty-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.7rem;
+}
+
+@media (max-width: 640px) {
+  .practice-difficulty-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.practice-difficulty-card {
+  text-align: left;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.quiz-page-source-option {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
+  gap: 0.35rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  background: var(--bg-panel-raised);
   color: var(--text-primary);
   cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
 }
 
-.quiz-page-source-option input {
+.practice-difficulty-card:hover {
+  transform: translateY(-1px);
+}
+
+.practice-difficulty-label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.practice-difficulty-blurb {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.practice-difficulty-card-easy:hover,
+.practice-difficulty-card-easy.practice-difficulty-card-selected {
+  border-color: var(--accent-teal);
+  background: var(--accent-teal-bg);
+}
+
+.practice-difficulty-card-easy.practice-difficulty-card-selected .practice-difficulty-label {
+  color: var(--accent-teal);
+}
+
+.practice-difficulty-card-medium:hover,
+.practice-difficulty-card-medium.practice-difficulty-card-selected {
+  border-color: var(--accent-amber);
+  background: var(--accent-amber-bg);
+}
+
+.practice-difficulty-card-medium.practice-difficulty-card-selected .practice-difficulty-label {
+  color: var(--accent-amber);
+}
+
+.practice-difficulty-card-hard:hover,
+.practice-difficulty-card-hard.practice-difficulty-card-selected {
+  border-color: var(--accent-coral);
+  background: var(--accent-coral-bg);
+}
+
+.practice-difficulty-card-hard.practice-difficulty-card-selected .practice-difficulty-label {
+  color: var(--accent-coral);
+}
+
+/* -- question-count stepper -- buttons for touch/click, a slider
+   underneath for fast large jumps; both drive the same numQuestions
+   state so either control alone is enough down to ~400px width. */
+.practice-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.3rem;
+}
+
+.practice-stepper-btn {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.practice-stepper-value {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 1.6rem;
+  text-align: center;
+}
+
+.practice-stepper-slider {
+  flex: 1;
+  min-width: 100px;
   accent-color: var(--accent-amber);
 }
 
-.quiz-page-source-option-disabled {
-  color: var(--text-muted);
-  cursor: default;
+.practice-generate-btn {
+  min-width: 12rem;
 }
 
-.quiz-page-hint {
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  margin: 0 0 1rem;
+/* -- generating state: an animated caret (gutter-caret motif) instead of
+   a generic spinner, plus skeleton bars previewing the question card
+   about to appear. */
+.practice-generating-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
 }
 
-.quiz-page-question {
+.practice-generating-caret {
+  color: var(--accent-amber);
+  letter-spacing: 0.08em;
+  animation: practice-caret-pulse 900ms ease-in-out infinite;
+}
+
+@keyframes practice-caret-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.practice-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-top: 1.1rem;
+}
+
+.practice-skeleton-line {
+  height: 0.85rem;
+  border-radius: var(--radius);
+  background: linear-gradient(
+    90deg,
+    var(--bg-panel-raised) 25%,
+    var(--border-hairline) 50%,
+    var(--bg-panel-raised) 75%
+  );
+  background-size: 200% 100%;
+  animation: practice-shimmer 1.4s ease-in-out infinite;
+}
+
+.practice-skeleton-line-question {
+  width: 70%;
+  height: 1.1rem;
+}
+
+@keyframes practice-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .practice-generating-caret,
+  .practice-skeleton-line {
+    animation: none;
+  }
+}
+
+/* -- question flow -- one question at a time, fading/sliding in on every
+   question change (PracticePage.jsx keys this panel by currentIndex, so
+   the animation replays on each new question, not on every re-render). */
+.practice-question-panel {
+  animation: practice-question-in 220ms ease;
+}
+
+@keyframes practice-question-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .practice-question-panel {
+    animation: none;
+  }
+}
+
+.practice-progress-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-panel-raised);
+  overflow: hidden;
+  margin: 0.3rem 0 1.1rem;
+}
+
+.practice-progress-fill {
+  height: 100%;
+  background: var(--accent-teal);
+  transition: width 240ms ease;
+}
+
+.practice-question-text {
   font-size: 1.05rem;
   color: var(--text-primary);
   margin: 0 0 1.1rem;
   line-height: 1.5;
 }
 
-.quiz-page-options {
+.practice-options {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
 }
 
-.quiz-page-option {
+.practice-option {
   text-align: left;
   padding: 0.65rem 0.9rem;
   border: 1px solid var(--border-hairline);
@@ -2657,47 +2851,191 @@ h2 {
   border-radius: var(--radius);
   font-size: 0.9rem;
   font-family: var(--font-body);
+  transition: border-color 120ms ease, background-color 120ms ease, opacity 120ms ease;
 }
 
-.quiz-page-option:hover:not(:disabled) {
+.practice-option:hover:not(:disabled) {
   border-color: var(--accent-teal);
   background: var(--accent-teal-bg);
 }
 
-.quiz-page-score {
+.practice-option:disabled {
+  cursor: default;
+}
+
+/* Compound selectors (.practice-option.practice-option-*), not bare
+   .practice-option-* -- these options are disabled once settled, and the
+   global `button:disabled` rule (App.css, top of file) is a type+pseudo-
+   class selector whose specificity (0,1,1) otherwise beats a single
+   class selector (0,1,0), silently winning back border-hairline/
+   text-muted and erasing the correct/wrong/tried tinting. Confirmed live
+   via getComputedStyle before this fix -- not a hypothetical. */
+.practice-option.practice-option-correct {
+  border-color: var(--accent-teal);
+  background: var(--accent-teal-bg);
+  color: var(--accent-teal);
+}
+
+.practice-option.practice-option-wrong {
+  border-color: var(--accent-coral);
+  background: var(--accent-coral-bg);
+  color: var(--accent-coral);
+}
+
+/* a first wrong pick, kept visible but dimmed+disabled while the user
+   tries again -- amber, the same "not final yet" tone the feedback
+   banner below uses, distinct from the coral used once it's final. */
+.practice-option.practice-option-tried {
+  border-color: var(--accent-amber);
+  opacity: 0.55;
+}
+
+.practice-feedback {
+  margin-top: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-hairline);
+  animation: practice-question-in 180ms ease;
+}
+
+.practice-feedback-headline {
+  font-weight: 600;
+  margin: 0 0 0.4rem;
+}
+
+.practice-feedback-retry {
+  color: var(--accent-amber);
+  background: var(--accent-amber-bg);
+  border-color: var(--accent-amber);
+  margin: 1rem 0 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.practice-feedback-correct {
+  border-color: var(--accent-teal);
+  background: var(--accent-teal-bg);
+}
+
+.practice-feedback-correct .practice-feedback-headline {
+  color: var(--accent-teal);
+}
+
+.practice-feedback-wrong {
+  border-color: var(--accent-coral);
+  background: var(--accent-coral-bg);
+}
+
+.practice-feedback-wrong .practice-feedback-headline {
+  color: var(--accent-coral);
+}
+
+.practice-explanation {
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* -- score screen -- */
+.practice-score-headline {
   font-family: var(--font-mono);
   font-size: 1.3rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0 0 1.2rem;
+  margin: 0 0 0.7rem;
 }
 
-.quiz-page-review-list {
+.practice-score-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.2rem;
+}
+
+.practice-score-chip {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.3rem 0.65rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-hairline);
+}
+
+.practice-score-chip-teal {
+  color: var(--accent-teal);
+  border-color: var(--accent-teal);
+  background: var(--accent-teal-bg);
+}
+
+.practice-score-chip-amber {
+  color: var(--accent-amber);
+  border-color: var(--accent-amber);
+  background: var(--accent-amber-bg);
+}
+
+.practice-score-chip-coral {
+  color: var(--accent-coral);
+  border-color: var(--accent-coral);
+  background: var(--accent-coral-bg);
+}
+
+.practice-review-list {
   margin: 0 0 1.2rem;
-  padding-left: 1.2rem;
+  padding: 0;
+  list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  gap: 0.5rem;
 }
 
-.quiz-page-review-item {
-  border-top: 1px solid var(--border-hairline);
-  padding-top: 1rem;
+.practice-review-item {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.8rem;
 }
 
-.quiz-page-review-item:first-child {
-  border-top: none;
-  padding-top: 0;
+.practice-review-summary {
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.92rem;
 }
 
-.quiz-page-review-question {
-  font-weight: 600;
+.practice-review-question {
   color: var(--text-primary);
-  margin: 0 0 0.6rem;
-  font-size: 0.95rem;
+  font-weight: 600;
 }
 
-.quiz-page-review-options {
+.practice-review-outcome {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.practice-review-outcome-first-try {
+  color: var(--accent-teal);
+}
+
+.practice-review-outcome-retry {
+  color: var(--accent-amber);
+}
+
+.practice-review-outcome-incorrect {
+  color: var(--accent-coral);
+}
+
+.practice-review-body {
+  margin-top: 0.7rem;
+}
+
+.practice-review-options {
   list-style: none;
   margin: 0 0 0.7rem;
   padding: 0;
@@ -2706,7 +3044,7 @@ h2 {
   gap: 0.4rem;
 }
 
-.quiz-page-review-option {
+.practice-review-option {
   padding: 0.4rem 0.7rem;
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius);
@@ -2718,22 +3056,19 @@ h2 {
   gap: 0.6rem;
 }
 
-/* correct = teal (matches the Return Value panel / Predict Mode's
-   "correct" feedback); incorrect (the user's own wrong pick) = coral --
-   the same two-accent right/wrong pairing used everywhere else. */
-.quiz-page-review-option-correct {
+.practice-review-option-correct {
   border-color: var(--accent-teal);
   background: var(--accent-teal-bg);
   color: var(--accent-teal);
 }
 
-.quiz-page-review-option-incorrect {
+.practice-review-option-incorrect {
   border-color: var(--accent-coral);
   background: var(--accent-coral-bg);
   color: var(--accent-coral);
 }
 
-.quiz-page-review-mark {
+.practice-review-mark {
   font-family: var(--font-mono);
   font-size: 0.68rem;
   font-weight: 600;
@@ -2742,7 +3077,7 @@ h2 {
   white-space: nowrap;
 }
 
-.quiz-page-review-explanation {
+.practice-review-explanation {
   color: var(--text-muted);
   font-size: 0.85rem;
   line-height: 1.55;
