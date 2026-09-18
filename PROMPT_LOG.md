@@ -2791,3 +2791,171 @@ sessions ago). `docs/schema.md`'s `sql` field documentation extended for `into`.
 `CLAUDE.md` §2's shipped-features bullet extended. `HANDOFF.md` rewritten with this
 session's status, including this audit's finding that the Developed By/Learn tab
 placeholder gaps a much earlier HANDOFF had flagged are actually already resolved.
+
+---
+
+## 27. Compact Procedure Library + layout density pass (frontend-only)
+
+**Date:** 2026-09-18 · **Not yet committed**
+
+**Prompt (verbatim):**
+
+> PHASE: Compact Procedure Library + layout density pass
+>
+> Context: Current SQL Console / Debugger layout has a wide left "Procedure Library"
+> column where each item is a tall card (badge + bold name + 3-4 line description).
+> This makes the left column much taller than the editor column, which pushes
+> everything below the editor (flowchart, etc.) far down the page with a large gap.
+> Reference screenshot (attached) shows a denser layout style to move toward:
+> top bar with step counter + playback icon controls, a slim left "OBJECTS" list
+> (name + small type/scope badge only, no description text), and a right panel
+> using compact NAME/TYPE/VALUE table rows for Variables. Do NOT copy its exact
+> colors -- keep our existing "Debugger Notebook" system (dark navy background,
+> IBM Plex Mono for code/labels, Space Grotesk for headings, amber/teal/coral
+> accents). Keep the top nav bar exactly as-is -- do not touch it.
+>
+> Scope (frontend-only, no backend/interpreter changes expected): compact the
+> sample list to one-line badge+name rows (~40-48px, ~220-260px column), re-check
+> the grid layout so the editor column's height drives row height instead of the
+> list, and (only if quick/non-breaking) group Run + step counter/playback into
+> one control bar and restyle Variables to NAME/TYPE/VALUE. No hover-flyout
+> sidebar, no backend/interpreter/nav changes.
+
+**What I did.** `frontend/src/pages/SqlConsolePage.jsx`: each `.sample-card` dropped its
+`sample.description` paragraph and the stacked `sample-card-header` wrapper -- now one
+flex row (`sample-kind-tag` badge + `sample-card-name`), with the dropped description text
+still reachable via the button's own `title` attribute (hover/assistive tech only). Pulled
+the `.step-navigator` block up next to the Run button into a new shared `.control-bar`
+wrapper (same conditionals, same handlers -- purely moved, not rewritten), and moved the
+"Runs as a procedure/function..." hint out to its own paragraph below the bar. Reordered
+the Variables table's columns from Variable/Value/Type to Name/Type/Value per the
+reference. `App.css`: `.sample-card`/`.new-custom-button` restyled as compact single-line
+rows (`min-height: 40px`, tighter padding, `text-overflow: ellipsis` on the name so a long
+camelCase identifier truncates instead of wrapping/overflowing); removed the now-dead
+`.sample-card-header`/`.sample-card strong`/`.sample-description` rules. `.debugger-grid`'s
+first column narrowed 240px -> 220px. New `.control-bar`/`.btn-run` rules for the grouped
+strip. **The real layout fix**: compacting the row height alone wasn't enough -- with 21
+samples at 40px each the list still summed to ~1000px+, taller than the editor column, so
+the grid row height (and everything rendered after the grid closes, e.g. the flowchart)
+was still being dragged down. Gave `.panel-samples` a `max-height: 560px` (roughly the
+editor column's own height) with the inner `.sample-list` scrolling internally
+(`overflow-y: auto`) above that -- verified via a Puppeteer measurement script that the
+grid height now tracks the editor column, not the list. The `max-height` cap is lifted
+back to `none` under the existing `max-width: 1000px` breakpoint where the grid already
+collapses to one stacked column (a capped, internally-scrolling list reads oddly stacked
+above the editor at that width). No backend, interpreter, or top-nav changes.
+
+**Verification.** `npm run lint`/`npm run build` both clean (pre-existing oxlint warnings
+unrelated to this change, unchanged). Backend suite re-run to confirm this really was
+frontend-only: **552 passing**, same count as before this phase, zero regressions. Both
+dev servers were already running this session; live-checked via a Puppeteer script
+(reusing an existing scratchpad's `node_modules`/local Chrome) against `/sql-console`:
+measured the sample column's width (220px) and first row height (40px) before any run,
+confirmed zero rows contain description-length text, ran `OperatorShowcase`, and confirmed
+the control bar contains both the Run button and `.step-navigator`, the Variables table's
+headers read `Name`/`Type`/`Value` in that order, and the grid's height tracks the editor
+column rather than the sample list. Screenshotted both Day and Night mode at 1500px and
+Night mode at the known 400px nav-overflow-prone width -- the pre-existing `.top-nav`
+overflow at that width (documented in `HANDOFF.md`, untouched by this phase) is still the
+only issue there; the stacked single-column layout, uncapped/full sample names, and
+compact control bar all render correctly at that width.
+
+---
+
+## 28. Hover-flyout sample rail + trim Live State + wider editor (frontend-only)
+
+**Date:** 2026-09-18 · **Not yet committed**
+
+**Prompt (verbatim):**
+
+> PHASE: Hover-flyout sample rail + trim Live State + wider editor
+>
+> Context: SqlConsolePage.jsx + App.css. Left "Procedure Library" is a static
+> 220px list (badge + name, ~40px rows, truncated, max-height 560px scroll).
+> Right "Live State" column is wider than its content needs. Reference: VS
+> Code-style collapsed icon rail that flies out on hover. Keep top nav bar,
+> "Debugger Notebook" palette/fonts, and all backend/logic untouched — layout only.
+>
+> 1. Left column → rail + flyout:
+>    - Collapsed (default): ~56-64px rail, badge/glyph per row, no name text.
+>    - Hover: absolute-positioned overlay expands to ~240-260px (does not
+>      reflow grid/editor), full names at normal spacing, wrap don't truncate.
+>      Keep existing scroll/max-height, active highlight, "+ New/Custom", and
+>      the `title` tooltip (as collapsed-state fallback).
+>    - ~150-200ms collapse delay on mouse leave. Items clickable while collapsed
+>      — needs a per-item distinguishing mark beyond the badge (e.g. initials)
+>      since multiple PROCEDUREs look identical at rest; use your judgment.
+>    - Mobile breakpoint: keep prior phase's simple list if the rail doesn't fit.
+>
+> 2. Right column: cut width ~15-20%, tighten Variables table + Call Stack
+>    padding to match. Same data, no wrap/clip issues.
+>
+> 3. Editor: reflow grid so it claims the width freed by 1 & 2. Flyout overlays
+>    on hover, does not shift this base width.
+>
+> Verify: lint/build clean; Puppeteer screenshots of collapsed + expanded rail
+> (confirm no editor shift) + full layout, Day/Night; recheck 400px + mobile
+> breakpoints; backend suite unchanged; update HANDOFF.md/PROMPT_LOG.md.
+
+**What I did.** Split the single always-visible compact list from phase #27 into two
+DOM copies of the same `SAMPLES` map in `SqlConsolePage.jsx`: `.sample-rail` (always
+in-flow, defines the grid's actual 60px first column — each row a `.rail-item` button
+showing only a colored initials chip from a new `getSampleInitials(name)` helper, which
+pulls capital letters out of a PascalCase name for a short, usually-unique pair like "OS"
+for OperatorShowcase) and `.sample-flyout` (always `position: absolute`, full badge +
+name rows via a new `renderWrappableName(name)` helper that inserts a `<wbr/>` before
+each internal capital letter so a wrapped name breaks at a word boundary instead of an
+arbitrary character). The flyout is opened/closed purely via CSS: `.panel-samples:hover
+.sample-flyout` / `:focus-within` toggle `opacity`/`visibility`/`pointer-events`, with a
+`transition-delay: 200ms` on the closing direction only (no JS timers) giving the
+"forgiveness" window the prompt asked for; opening has no delay. Because the flyout is
+*always* `position: absolute` (never toggled between static/absolute), opening it can
+never reflow the grid — confirmed by measuring `.panel-editor`'s `left` before/after
+hover in Puppeteer (bit-for-bit identical). Two real bugs caught during live-checking,
+not by inspection: (1) an absolutely-positioned child's `top:0; left:0` resolves against
+its containing block's *padding* box, not border box — the flyout needed
+`top: -1.5rem; left: -0.4rem` (matching `.panel-samples`'s own padding) to actually cover
+the rail's border/tab area instead of leaving a visible sliver of it above the flyout,
+which was rendering as an ugly overlap with the flyout's own "PROCEDURE LIBRARY" tab.
+(2) `overflow-wrap: break-word` alone chopped a name at an arbitrary character
+(`CalculateTota` / `l`) — fixed by the `<wbr/>`-insertion approach above, giving
+`Calculate` / `Total` instead. `.debugger-grid`'s columns changed from
+`220px minmax(0,1.6fr) minmax(280px,1fr)` to `60px minmax(0,2fr) minmax(230px,0.8fr)`;
+`.panel-state` (Live State) and `.panel-samples` both gained tighter horizontal padding
+overrides. Mobile (`max-width: 1000px`): `.sample-rail` becomes `display: none` and
+`.sample-flyout` has its absolute positioning/opacity/transition all stripped back to
+plain static/always-visible/no-transition — i.e. it reverts to exactly phase #27's plain
+compact list, since a hover flyout has no equivalent on a touch device.
+
+**A real debugging detour, worth recording.** Puppeteer screenshots intermittently
+showed a "ghost" double-exposure of the flyout's full-name rows over the collapsed rail
+in `fullPage: true` captures, specifically on a page that had already fired the hover
+transition earlier in its lifetime (and more reliably after several rapid interactions —
+theme toggle + sample click + Run — in quick succession before the capture).
+`getComputedStyle` queried at the literal moment of each screenshot consistently reported
+the CORRECT hidden state (`opacity: 0`, `pointer-events: none`) even when the saved PNG
+showed the ghost — ruling out an actual CSS/state bug immediately. Isolated further: a
+`fullPage: false` (viewport-only) screenshot taken at the exact same moment, with the
+exact same interaction history, was always clean; a `fullPage: true` screenshot on a
+*fresh* page/tab with no prior hover history was always clean; a `fullPage: true`
+screenshot on a page WITH hover history, after a short settle delay plus a forced
+reflow (`element.getBoundingClientRect()`) and a scroll nudge, also came back clean.
+Conclusion: a stale-compositor-tile race specific to Puppeteer/CDP's full-page capture
+stitching path after a CSS opacity transition, not a product bug — no real user
+interaction ever triggers that specific capture mechanism. Documented in `HANDOFF.md`'s
+Live gotchas for future sessions rather than chased further or "fixed" in app CSS.
+
+**Verification.** `npm run lint`/`npm run build` clean (same two pre-existing warnings
+as recent sessions). Backend suite re-run specifically to confirm frontend-only: **552
+passing**, unchanged. Both dev servers were already running. Live-checked via Puppeteer
+(reused an existing scratchpad's `node_modules` + local Chrome): measured the rail
+(60px), the editor's width increase and Live State's ~16% reduction at a 1500px
+viewport, confirmed zero reflow of the editor while the flyout is open, confirmed
+collapsed/hovered opacity+pointer-events values, confirmed the Variables table headers
+(Name/Type/Value, unchanged from #27) and control bar (unchanged from #27) still render
+correctly, and confirmed the mobile fallback (rail hidden, flyout static and always
+visible, all 21 full-name rows unclipped) at 400px. Screenshotted collapsed rail,
+expanded rail (hover), and full page layout in both Day and Night mode.
+
+`HANDOFF.md` rewritten with this session's status (its own convention: fully rewritten,
+not appended to).

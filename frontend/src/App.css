@@ -971,10 +971,17 @@ h2 {
   color: var(--accent-amber);
 }
 
+/* Column 1 is the collapsed icon rail's actual width (see .sample-rail
+   below) -- the hover flyout that replaces it is always position:absolute
+   (see .sample-flyout), so it never factors into this track's width and
+   opening it never reflows column 2/3. Column 3 (Live State) is
+   deliberately a smaller minmax/fr share than column 2 (Editor) -- see
+   the "Hover-flyout sample rail" phase -- so the width freed by both the
+   rail (was 220px) and the narrower Live State column goes to the editor. */
 .debugger-grid {
   position: relative;
   display: grid;
-  grid-template-columns: 240px minmax(0, 1.6fr) minmax(280px, 1fr);
+  grid-template-columns: 60px minmax(0, 2fr) minmax(230px, 0.8fr);
   gap: 1.1rem;
   align-items: start;
   margin-top: 0.9rem;
@@ -992,14 +999,67 @@ h2 {
   margin-top: 0;
 }
 
+/* Caps the Procedure Library's own height and scrolls its row list
+   internally instead of growing with however many samples exist --
+   otherwise a long sample list (20+ rows still add up) would make this
+   column the tallest in the grid again, dragging everything below the
+   debugger row down with it. The value roughly matches the editor
+   column's own height (360px Monaco + its control bar/hint text) so the
+   grid's row height is normally set by the editor, not this list. Narrow
+   horizontal padding overridden here (.panel's own 1.25rem/side would
+   eat almost this entire 60px column) -- the flyout below restores full
+   .panel padding for itself since it isn't width-constrained. */
+.panel-samples {
+  display: flex;
+  flex-direction: column;
+  max-height: 560px;
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
+}
+
+.panel-samples .sample-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* The rail's own "PROCEDURE LIBRARY" label doesn't fit a 60px column --
+   shortened to fit here; the flyout shows the full label again via its
+   own .sample-flyout-tab once open. Defensive ellipsis in case a future
+   theme/font change still overflows. */
+.panel-samples > .panel-tab {
+  max-width: 52px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .panel-state {
   position: sticky;
   top: 5.5rem;
+  /* Narrower than the default .panel padding to match this column's own
+     reduced width (see .debugger-grid's own comment) -- reclaims a bit
+     more content width for the Variables/Call Stack tables. */
+  padding-left: 1rem;
+  padding-right: 1rem;
 }
 
 @media (max-width: 1000px) {
   .panel-state {
     position: static;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+
+  /* The grid collapses to one stacked column below this width -- a
+     capped-height internally-scrolling rail/flyout reads oddly stacked
+     above the editor on a touch device with no hover at all, so this
+     falls back to the prior phase's always-visible, in-flow compact list
+     instead (see .sample-rail/.sample-flyout's own media queries). */
+  .panel-samples {
+    max-height: none;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
   }
 }
 
@@ -1042,17 +1102,25 @@ h2 {
   }
 }
 
-/* -- left panel: sample / custom picker ---------------------------------- */
+/* -- left panel: sample / custom picker ----------------------------------
+   Two representations of the same sample list share the .sample-list/
+   .new-custom-button gap/layout rules below: the always-in-flow collapsed
+   rail (.sample-rail, icon-only rows -- defines the actual grid column
+   width) and the hover/focus flyout (.sample-flyout, full badge+name rows,
+   always position:absolute so opening it never reflows the grid). See the
+   "Hover-flyout sample rail" phase. */
 
 .new-custom-button {
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
+  min-height: 40px;
   text-align: left;
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 0.92rem;
-  padding: 0.75rem 0.9rem;
-  margin-bottom: 1rem;
+  font-size: 0.82rem;
+  padding: 0.5rem 0.7rem;
+  margin-bottom: 0.6rem;
   border: 1px dashed var(--accent-amber);
   color: var(--accent-amber);
   background: var(--accent-amber-bg);
@@ -1064,23 +1132,32 @@ h2 {
   color: var(--bg-base);
 }
 
+/* The rail's own "+" button -- same control, just square and icon-only to
+   fit the 60px column. */
+.new-custom-button-rail {
+  justify-content: center;
+  padding: 0.5rem;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
 .sample-list {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.3rem;
 }
 
 .sample-card {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.3rem;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 40px;
   text-align: left;
   background: var(--bg-panel-raised);
   color: var(--text-primary);
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius);
-  padding: 0.65rem 0.8rem;
+  padding: 0.45rem 0.65rem;
 }
 
 .sample-card:hover {
@@ -1092,28 +1169,14 @@ h2 {
   background: var(--accent-teal-bg);
 }
 
-/* Badge above title, not inline beside it -- an inline row pushed the
-   PROCEDURE/FUNCTION tag past the card's right edge on longer names
-   (TieredPricingCalculator, SumUntilLimit) since neither element would
-   shrink to make room for the other. Stacking removes the width
-   contest entirely: the tag stays its own natural chip size, and the
-   title gets the full card width to wrap into. */
-.sample-card-header {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.3rem;
-  width: 100%;
-}
-
-.sample-card strong {
+.sample-card-name {
   font-family: var(--font-mono);
-  font-size: 0.86rem;
+  font-size: 0.82rem;
   color: var(--text-primary);
-  width: 100%;
-  /* Names are single unbroken camelCase identifiers (no spaces/hyphens),
-     so normal wrapping wouldn't break them at all -- force a mid-word
-     break once one is too long for the card instead of overflowing. */
+  flex: 1;
+  min-width: 0;
+  /* The flyout has room a fixed 220px column didn't -- wrap a long name
+     onto a second line instead of truncating it, per this phase's spec. */
   overflow-wrap: break-word;
 }
 
@@ -1143,11 +1206,151 @@ h2 {
   background: var(--accent-teal-bg);
 }
 
-.sample-description {
-  font-size: 0.76rem;
+/* -- collapsed icon rail --------------------------------------------------
+   Each row is just a small colored initials chip (see getSampleInitials in
+   SqlConsolePage.jsx) -- the kind badge alone isn't distinguishing since
+   most samples share a kind, and there's no room for a name at 60px. */
+.sample-rail {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.rail-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+  padding: 0.3rem;
+}
+
+.rail-item:hover {
+  border-color: var(--accent-teal);
+}
+
+.rail-item-active {
+  border-color: var(--accent-teal);
+  background: var(--accent-teal-bg);
+}
+
+.rail-item-initials {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.rail-item-initials-procedure {
   color: var(--text-muted);
-  font-weight: normal;
-  line-height: 1.4;
+}
+
+.rail-item-initials-function {
+  color: var(--accent-teal);
+}
+
+/* -- hover/focus flyout ----------------------------------------------------
+   Always position:absolute, anchored at the rail's own top-left corner and
+   wider -- opacity/visibility/pointer-events are the only things toggled
+   on hover, so the grid/editor never reflow while it's open (it simply
+   paints over the rail and a strip of the editor's left edge). The
+   transition-delay on the closing (non-:hover) state is what gives it a
+   short "forgiveness" window when the pointer briefly leaves before
+   collapsing -- opening itself has no delay. */
+.sample-flyout {
+  position: absolute;
+  /* top/left:0 would align to .panel-samples's PADDING box, not its
+     border box -- offsetting by that padding (1.5rem top from .panel's
+     base rule, 0.4rem left from this panel's own override above) lines
+     the flyout's border up with the rail panel's own border instead, so
+     it actually covers the rail's tab/border area rather than leaving a
+     sliver of it exposed above the flyout. */
+  top: -1.5rem;
+  left: -0.4rem;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  width: 250px;
+  max-height: 560px;
+  overflow: hidden;
+  background: var(--bg-panel);
+  border: 1px solid var(--accent-teal);
+  border-radius: var(--radius);
+  padding: 1.5rem 1.25rem 1.25rem;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 150ms ease, visibility 0s linear 200ms;
+}
+
+.panel-samples:hover .sample-flyout,
+.panel-samples:focus-within .sample-flyout {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 120ms ease;
+}
+
+/* The rail's own abbreviated tab pokes up above the panel's border (same
+   as every .panel-tab); the flyout's top edge sits at the padding box
+   below that, so it doesn't cover this sliver -- hide the rail's tab
+   outright while the flyout's own full-text tab is showing instead,
+   rather than let both render at once. */
+.panel-samples:hover > .panel-tab,
+.panel-samples:focus-within > .panel-tab {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sample-flyout {
+    transition: none;
+  }
+}
+
+.sample-flyout-tab {
+  position: absolute;
+  top: -0.55rem;
+  left: 0.9rem;
+}
+
+.sample-flyout .sample-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+@media (max-width: 1000px) {
+  /* No hover/pointer affordance worth relying on at this width (and the
+     grid is already a single stacked column) -- fall back to the prior
+     phase's plain, always-visible, in-flow list: hide the rail, and
+     un-float the flyout back into normal flow. */
+  .sample-rail {
+    display: none;
+  }
+
+  .sample-flyout {
+    position: static;
+    width: auto;
+    max-height: none;
+    overflow: visible;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: none;
+    border: none;
+    padding: 0;
+    background: transparent;
+  }
+
+  /* The rail is gone at this width, so its own abbreviated "LIBRARY" tab
+     would just duplicate the flyout's (now static, always-visible)
+     "PROCEDURE LIBRARY" one -- keep only the latter, full label. */
+  .panel-samples > .panel-tab {
+    display: none;
+  }
 }
 
 /* -- center panel: editor + step controls -------------------------------- */
@@ -1726,16 +1929,44 @@ h2 {
    scroll wrapper for a result set wider than the panel -- get their own
    rules below. */
 
-.sql-console-actions {
+/* -- Compact control bar: Run + step counter/playback controls grouped
+   into one strip (Compact Procedure Library phase) -- a flat raised-panel
+   bar rather than the Run button and .step-navigator sitting as two
+   separately-spaced rows. */
+.control-bar {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.7rem;
   margin: 0.85rem 0 0;
+  padding: 0.55rem 0.7rem;
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius);
+}
+
+.control-bar .step-navigator {
+  flex: 1;
+  margin: 0; /* the bar itself now owns the outer spacing */
+}
+
+.btn-run {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+  border-color: var(--accent-amber);
+  color: var(--accent-amber);
+  flex-shrink: 0;
+}
+
+.btn-run:hover:not(:disabled) {
+  background: var(--accent-amber-bg);
 }
 
 .sql-console-hint {
+  display: block;
   color: var(--text-muted);
   font-size: 0.78rem;
+  margin: 0.4rem 0 0;
 }
 
 .sql-console-results-panel {

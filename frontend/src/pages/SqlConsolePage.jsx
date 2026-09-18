@@ -60,6 +60,38 @@ function formatValue(entry) {
   return String(entry.value)
 }
 
+// Collapsed-rail identifying mark for the Procedure Library (see the
+// "Hover-flyout sample rail" phase) -- the rail is too narrow to show a
+// sample's name, and the kind badge alone (PROCEDURE/FUNCTION) isn't
+// distinguishing since most samples share a kind. Every sample name is
+// PascalCase (GradeClassifier, OperatorShowcase, ...), so pulling the
+// capital letters gives a short, usually-unique pair of initials (GC, OS)
+// for free; falls back to the first two characters for the rare
+// all-lowercase/single-capital name so this never renders blank.
+function getSampleInitials(name) {
+  const caps = name.match(/[A-Z]/g) ?? []
+  if (caps.length >= 2) return caps[0] + caps[1]
+  if (caps.length === 1) return caps[0] + (name[1] ? name[1].toUpperCase() : '')
+  return name.slice(0, 2).toUpperCase()
+}
+
+// The flyout wraps a long name instead of truncating it (see the
+// "Hover-flyout sample rail" phase), but a PascalCase identifier has no
+// spaces/hyphens for the browser to break on -- left alone,
+// overflow-wrap:break-word would chop it at an arbitrary character
+// (e.g. "CalculateTota" / "l"). Inserting a <wbr/> before each internal
+// capital letter gives the browser a natural word-boundary break instead
+// (e.g. "Calculate" / "Total"), same convention a reader's eye already
+// uses to parse a PascalCase name.
+function renderWrappableName(name) {
+  return name.split(/(?=[A-Z])/).map((part, i) => (
+    <span key={i}>
+      {i > 0 && <wbr />}
+      {part}
+    </span>
+  ))
+}
+
 // Predict Mode's guess check -- numeric comparison for numbers (so "50" and
 // "50.0" both match 50), case-insensitive exact match for booleans, exact
 // (surrounding-quote-tolerant) match for everything else.
@@ -1131,24 +1163,69 @@ function SqlConsolePage() {
 
       <div className="debugger-grid" ref={gridRef}>
         <aside className="panel panel-samples">
-          <span className="panel-tab">PROCEDURE LIBRARY</span>
-          <button className="new-custom-button" onClick={startNewCustomProcedure}>
-            + New / Custom Procedure
-          </button>
-          <div className="sample-list">
-            {SAMPLES.map((sample) => (
-              <button
-                key={sample.name}
-                className={sample.name === selectedSampleName ? 'sample-card sample-card-active' : 'sample-card'}
-                onClick={() => loadSample(sample)}
-              >
-                <div className="sample-card-header">
+          <span className="panel-tab">LIB</span>
+
+          {/* Collapsed icon rail -- always in the document flow, defining
+              the grid column's actual (narrow) width. Each row shows only
+              a kind badge + initials (see getSampleInitials's own comment)
+              since there's no room for a name; the full name/description
+              still reaches a mouse user via `title` and a screen reader
+              via `aria-label`. Hidden below the mobile breakpoint in favor
+              of the flyout rendered inline (see .sample-flyout's own CSS). */}
+          <div className="sample-rail">
+            <button
+              className="new-custom-button new-custom-button-rail"
+              onClick={startNewCustomProcedure}
+              title="New / Custom Procedure"
+              aria-label="New / Custom Procedure"
+            >
+              +
+            </button>
+            <div className="sample-list">
+              {SAMPLES.map((sample) => (
+                <button
+                  key={sample.name}
+                  className={
+                    sample.name === selectedSampleName ? 'rail-item rail-item-active' : 'rail-item'
+                  }
+                  onClick={() => loadSample(sample)}
+                  title={`${sample.name} — ${sample.description}`}
+                  aria-label={sample.name}
+                >
+                  <span className={`rail-item-initials rail-item-initials-${sample.kind.toLowerCase()}`}>
+                    {getSampleInitials(sample.name)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Hover/focus flyout -- always absolutely positioned (so it
+              never reflows the grid/editor even while open), just
+              invisible and non-interactive until the rail (or a control
+              inside the flyout itself, via :focus-within) has pointer or
+              keyboard focus. Below the mobile breakpoint this becomes the
+              always-visible, in-flow list instead (see CSS) -- the same
+              "prior phase" compact-row style, since a hover flyout has no
+              equivalent on a touch device. */}
+          <div className="sample-flyout">
+            <span className="panel-tab sample-flyout-tab">PROCEDURE LIBRARY</span>
+            <button className="new-custom-button" onClick={startNewCustomProcedure}>
+              + New / Custom Procedure
+            </button>
+            <div className="sample-list">
+              {SAMPLES.map((sample) => (
+                <button
+                  key={sample.name}
+                  className={sample.name === selectedSampleName ? 'sample-card sample-card-active' : 'sample-card'}
+                  onClick={() => loadSample(sample)}
+                  title={sample.description}
+                >
                   <span className={`sample-kind-tag sample-kind-tag-${sample.kind.toLowerCase()}`}>{sample.kind}</span>
-                  <strong>{sample.name}</strong>
-                </div>
-                <span className="sample-description">{sample.description}</span>
-              </button>
-            ))}
+                  <strong className="sample-card-name">{renderWrappableName(sample.name)}</strong>
+                </button>
+              ))}
+            </div>
           </div>
         </aside>
 
@@ -1184,14 +1261,83 @@ function SqlConsolePage() {
             />
           </div>
 
-          <p className="sql-console-actions">
-            <button onClick={handleRun} disabled={isRunning}>
-              {isRunning ? 'Running…' : 'Run'}
+          <div className="control-bar">
+            <button className="btn-run" onClick={handleRun} disabled={isRunning}>
+              {isRunning ? 'Running…' : '▶ Run'}
             </button>
-            <span className="sql-console-hint">
-              Runs as a procedure/function if it parses as one, otherwise as plain SQL. Ctrl/Cmd + Enter also
-              runs it.
-            </span>
+            {mode !== 'sql' && (
+              <div className="step-navigator">
+                <button onClick={goToPreviousStep} disabled={isFirstStep}>
+                  ◀ Previous
+                </button>
+                <button onClick={handleAdvance} disabled={isLastStep || Boolean(upcomingQuiz)} title={upcomingQuiz ? 'Answer the prediction below to continue' : undefined}>
+                  Next ▶
+                </button>
+                <button
+                  onClick={continueExecution}
+                  disabled={!hasSteps || isLastStep}
+                  title={
+                    breakpoints.size > 0
+                      ? 'Resume execution from here to the next breakpoint'
+                      : 'No breakpoints set -- resumes execution from here to the end of the trace'
+                  }
+                >
+                  ⏵ Continue
+                </button>
+                <button onClick={restartTrace} disabled={!hasSteps} title="Jump back to step 1 of this same trace -- no re-run, nothing re-fetched">
+                  ↺ Restart
+                </button>
+                <input
+                  type="range"
+                  className="step-scrubber"
+                  min={0}
+                  max={hasSteps ? steps.length - 1 : 0}
+                  value={currentStepIndex}
+                  disabled={!hasSteps}
+                  onChange={(event) => setCurrentStepIndex(Number(event.target.value))}
+                  aria-label="Jump to step"
+                />
+                <span className="step-label">
+                  {hasSteps ? `Step ${currentStepIndex + 1} of ${steps.length}` : 'No steps yet'}
+                </span>
+                {hasSteps && currentStep && breakpoints.has(currentStep.line) && (
+                  <span className="breakpoint-paused-badge">⏸ Paused at breakpoint</span>
+                )}
+                {speechSupported && (
+                  <label className="auto-read-toggle">
+                    <input
+                      type="checkbox"
+                      checked={autoReadExplanations}
+                      onChange={(event) => setAutoReadExplanations(event.target.checked)}
+                    />
+                    Auto-read explanations
+                  </label>
+                )}
+                <label className="auto-read-toggle">
+                  <input
+                    type="checkbox"
+                    checked={quizMode}
+                    onChange={(event) => setQuizMode(event.target.checked)}
+                  />
+                  Predict Mode
+                </label>
+                {quizMode && (
+                  <span className="quiz-score">
+                    {quizScore.correct}/{quizScore.total} correct
+                    {quizFeedback && (
+                      <span className={quizFeedback.correct ? 'quiz-feedback quiz-feedback-correct' : 'quiz-feedback quiz-feedback-incorrect'}>
+                        {quizFeedback.correct ? '✓' : '✗'}{' '}
+                        {quizFeedback.correct ? 'correct' : `was ${quizFeedback.actualDisplay} (guessed ${quizFeedback.guessDisplay})`}
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          <p className="sql-console-hint">
+            Runs as a procedure/function if it parses as one, otherwise as plain SQL. Ctrl/Cmd + Enter also
+            runs it.
           </p>
 
           {debugError && <p className="status status-error">Error: {debugError}</p>}
@@ -1202,74 +1348,6 @@ function SqlConsolePage() {
             Click a line number (or the glyph margin beside it) to toggle a breakpoint.
             {breakpoints.size > 0 && ` ${breakpoints.size} breakpoint${breakpoints.size === 1 ? '' : 's'} set.`}
           </p>
-
-          <div className="step-navigator">
-            <button onClick={goToPreviousStep} disabled={isFirstStep}>
-              ◀ Previous
-            </button>
-            <button onClick={handleAdvance} disabled={isLastStep || Boolean(upcomingQuiz)} title={upcomingQuiz ? 'Answer the prediction below to continue' : undefined}>
-              Next ▶
-            </button>
-            <button
-              onClick={continueExecution}
-              disabled={!hasSteps || isLastStep}
-              title={
-                breakpoints.size > 0
-                  ? 'Resume execution from here to the next breakpoint'
-                  : 'No breakpoints set -- resumes execution from here to the end of the trace'
-              }
-            >
-              ⏵ Continue
-            </button>
-            <button onClick={restartTrace} disabled={!hasSteps} title="Jump back to step 1 of this same trace -- no re-run, nothing re-fetched">
-              ↺ Restart
-            </button>
-            <input
-              type="range"
-              className="step-scrubber"
-              min={0}
-              max={hasSteps ? steps.length - 1 : 0}
-              value={currentStepIndex}
-              disabled={!hasSteps}
-              onChange={(event) => setCurrentStepIndex(Number(event.target.value))}
-              aria-label="Jump to step"
-            />
-            <span className="step-label">
-              {hasSteps ? `Step ${currentStepIndex + 1} of ${steps.length}` : 'No steps yet'}
-            </span>
-            {hasSteps && currentStep && breakpoints.has(currentStep.line) && (
-              <span className="breakpoint-paused-badge">⏸ Paused at breakpoint</span>
-            )}
-            {speechSupported && (
-              <label className="auto-read-toggle">
-                <input
-                  type="checkbox"
-                  checked={autoReadExplanations}
-                  onChange={(event) => setAutoReadExplanations(event.target.checked)}
-                />
-                Auto-read explanations
-              </label>
-            )}
-            <label className="auto-read-toggle">
-              <input
-                type="checkbox"
-                checked={quizMode}
-                onChange={(event) => setQuizMode(event.target.checked)}
-              />
-              Predict Mode
-            </label>
-            {quizMode && (
-              <span className="quiz-score">
-                {quizScore.correct}/{quizScore.total} correct
-                {quizFeedback && (
-                  <span className={quizFeedback.correct ? 'quiz-feedback quiz-feedback-correct' : 'quiz-feedback quiz-feedback-incorrect'}>
-                    {quizFeedback.correct ? '✓' : '✗'}{' '}
-                    {quizFeedback.correct ? 'correct' : `was ${quizFeedback.actualDisplay} (guessed ${quizFeedback.guessDisplay})`}
-                  </span>
-                )}
-              </span>
-            )}
-          </div>
 
           {upcomingQuiz?.type === 'value' && (
             <form className="quiz-panel" onSubmit={submitValueGuess}>
@@ -1497,9 +1575,9 @@ function SqlConsolePage() {
             <table className="variable-table">
               <thead>
                 <tr>
-                  <th>Variable</th>
-                  <th>Value</th>
+                  <th>Name</th>
                   <th>Type</th>
+                  <th>Value</th>
                 </tr>
               </thead>
               <tbody>
@@ -1517,11 +1595,11 @@ function SqlConsolePage() {
                         className={entry.changed ? 'var-row-changed' : undefined}
                       >
                         <td>{name}</td>
+                        <td>{entry.type}</td>
                         <td>
                           {formatted === null ? <em className="var-empty">—</em> : formatted}
                           {entry.changed && <span className="changed-badge">changed</span>}
                         </td>
-                        <td>{entry.type}</td>
                       </tr>
                     )
                   })}
